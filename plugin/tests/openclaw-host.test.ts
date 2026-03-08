@@ -85,6 +85,7 @@ describe('openclaw host bridge', () => {
                 publicKey: 'pub',
               },
               approvedClients: {},
+              discovery: { enabled: true },
             },
           },
         },
@@ -106,6 +107,7 @@ describe('openclaw host bridge', () => {
       configured: true,
       enabled: true,
       publicKey: 'pub',
+      discoveryEnabled: true,
     });
   });
 

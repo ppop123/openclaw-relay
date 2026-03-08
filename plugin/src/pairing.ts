@@ -37,6 +37,7 @@ export async function ensureEnabledAccountConfig(existing: RelayAccountConfig | 
     channelToken: randomToken(24),
     gatewayKeyPair: identity.serialized,
     approvedClients: {},
+    discovery: { enabled: false },
   };
 }
 

@@ -14,12 +14,18 @@ export interface ApprovedClientRecord {
   lastSeenAt?: string;
 }
 
+export interface PeerDiscoveryConfig {
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+}
+
 export interface RelayAccountConfig {
   enabled: boolean;
   server: string;
   channelToken: string;
   gatewayKeyPair: GatewayKeyPairConfig;
   approvedClients: Record<string, ApprovedClientRecord>;
+  peerDiscovery?: PeerDiscoveryConfig;
 }
 
 export interface RelayChannelConfig {
@@ -38,6 +44,7 @@ export interface RelayAccountInspection {
   channel: string;
   gatewayPublicKey: string;
   approvedClients: InspectApprovedClient[];
+  peerDiscoveryEnabled: boolean;
 }
 
 export interface RelayConfigStore {
@@ -55,6 +62,9 @@ export interface RegisterFrame extends RelayFrameBase {
   type: 'register';
   channel: string;
   version: number;
+  discoverable?: boolean;
+  public_key?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RegisteredFrame extends RelayFrameBase {
@@ -74,6 +84,54 @@ export interface JoinedFrame extends RelayFrameBase {
   type: 'joined';
   channel: string;
   gateway_online: boolean;
+}
+
+export interface DiscoveryPeer {
+  public_key: string;
+  metadata?: Record<string, unknown>;
+  online_since: string;
+}
+
+export interface DiscoverFrame extends RelayFrameBase {
+  type: 'discover';
+}
+
+export interface DiscoverResultFrame extends RelayFrameBase {
+  type: 'discover_result';
+  peers: DiscoveryPeer[];
+}
+
+export interface SignalSendFrame extends RelayFrameBase {
+  type: 'signal';
+  target: string;
+  ephemeral_key: string;
+  payload: string;
+}
+
+export interface SignalForwardFrame extends RelayFrameBase {
+  type: 'signal';
+  source: string;
+  ephemeral_key: string;
+  payload: string;
+}
+
+export interface SignalErrorFrame extends RelayFrameBase {
+  type: 'signal_error';
+  code: string;
+  target?: string;
+}
+
+export interface InviteCreateFrame extends RelayFrameBase {
+  type: 'invite_create';
+  invite_hash: string;
+  max_uses?: number;
+  ttl_seconds?: number;
+}
+
+export interface InviteCreatedFrame extends RelayFrameBase {
+  type: 'invite_created';
+  invite_hash: string;
+  expires_at: string;
 }
 
 export interface DataFrame extends RelayFrameBase {
@@ -101,7 +159,36 @@ export interface ErrorFrame extends RelayFrameBase {
   message: string;
 }
 
-export type RelayFrame = RegisterFrame | RegisteredFrame | JoinFrame | JoinedFrame | DataFrame | PresenceFrame | PingFrame | ErrorFrame | Record<string, unknown>;
+export type RelayFrame =
+  | RegisterFrame
+  | RegisteredFrame
+  | JoinFrame
+  | JoinedFrame
+  | DiscoverFrame
+  | DiscoverResultFrame
+  | SignalSendFrame
+  | SignalForwardFrame
+  | SignalErrorFrame
+  | InviteCreateFrame
+  | InviteCreatedFrame
+  | DataFrame
+  | PresenceFrame
+  | PingFrame
+  | ErrorFrame
+  | Record<string, unknown>;
+
+export interface PeerSignalEnvelope {
+  version: 1;
+  kind: string;
+  body?: Record<string, unknown>;
+}
+
+export interface ReceivedPeerSignal {
+  source: string;
+  envelope: PeerSignalEnvelope;
+  receivedAt: string;
+  raw: SignalForwardFrame;
+}
 
 export interface HelloMessage {
   type: 'hello';
@@ -201,6 +288,13 @@ export interface RelayRuntimeAdapter {
   systemStatus?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
 }
 
+export interface PeerDiscoveryStatus {
+  enabled: boolean;
+  publicKey?: string;
+  pendingSignals: number;
+  pendingSignalErrors: number;
+}
+
 export interface GatewayStatus {
   state: ConnectionState;
   health: HealthState;
@@ -210,6 +304,7 @@ export interface GatewayStatus {
   activeSessions: number;
   lastRegisteredAt?: string;
   lastFatalErrorCode?: string;
+  peerDiscovery?: PeerDiscoveryStatus;
 }
 
 export interface PairingSessionInfo {

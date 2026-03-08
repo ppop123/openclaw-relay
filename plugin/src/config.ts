@@ -1,8 +1,19 @@
-import { RelayAccountConfig, RelayAccountInspection, RelayConfigStore, type ApprovedClientRecord, type InspectApprovedClient } from './types.js';
-import { b64Decode, nowIso, publicKeyFingerprint, sha256Hex } from './utils.js';
+import {
+  PeerDiscoveryConfig,
+  RelayAccountConfig,
+  RelayAccountInspection,
+  RelayConfigStore,
+  type ApprovedClientRecord,
+  type InspectApprovedClient,
+} from './types.js';
+import { nowIso, publicKeyFingerprint, sha256Hex } from './utils.js';
 
 function cloneConfig<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function toInspectApprovedClient(fingerprint: string, record: ApprovedClientRecord): InspectApprovedClient {
@@ -13,12 +24,23 @@ function toInspectApprovedClient(fingerprint: string, record: ApprovedClientReco
   };
 }
 
+export function normalizePeerDiscoveryConfig(config: PeerDiscoveryConfig | undefined): PeerDiscoveryConfig {
+  return {
+    enabled: config?.enabled === true,
+    ...(config?.metadata ? { metadata: cloneConfig(config.metadata) } : {}),
+  };
+}
+
 export function validateAccountConfig(config: RelayAccountConfig): void {
   if (!config.server) throw new Error('relay server is required');
   if (!config.channelToken) throw new Error('channel token is required');
   if (!config.gatewayKeyPair?.privateKey) throw new Error('gateway private key is required');
   if (!config.gatewayKeyPair?.publicKey) throw new Error('gateway public key is required');
   if (!config.approvedClients) throw new Error('approvedClients is required');
+  if (config.peerDiscovery && !isPlainObject(config.peerDiscovery)) throw new Error('peerDiscovery must be an object when provided');
+  if (config.peerDiscovery?.metadata !== undefined && !isPlainObject(config.peerDiscovery.metadata)) {
+    throw new Error('peerDiscovery.metadata must be an object when provided');
+  }
 }
 
 export async function deriveChannelHash(channelToken: string): Promise<string> {
@@ -27,12 +49,14 @@ export async function deriveChannelHash(channelToken: string): Promise<string> {
 
 export async function inspectAccount(config: RelayAccountConfig): Promise<RelayAccountInspection> {
   validateAccountConfig(config);
+  const peerDiscovery = normalizePeerDiscoveryConfig(config.peerDiscovery);
   return {
     enabled: config.enabled,
     server: config.server,
     channel: await deriveChannelHash(config.channelToken),
     gatewayPublicKey: config.gatewayKeyPair.publicKey,
     approvedClients: Object.entries(config.approvedClients).map(([fingerprint, record]) => toInspectApprovedClient(fingerprint, record)),
+    peerDiscoveryEnabled: peerDiscovery.enabled,
   };
 }
 
@@ -43,6 +67,7 @@ export async function createEmptyAccount(server: string, gatewayKeyPair: { priva
     channelToken: '',
     gatewayKeyPair,
     approvedClients: {},
+    peerDiscovery: { enabled: false },
   };
 }
 
@@ -81,7 +106,7 @@ export async function upsertApprovedClient(
   clientId?: string,
   label?: string,
 ): Promise<{ fingerprint: string; next: RelayAccountConfig }> {
-  const fingerprint = await publicKeyFingerprint(b64Decode(clientPublicKey));
+  const fingerprint = await publicKeyFingerprint(new Uint8Array(atob(clientPublicKey).split('').map((char) => char.charCodeAt(0))));
   const next = cloneConfig(config);
   const existing = next.approvedClients[fingerprint];
   const lastSeenAt = nowIso();

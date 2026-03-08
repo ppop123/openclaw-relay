@@ -140,9 +140,11 @@ function resolveRelayAccount(cfg: OpenClawConfig, accountId = DEFAULT_ACCOUNT_ID
       ? raw.gatewayKeyPair
       : { privateKey: '', publicKey: '' },
     approvedClients: configured ? raw.approvedClients : {},
+    discovery: configured ? { enabled: Boolean(raw.discovery?.enabled) } : { enabled: false },
     configured,
   };
 }
+
 
 function summarizeAccount(account: ResolvedRelayAccount): ChannelAccountSnapshot {
   return {
@@ -150,6 +152,7 @@ function summarizeAccount(account: ResolvedRelayAccount): ChannelAccountSnapshot
     enabled: account.enabled,
     configured: account.configured,
     publicKey: account.gatewayKeyPair.publicKey || null,
+    discoveryEnabled: Boolean(account.discovery?.enabled),
   };
 }
 
@@ -927,6 +930,13 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
                     type: 'object',
                   },
                 },
+                discovery: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    enabled: { type: 'boolean' },
+                  },
+                },
               },
               required: ['enabled', 'server', 'channelToken', 'gatewayKeyPair', 'approvedClients'],
             },
@@ -938,6 +948,7 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
         'accounts.default.channelToken': { label: 'Channel Token', sensitive: true },
         'accounts.default.gatewayKeyPair.privateKey': { label: 'Gateway Private Key', sensitive: true, advanced: true },
         'accounts.default.gatewayKeyPair.publicKey': { label: 'Gateway Public Key', advanced: true },
+        'accounts.default.discovery.enabled': { label: 'Enable Agent Discovery', help: 'Allow this OpenClaw gateway to advertise itself to other gateways on the same relay. Human-facing clients still cannot browse peers.' },
       },
     },
     config: {

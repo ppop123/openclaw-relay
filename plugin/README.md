@@ -40,6 +40,16 @@ openclaw relay rotate-token
 openclaw relay disable
 ```
 
+## Agent Discovery Boundary
+
+The plugin now understands the relay's gateway-only Layer 0.5 control plane, but it keeps the product boundary strict:
+
+- Human-facing clients still talk only to their own OpenClaw instance.
+- Human-facing clients must not browse or contact other OpenClaw instances through this plugin.
+- Operator opt-in for discoverability is controlled by `channels.relay.accounts.<id>.discovery.enabled` in the OpenClaw config.
+- The plugin currently reuses the gateway X25519 identity as the discovery public key and advertises generated metadata based on gateway capabilities.
+- Internal gateway-side methods exist for `discover`, `signal`, and `invite_create`, but higher-level OpenClaw agent policy is still being built on top.
+
 ## Runtime requirements
 
 - Node.js `>=22`

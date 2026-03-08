@@ -58,6 +58,37 @@ describe('RelayConnection heartbeat', () => {
 
     vi.useRealTimers();
   });
+
+  it('includes discovery fields in the initial register frame when configured', async () => {
+    const ws = new FakeWebSocket();
+    const discoveryKey = Buffer.alloc(32, 0x11).toString('base64');
+    const connection = new RelayConnection({
+      url: 'ws://relay.test/ws',
+      channel: 'abcd',
+      register: {
+        discoverable: true,
+        public_key: discoveryKey,
+        metadata: { name: 'alpha' },
+      },
+      webSocketFactory: () => ws,
+      onFrame: () => undefined,
+    });
+
+    const startPromise = connection.start();
+    ws.emit('open');
+
+    expect(JSON.parse(ws.sent[0]!)).toEqual({
+      type: 'register',
+      channel: 'abcd',
+      version: 1,
+      discoverable: true,
+      public_key: discoveryKey,
+      metadata: { name: 'alpha' },
+    });
+
+    ws.emit('message', { data: JSON.stringify({ type: 'registered', channel: 'abcd', clients: 0 }) });
+    await startPromise;
+  });
 });
 
 describe('computeReconnectDelay', () => {

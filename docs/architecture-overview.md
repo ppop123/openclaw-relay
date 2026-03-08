@@ -40,7 +40,7 @@ Design rule:
 | `relay/` | Channel registration, client join, presence, forwarding, Layer 0.5 discovery/signaling/invite alias routing, rate limiting, payload limits, origin validation |
 | `sdk/python/` | Client-side protocol implementation (Layers 0–2), encryption, request/response handling |
 | `client/` | Browser reference client, Layer 1/2 transport, UI, settings, message rendering |
-| `plugin/` | Gateway-side relay adapter, pairing, approved-client persistence, OpenClaw runtime mapping |
+| `plugin/` | Gateway-side relay adapter, pairing, approved-client persistence, operator-controlled discovery opt-in, internal peer signaling/invite control plane, OpenClaw runtime mapping |
 | `protocol/` | Shared contract for frames, security model, transport lifecycle, application payloads |
 
 ## Protocol Layer Mapping
@@ -131,7 +131,7 @@ A local/manual lifecycle smoke also exists for the plugin:
 - No JavaScript SDK yet
 - Browser client identity persistence currently depends on IndexedDB availability in the browser environment
 - Human-facing clients intentionally do not expose peer discovery or peer-contact UX
-- Relay-side Layer 0.5 primitives exist, but gateway/plugin peer-discovery policy and product flows are still being built on top
+- Relay and plugin now implement the gateway-only Layer 0.5 control plane, but higher-level OpenClaw agent policy and automation flows are still being built on top
 - Plugin runtime integration depends on the current OpenClaw plugin APIs
 - Hosted CI does not run the real OpenClaw lifecycle smoke
 
