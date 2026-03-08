@@ -231,6 +231,37 @@ describe('RelayConnection constructor', () => {
     warnSpy.mockRestore();
   });
 
+  it('falls back to a replacement memory-only identity when the stored keypair is invalid', async () => {
+    mockLoadStoredIdentity.mockResolvedValue({
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      fingerprint: 'sha256:savedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+    const conn = new RelayConnection();
+    conn.onToast = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await conn.hydratePersistedIdentity();
+    vi.spyOn(conn.crypto, 'importIdentity').mockRejectedValueOnce(new Error('corrupt keypair'));
+
+    const summary = await conn._ensureClientIdentity();
+
+    expect(mockDeleteStoredIdentity).toHaveBeenCalled();
+    expect(mockSaveStoredIdentity).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({
+      exists: true,
+      persistence: 'memory',
+      loadFailed: true,
+      fingerprint: 'sha256:testfingerprint',
+    });
+    expect(conn.onToast).toHaveBeenCalledWith(
+      expect.stringMatching(/invalid and will be replaced/i),
+      'warning',
+    );
+    warnSpy.mockRestore();
+  });
+
   it('resets the persisted identity', async () => {
     const conn = new RelayConnection();
     await conn._ensureClientIdentity();

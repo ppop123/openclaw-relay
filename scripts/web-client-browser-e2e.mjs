@@ -43,6 +43,12 @@ async function waitForIdentityFingerprint(page, expected) {
   await page.waitForFunction((value) => window.app.connection.identityFingerprint === value, expected);
 }
 
+function makeMismatchedPinnedKey(value) {
+  const last = value.slice(-1);
+  const replacement = last === 'A' ? 'B' : 'A';
+  return `${value.slice(0, -1)}${replacement}`;
+}
+
 async function fileExists(path) {
   try {
     await stat(path);
@@ -360,6 +366,21 @@ async function run() {
       throw error;
     }
 
+    log('rejecting a mismatched pinned gateway key');
+    await page.fill('#relayUrl', runtime.relayUrl);
+    await page.fill('#channelToken', CHANNEL_TOKEN);
+    await page.fill('#gatewayPubKey', makeMismatchedPinnedKey(runtime.gatewayPubKey));
+    await page.click('#connectBtn');
+    await page.waitForFunction(() => {
+      const errorEl = document.getElementById('connectError');
+      return errorEl.style.display === 'block' && errorEl.textContent.includes('Gateway public key does not match');
+    });
+    assert.equal(
+      await page.evaluate(() => document.getElementById('connectPanel').style.display !== 'none'),
+      true,
+      'mismatched pinned gateway key should keep the connect panel visible',
+    );
+
     log('connecting the browser client');
     await page.fill('#relayUrl', runtime.relayUrl);
     await page.fill('#channelToken', CHANNEL_TOKEN);
@@ -398,6 +419,12 @@ async function run() {
     assert.equal(await page.inputValue('#relayUrl'), `${runtime.relayUrl}/ws`, 'relay url persists across reload');
     assert.equal(await page.inputValue('#gatewayPubKey'), runtime.gatewayPubKey, 'gateway key persists across reload');
     assert.equal(await page.inputValue('#channelToken'), '', 'channel token is not persisted');
+    const persistedSettings = await page.evaluate(() => JSON.parse(localStorage.getItem('openclaw-relay-settings') || '{}'));
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(persistedSettings, 'channelToken'),
+      false,
+      'channel token is absent from persisted settings',
+    );
     const fingerprintAfterReload = await page.locator('#identityFingerprint').evaluate((el) => el.title);
     assert.equal(fingerprintAfterReload, fingerprintBeforeReload, 'fingerprint stays stable across reload');
 

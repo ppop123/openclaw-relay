@@ -206,9 +206,11 @@
     "browser_e2e_runtime": {
       "script": "scripts/web-client-browser-e2e.mjs",
       "coverage": [
+        "pinned gateway-key mismatch refusal",
         "connect and agents.list",
         "streamed chat.send",
         "reload identity persistence",
+        "channelToken absent from persisted settings",
         "protected identity export/reset/import",
         "preferred-agent restore",
         "transcript export"

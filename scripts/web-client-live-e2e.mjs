@@ -80,6 +80,32 @@ async function allocatePort() {
   return port;
 }
 
+async function findListeningPort(pid, attempts = 60) {
+  let lastOutput = '';
+  for (let index = 0; index < attempts; index += 1) {
+    const result = await new Promise((resolve) => {
+      const child = spawn('lsof', ['-Pan', '-p', String(pid), '-iTCP', '-sTCP:LISTEN'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk) => { stdout += String(chunk); });
+      child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+      child.on('exit', (code) => resolve({ code, stdout, stderr }));
+    });
+
+    lastOutput = `${result.stdout}${result.stderr}`.trim();
+    const match = lastOutput.match(/TCP\s+[^\s:]+:(\d+)\s+\(LISTEN\)/);
+    if (match) {
+      return Number(match[1]);
+    }
+
+    await delay(250);
+  }
+
+  throw new Error(`timed out resolving a listening TCP port for pid ${pid}: ${lastOutput || 'no lsof output'}`);
+}
+
 async function createX25519Identity() {
   const keyPair = await cryptoApi.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
   const publicKeyBytes = new Uint8Array(await cryptoApi.subtle.exportKey('raw', keyPair.publicKey));
@@ -209,6 +235,32 @@ function startStaticServer() {
   };
 }
 
+async function runCommand(name, command, args, { cwd, env }) {
+  const result = await new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: { ...process.env, ...env, NO_COLOR: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += String(chunk); });
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.on('exit', (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
+
+  if (result.code !== 0) {
+    throw new Error(`${name} failed with code ${result.code}: ${result.stderr || result.stdout}`.trim());
+  }
+}
+
+async function buildRelayBinary(outputPath) {
+  await runCommand('go build relay', 'go', ['build', '-o', outputPath, '.'], {
+    cwd: RELAY_ROOT,
+    env: {},
+  });
+}
+
 function spawnLoggedProcess(name, command, args, { cwd, env, logPath }) {
   const stream = createWriteStream(logPath, { flags: 'a' });
   const child = spawn(command, args, {
@@ -293,8 +345,6 @@ async function callSystemStatus(page) {
 
 async function run() {
   await mkdir(RUN_ROOT, { recursive: true });
-  const relayPort = await allocatePort();
-  const gatewayPort = await allocatePort();
   const chromePath = await resolveChromePath();
   const configPath = join(RUN_ROOT, 'openclaw.json');
   const stateDir = join(RUN_ROOT, 'openclaw-state');
@@ -306,14 +356,15 @@ async function run() {
 
   const gatewayIdentity = await createX25519Identity();
   const browserIdentity = await writeBrowserIdentity(browserIdentityPath);
-  const config = buildConfig({ relayPort, gatewayIdentity, browserIdentity });
+  const relayBinaryPath = join(RUN_ROOT, 'relay-e2e');
+  const gatewayPort = await allocatePort();
   await mkdir(stateDir, { recursive: true });
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  await buildRelayBinary(relayBinaryPath);
 
   const staticServer = startStaticServer();
   const pageOrigin = await staticServer.start();
   const pageOriginHost = new URL(pageOrigin).host;
-  const relay = spawnLoggedProcess('relay', 'go', ['run', '.', '-port', String(relayPort), '-tls', 'off', '--allow-origin', pageOriginHost], {
+  const relay = spawnLoggedProcess('relay', relayBinaryPath, ['-port', '0', '-tls', 'off', '--allow-origin', pageOriginHost], {
     cwd: RELAY_ROOT,
     env: {},
     logPath: relayLog,
@@ -322,8 +373,12 @@ async function run() {
   let gateway;
   let context;
   try {
+    const relayPort = await findListeningPort(relay.pid);
     log(`starting relay on :${relayPort}`);
     await waitForHttp(`http://127.0.0.1:${relayPort}/status`);
+
+    const config = buildConfig({ relayPort, gatewayIdentity, browserIdentity });
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
     gateway = spawnLoggedProcess('gateway', 'openclaw', ['gateway', 'run', '--allow-unconfigured', '--port', String(gatewayPort), '--auth', 'none', '--verbose'], {
       cwd: ROOT,

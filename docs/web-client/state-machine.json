@@ -216,7 +216,7 @@
     ]
   },
   "agent_selection_model": {
-    "storage_field": "selectedAgent",
+    "storage_field": "openclaw-relay-settings.selectedAgent",
     "restore_rule": "reuse the saved agent if it still exists in the latest agents.list response; otherwise fall back to the first available agent",
     "update_trigger": "user changes #agentSelect"
   },
