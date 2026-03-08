@@ -31,7 +31,7 @@ Both sides connect **outbound** — no port forwarding, no public IP, no DNS set
 
 ## Latest Release / 最新发布
 
-`OpenClaw Relay v0.1.0` is now available. / `OpenClaw Relay v0.1.0` 已发布。
+`OpenClaw Relay v0.2.0` is now available. / `OpenClaw Relay v0.2.0` 已发布。
 
 Official release scope / 正式支持范围：
 
@@ -48,8 +48,8 @@ Excluded from official release scope / 不在正式发布范围内：
 
 Release notes / 发布说明：
 
-- 中文：[`docs/releases/v0.1.0-github-release.zh-CN.md`](docs/releases/v0.1.0-github-release.zh-CN.md)
-- English: [`docs/releases/v0.1.0-github-release.en.md`](docs/releases/v0.1.0-github-release.en.md)
+- 中文：[`docs/releases/v0.2.0-github-release.zh-CN.md`](docs/releases/v0.2.0-github-release.zh-CN.md)
+- English: [`docs/releases/v0.2.0-github-release.en.md`](docs/releases/v0.2.0-github-release.en.md)
 
 ## Project Status
 

@@ -6,7 +6,7 @@ This package contains the OpenClaw Relay gateway plugin. Install it into your ow
 
 - Implemented and covered by CI tests
 - Verified locally against a real OpenClaw runtime build
-- Officially supported as part of `v0.1.0`
+- Officially supported as part of `v0.2.0`
 - Requires a current OpenClaw runtime with channel and CLI plugin APIs enabled
 
 ## What it provides

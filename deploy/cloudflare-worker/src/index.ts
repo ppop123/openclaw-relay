@@ -39,7 +39,7 @@ export default {
 			return jsonResponse(
 				{
 					name: "openclaw-relay",
-					version: "0.1.0",
+					version: "0.2.0",
 					protocol_version: 1,
 					public: true,
 					runtime: "cloudflare-workers",

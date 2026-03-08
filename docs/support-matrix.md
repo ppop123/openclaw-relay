@@ -14,7 +14,7 @@
 | Protocol specification | `protocol/` | Wire protocol specification (v1) |
 | OpenClaw gateway plugin | `plugin/` | TypeScript gateway plugin for installing relay support into your own OpenClaw runtime |
 
-These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.1.0`.
+These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.2.0`.
 
 ### Experimental (Not Officially Supported)
 
