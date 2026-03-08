@@ -1,0 +1,6 @@
+{
+  "_comment": "Layer 0.5: Relay confirms invite alias creation and returns its expiration time.",
+  "type": "invite_created",
+  "invite_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "expires_at": "2026-03-09T10:05:00Z"
+}

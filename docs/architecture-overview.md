@@ -37,7 +37,7 @@ Design rule:
 
 | Component | Primary Responsibilities |
 |----------|---------------------------|
-| `relay/` | Channel registration, client join, presence, forwarding, rate limiting, payload limits, origin validation |
+| `relay/` | Channel registration, client join, presence, forwarding, Layer 0.5 discovery/signaling/invite alias routing, rate limiting, payload limits, origin validation |
 | `sdk/python/` | Client-side protocol implementation (Layers 0–2), encryption, request/response handling |
 | `client/` | Browser reference client, Layer 1/2 transport, UI, settings, message rendering |
 | `plugin/` | Gateway-side relay adapter, pairing, approved-client persistence, OpenClaw runtime mapping |
@@ -47,7 +47,7 @@ Design rule:
 
 | Layer | Purpose | Main Sources |
 |------|---------|--------------|
-| Layer 0 | Channel and relay frames | `protocol/layer0-channel.md` |
+| Layer 0 / 0.5 | Channel routing plus gateway-only discovery/signaling/invite frames | `protocol/layer0-channel.md` |
 | Layer 1 | Identity, handshake, session key derivation | `protocol/layer1-security.md` |
 | Layer 2 | Request/response/streaming transport | `protocol/layer2-transport.md` |
 | Layer 3 | Application methods | `protocol/layer3-application.md` |
@@ -72,7 +72,17 @@ Design rule:
 7. Both sides derive a per-connection AES-GCM session key via HKDF
 8. All later Layer 2 payloads are encrypted
 
-### 3. Request / Response
+### 3. Gateway-Only Peer Discovery Bootstrap
+
+1. A gateway may register as discoverable with a discovery public key and opaque metadata
+2. Any registered gateway may call `discover` to list currently discoverable peers on the same relay
+3. A discoverable gateway may send encrypted `signal` frames to another discoverable gateway
+4. The accepting gateway may create a short-lived invite alias
+5. The initiating side joins via `JOIN.channel = invite_hash` and then proceeds through the normal `HELLO` / `HELLO_ACK` flow
+
+Human-facing clients do not participate in this flow and must not expose it in UI.
+
+### 4. Request / Response
 
 1. Client encrypts a Layer 2 `request`
 2. Gateway decrypts it and routes it to the OpenClaw runtime
@@ -120,6 +130,8 @@ A local/manual lifecycle smoke also exists for the plugin:
 - Single relay node only
 - No JavaScript SDK yet
 - Browser client identity persistence currently depends on IndexedDB availability in the browser environment
+- Human-facing clients intentionally do not expose peer discovery or peer-contact UX
+- Relay-side Layer 0.5 primitives exist, but gateway/plugin peer-discovery policy and product flows are still being built on top
 - Plugin runtime integration depends on the current OpenClaw plugin APIs
 - Hosted CI does not run the real OpenClaw lifecycle smoke
 

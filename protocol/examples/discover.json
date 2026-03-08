@@ -1,0 +1,4 @@
+{
+  "_comment": "Layer 0.5: Any registered gateway may request the current discoverable peer list.",
+  "type": "discover"
+}

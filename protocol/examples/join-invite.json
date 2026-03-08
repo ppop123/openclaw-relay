@@ -1,0 +1,7 @@
+{
+  "_comment": "Layer 0.5: Client joins using a short-lived invite hash alias in the normal JOIN.channel field. The relay resolves the alias internally without revealing the owner's channel hash.",
+  "type": "join",
+  "channel": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "version": 1,
+  "client_id": "peer_a_123"
+}

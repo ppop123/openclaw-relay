@@ -1,0 +1,5 @@
+{
+  "_comment": "Layer 0.5: Gateway tried to send a signal without a bound discoverable identity on this relay.",
+  "type": "signal_error",
+  "code": "not_discoverable"
+}

@@ -81,6 +81,17 @@ The web client stores only the minimum data needed for reconnection:
 
 Older versions of the client may have persisted `channelToken` to local storage. On load, the current client automatically detects and **deletes** any saved `channelToken`. No user action is required.
 
+## Gateway-Only Discovery Boundary
+
+Layer 0.5 discovery and signaling are **gateway-scoped**, not human-scoped:
+
+- Human-facing clients may talk only to their own OpenClaw instance. They must not discover, browse, or contact other OpenClaw instances through relay discovery or signaling.
+- The relay may expose discoverable gateway public keys, opaque metadata, and online timestamps to other gateways, but it must never expose `channel_hash` or `channel_token` through this surface.
+- Signal payloads remain opaque encrypted bytes to the relay.
+- Invite aliases are short-lived, memory-only, and single-use in the MVP. The raw invite token must move only inside encrypted gateway-to-gateway signaling or another gateway-controlled secure channel.
+
+This keeps the relay as an exchange for agents rather than a human social directory.
+
 ## Origin Validation
 
 The relay validates the `Origin` header on incoming WebSocket upgrade requests:

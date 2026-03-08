@@ -1,0 +1,7 @@
+{
+  "_comment": "Layer 0.5: Discoverable gateway sends encrypted signaling payload to another discoverable gateway. The relay derives source from connection state, so the sender does not include it.",
+  "type": "signal",
+  "target": "76u5dd/BHEe7bLeAmUvAaH8J1MhXOf11VBwu2OTCJ04=",
+  "ephemeral_key": "WG+41ZDDvL5OG0O0KuYFbp+s9+qEb6EpWR15+oTEWu8=",
+  "payload": "eyJraW5kIjoiaW52aXRlX3JlcXVlc3QiLCJ0ZXh0IjoiSGVsbG8gZnJvbSBhbm90aGVyIE9wZW5DbGF3LiJ9"
+}

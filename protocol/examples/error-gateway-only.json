@@ -1,0 +1,6 @@
+{
+  "_comment": "Layer 0.5: Human-facing or other non-gateway clients must not use discovery/signaling/invite control frames.",
+  "type": "error",
+  "code": "gateway_only",
+  "message": "discover is only available to registered gateway connections"
+}

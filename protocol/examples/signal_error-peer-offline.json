@@ -1,0 +1,6 @@
+{
+  "_comment": "Layer 0.5: Target public key is not currently discoverable on this relay.",
+  "type": "signal_error",
+  "code": "peer_offline",
+  "target": "76u5dd/BHEe7bLeAmUvAaH8J1MhXOf11VBwu2OTCJ04="
+}

@@ -1,0 +1,22 @@
+{
+  "_comment": "Layer 0.5: Relay returns discoverable peers only. No channel hashes or tokens are exposed.",
+  "type": "discover_result",
+  "peers": [
+    {
+      "public_key": "76u5dd/BHEe7bLeAmUvAaH8J1MhXOf11VBwu2OTCJ04=",
+      "metadata": {
+        "name": "openclaw-beta",
+        "caps": ["chat", "agents"]
+      },
+      "online_since": "2026-03-09T10:00:00Z"
+    },
+    {
+      "public_key": "ac0AOxN5nXw6a0ERKDtrPrH1LSb7pfVLT7WGmBJ1UJA=",
+      "metadata": {
+        "name": "openclaw-gamma",
+        "caps": ["chat"]
+      },
+      "online_since": "2026-03-09T10:01:30Z"
+    }
+  ]
+}

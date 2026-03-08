@@ -1,11 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
 	"nhooyr.io/websocket"
+)
+
+const (
+	maxSignalsPerMinute      = 10
+	maxPendingInvitesPerPeer = 10
 )
 
 // RelayConfig holds relay server configuration.
@@ -25,12 +32,28 @@ type clientConn struct {
 
 // channel represents a relay channel with a gateway and zero or more clients.
 type channel struct {
-	mu          sync.RWMutex
-	hash        string
-	gateway     *websocket.Conn
-	clients     map[string]*clientConn
-	limiter     *tokenBucket
-	createdAt   time.Time
+	mu        sync.RWMutex
+	hash      string
+	gateway   *websocket.Conn
+	clients   map[string]*clientConn
+	limiter   *tokenBucket
+	createdAt time.Time
+}
+
+type discoveryEntry struct {
+	publicKey    string
+	channelHash  string
+	metadata     json.RawMessage
+	registeredAt time.Time
+	conn         *websocket.Conn
+}
+
+type inviteEntry struct {
+	inviteHash       string
+	ownerPublicKey   string
+	ownerChannelHash string
+	expiresAt        time.Time
+	remainingUses    int
 }
 
 // Relay is the core relay server managing channels and connections.
@@ -38,8 +61,12 @@ type Relay struct {
 	config RelayConfig
 	logger *slog.Logger
 
-	mu       sync.RWMutex
-	channels map[string]*channel
+	mu              sync.RWMutex
+	channels        map[string]*channel
+	discoveryByKey  map[string]*discoveryEntry
+	discoveryByConn map[*websocket.Conn]*discoveryEntry
+	invites         map[string]*inviteEntry
+	signalLimiters  map[*websocket.Conn]*tokenBucket
 
 	framesForwarded int64
 	framesRejected  int64
@@ -48,9 +75,13 @@ type Relay struct {
 // NewRelay creates a new Relay instance.
 func NewRelay(config RelayConfig, logger *slog.Logger) *Relay {
 	return &Relay{
-		config:   config,
-		logger:   logger,
-		channels: make(map[string]*channel),
+		config:          config,
+		logger:          logger,
+		channels:        make(map[string]*channel),
+		discoveryByKey:  make(map[string]*discoveryEntry),
+		discoveryByConn: make(map[*websocket.Conn]*discoveryEntry),
+		invites:         make(map[string]*inviteEntry),
+		signalLimiters:  make(map[*websocket.Conn]*tokenBucket),
 	}
 }
 
@@ -70,7 +101,6 @@ func (r *Relay) RegisterGateway(channelHash string, conn *websocket.Conn) (*chan
 	}
 
 	if len(r.channels) >= r.config.MaxChannels {
-		// Check if this channel already exists (gateway reconnect to existing channel).
 		if _, exists := r.channels[channelHash]; !exists {
 			return nil, "channel_limit_reached"
 		}
@@ -95,25 +125,154 @@ func (r *Relay) RegisterGateway(channelHash string, conn *websocket.Conn) (*chan
 	return ch, ""
 }
 
+func (r *Relay) BindGatewayDiscovery(channelHash string, conn *websocket.Conn, publicKey string, metadata json.RawMessage) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if existing, ok := r.discoveryByConn[conn]; ok {
+		if current, ok := r.discoveryByKey[existing.publicKey]; ok && current == existing {
+			delete(r.discoveryByKey, existing.publicKey)
+		}
+		delete(r.discoveryByConn, conn)
+	}
+	if limiter, ok := r.signalLimiters[conn]; ok {
+		limiter.stop()
+		delete(r.signalLimiters, conn)
+	}
+
+	if old, ok := r.discoveryByKey[publicKey]; ok && old.conn != conn {
+		delete(r.discoveryByConn, old.conn)
+		if limiter, ok := r.signalLimiters[old.conn]; ok {
+			limiter.stop()
+			delete(r.signalLimiters, old.conn)
+		}
+	}
+
+	entry := &discoveryEntry{
+		publicKey:    publicKey,
+		channelHash:  channelHash,
+		metadata:     copyRawMessage(metadata),
+		registeredAt: time.Now().UTC(),
+		conn:         conn,
+	}
+	r.discoveryByKey[publicKey] = entry
+	r.discoveryByConn[conn] = entry
+	r.signalLimiters[conn] = newIntervalTokenBucket(maxSignalsPerMinute, time.Minute)
+}
+
+func (r *Relay) DiscoveryIdentityForConn(conn *websocket.Conn) (*discoveryEntry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry, ok := r.discoveryByConn[conn]
+	if !ok {
+		return nil, false
+	}
+	copy := *entry
+	copy.metadata = copyRawMessage(entry.metadata)
+	return &copy, true
+}
+
+func (r *Relay) LookupDiscoveryTarget(publicKey string) (*discoveryEntry, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry, ok := r.discoveryByKey[publicKey]
+	if !ok {
+		return nil, false
+	}
+	copy := *entry
+	copy.metadata = copyRawMessage(entry.metadata)
+	return &copy, true
+}
+
+func (r *Relay) ListDiscoverablePeers(excludeConn *websocket.Conn) []DiscoveryPeer {
+	r.mu.RLock()
+	peers := make([]DiscoveryPeer, 0, len(r.discoveryByKey))
+	for _, entry := range r.discoveryByKey {
+		if entry.conn == excludeConn {
+			continue
+		}
+		peers = append(peers, DiscoveryPeer{
+			PublicKey:   entry.publicKey,
+			Metadata:    copyRawMessage(entry.metadata),
+			OnlineSince: entry.registeredAt.Format(time.RFC3339),
+		})
+	}
+	r.mu.RUnlock()
+
+	sort.Slice(peers, func(i, j int) bool {
+		return peers[i].PublicKey < peers[j].PublicKey
+	})
+	return peers
+}
+
+func (r *Relay) AllowSignal(conn *websocket.Conn) bool {
+	r.mu.RLock()
+	limiter, ok := r.signalLimiters[conn]
+	r.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	return limiter.allow()
+}
+
+func (r *Relay) CreateInvite(conn *websocket.Conn, inviteHash string, maxUses, ttlSeconds int) (time.Time, string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.pruneExpiredInvitesLocked(time.Now())
+
+	owner, ok := r.discoveryByConn[conn]
+	if !ok {
+		return time.Time{}, "not_discoverable"
+	}
+	if _, exists := r.invites[inviteHash]; exists {
+		return time.Time{}, "invalid_frame"
+	}
+
+	pending := 0
+	for _, invite := range r.invites {
+		if invite.ownerPublicKey == owner.publicKey {
+			pending++
+		}
+	}
+	if pending >= maxPendingInvitesPerPeer {
+		return time.Time{}, "invite_limit_reached"
+	}
+
+	expiresAt := time.Now().Add(time.Duration(ttlSeconds) * time.Second).UTC()
+	r.invites[inviteHash] = &inviteEntry{
+		inviteHash:       inviteHash,
+		ownerPublicKey:   owner.publicKey,
+		ownerChannelHash: owner.channelHash,
+		expiresAt:        expiresAt,
+		remainingUses:    maxUses,
+	}
+	return expiresAt, ""
+}
+
 // JoinClient adds a client to a channel.
 // Returns the channel, whether the gateway is online, and an error code.
 func (r *Relay) JoinClient(channelHash, clientID string, conn *websocket.Conn) (*channel, bool, string) {
 	r.mu.Lock()
+	resolvedChannelHash, errCode := r.resolveJoinChannelLocked(channelHash)
+	if errCode != "" {
+		r.mu.Unlock()
+		return nil, false, errCode
+	}
 
-	ch, exists := r.channels[channelHash]
+	ch, exists := r.channels[resolvedChannelHash]
 	if !exists {
-		// Create channel without gateway; client can wait.
 		if len(r.channels) >= r.config.MaxChannels {
 			r.mu.Unlock()
 			return nil, false, "channel_limit_reached"
 		}
 		ch = &channel{
-			hash:      channelHash,
+			hash:      resolvedChannelHash,
 			clients:   make(map[string]*clientConn),
 			limiter:   newTokenBucket(r.config.RateLimit),
 			createdAt: time.Now(),
 		}
-		r.channels[channelHash] = ch
+		r.channels[resolvedChannelHash] = ch
 	}
 	r.mu.Unlock()
 
@@ -121,15 +280,11 @@ func (r *Relay) JoinClient(channelHash, clientID string, conn *websocket.Conn) (
 	defer ch.mu.Unlock()
 
 	if len(ch.clients) >= r.config.MaxClientsPerCh {
-		// Allow replacing an existing client_id (doesn't count as a new slot).
 		if _, replacing := ch.clients[clientID]; !replacing {
 			return nil, false, "channel_full"
 		}
 	}
 
-	// If this client_id is already connected, close the old connection.
-	// Its read-loop goroutine will eventually call RemoveClient, but
-	// the ownership check there will prevent it from removing the new conn.
 	if old, exists := ch.clients[clientID]; exists {
 		old.conn.Close(websocket.StatusNormalClosure, "replaced by new connection")
 	}
@@ -138,14 +293,14 @@ func (r *Relay) JoinClient(channelHash, clientID string, conn *websocket.Conn) (
 	gatewayOnline := ch.gateway != nil
 
 	r.logger.Info("client.joined",
-		"channel_hash", channelHash[:min(12, len(channelHash))],
+		"channel_hash", resolvedChannelHash[:min(12, len(resolvedChannelHash))],
 		"client_id", clientID,
 	)
 	return ch, gatewayOnline, ""
 }
 
 // RemoveGateway removes the gateway from a channel and cleans up.
-func (r *Relay) RemoveGateway(channelHash string) {
+func (r *Relay) RemoveGateway(channelHash string, conn *websocket.Conn) {
 	r.mu.Lock()
 	ch, exists := r.channels[channelHash]
 	if !exists {
@@ -154,15 +309,20 @@ func (r *Relay) RemoveGateway(channelHash string) {
 	}
 
 	ch.mu.Lock()
+	if ch.gateway != conn {
+		ch.mu.Unlock()
+		r.mu.Unlock()
+		return
+	}
 	ch.gateway = nil
-	// Collect client connections to notify.
 	clients := make([]*clientConn, 0, len(ch.clients))
 	for _, c := range ch.clients {
 		clients = append(clients, c)
 	}
 	ch.mu.Unlock()
 
-	// If no clients remain, remove the channel entirely.
+	r.unbindGatewayDiscoveryLocked(conn, channelHash)
+
 	if len(clients) == 0 {
 		duration := time.Since(ch.createdAt).Seconds()
 		ch.limiter.stop()
@@ -176,11 +336,10 @@ func (r *Relay) RemoveGateway(channelHash string) {
 	}
 	r.mu.Unlock()
 
-	// Notify all clients that gateway went offline.
 	presenceMsg := Frame{
-		Type:     "presence",
-		Role:     "gateway",
-		Status:   "offline",
+		Type:   "presence",
+		Role:   "gateway",
+		Status: "offline",
 	}
 	for _, c := range clients {
 		writeJSON(c.conn, presenceMsg)
@@ -201,7 +360,6 @@ func (r *Relay) RemoveClient(channelHash, clientID string, conn *websocket.Conn,
 	r.mu.Unlock()
 
 	ch.mu.Lock()
-	// Only remove if this connection still owns the slot.
 	current, exists := ch.clients[clientID]
 	if !exists || current.conn != conn {
 		ch.mu.Unlock()
@@ -218,7 +376,6 @@ func (r *Relay) RemoveClient(channelHash, clientID string, conn *websocket.Conn,
 		"reason", reason,
 	)
 
-	// Notify gateway that client left.
 	if gw != nil {
 		presenceMsg := Frame{
 			Type:     "presence",
@@ -229,7 +386,6 @@ func (r *Relay) RemoveClient(channelHash, clientID string, conn *websocket.Conn,
 		writeJSON(gw, presenceMsg)
 	}
 
-	// If channel has no gateway and no clients, remove it.
 	if gw == nil && remainingClients == 0 {
 		r.mu.Lock()
 		ch2, exists := r.channels[channelHash]
@@ -243,6 +399,54 @@ func (r *Relay) RemoveClient(channelHash, clientID string, conn *websocket.Conn,
 			)
 		}
 		r.mu.Unlock()
+	}
+}
+
+func (r *Relay) resolveJoinChannelLocked(channelHash string) (string, string) {
+	r.pruneExpiredInvitesLocked(time.Now())
+	invite, exists := r.invites[channelHash]
+	if !exists {
+		return channelHash, ""
+	}
+	if _, ok := r.channels[invite.ownerChannelHash]; !ok {
+		delete(r.invites, channelHash)
+		return "", "invite_invalid"
+	}
+	if invite.remainingUses <= 0 {
+		return "", "invite_invalid"
+	}
+	invite.remainingUses--
+	return invite.ownerChannelHash, ""
+}
+
+func (r *Relay) pruneExpiredInvitesLocked(now time.Time) {
+	for hash, invite := range r.invites {
+		if !invite.expiresAt.After(now) {
+			delete(r.invites, hash)
+		}
+	}
+}
+
+func (r *Relay) unbindGatewayDiscoveryLocked(conn *websocket.Conn, channelHash string) {
+	entry, ok := r.discoveryByConn[conn]
+	if ok {
+		if current, exists := r.discoveryByKey[entry.publicKey]; exists && current == entry {
+			delete(r.discoveryByKey, entry.publicKey)
+		}
+		delete(r.discoveryByConn, conn)
+		r.removeInvitesForOwnerLocked(entry.publicKey, channelHash)
+	}
+	if limiter, ok := r.signalLimiters[conn]; ok {
+		limiter.stop()
+		delete(r.signalLimiters, conn)
+	}
+}
+
+func (r *Relay) removeInvitesForOwnerLocked(ownerPublicKey, ownerChannelHash string) {
+	for hash, invite := range r.invites {
+		if invite.ownerPublicKey == ownerPublicKey || invite.ownerChannelHash == ownerChannelHash {
+			delete(r.invites, hash)
+		}
 	}
 }
 
@@ -298,23 +502,34 @@ func (r *Relay) CloseAll() {
 		ch.limiter.stop()
 		ch.mu.Unlock()
 	}
+	for _, limiter := range r.signalLimiters {
+		limiter.stop()
+	}
 	r.channels = make(map[string]*channel)
+	r.discoveryByKey = make(map[string]*discoveryEntry)
+	r.discoveryByConn = make(map[*websocket.Conn]*discoveryEntry)
+	r.invites = make(map[string]*inviteEntry)
+	r.signalLimiters = make(map[*websocket.Conn]*tokenBucket)
 }
 
 // tokenBucket implements a simple token bucket rate limiter.
 type tokenBucket struct {
-	mu       sync.Mutex
-	tokens   int
-	max      int
-	ticker   *time.Ticker
-	done     chan struct{}
+	mu     sync.Mutex
+	tokens int
+	max    int
+	ticker *time.Ticker
+	done   chan struct{}
 }
 
 func newTokenBucket(rate int) *tokenBucket {
+	return newIntervalTokenBucket(rate, time.Second)
+}
+
+func newIntervalTokenBucket(rate int, interval time.Duration) *tokenBucket {
 	tb := &tokenBucket{
 		tokens: rate,
 		max:    rate,
-		ticker: time.NewTicker(time.Second),
+		ticker: time.NewTicker(interval),
 		done:   make(chan struct{}),
 	}
 	go tb.refill()
@@ -353,4 +568,13 @@ func (tb *tokenBucket) stop() {
 	default:
 		close(tb.done)
 	}
+}
+
+func copyRawMessage(value json.RawMessage) json.RawMessage {
+	if len(value) == 0 {
+		return nil
+	}
+	copied := make([]byte, len(value))
+	copy(copied, value)
+	return json.RawMessage(copied)
 }

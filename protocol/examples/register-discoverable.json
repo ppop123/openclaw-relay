@@ -1,0 +1,13 @@
+{
+  "_comment": "Layer 0 / 0.5: Gateway registers as discoverable. metadata is opaque relay-stored JSON.",
+  "type": "register",
+  "channel": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "version": 1,
+  "discoverable": true,
+  "public_key": "iSn35xtBbuS1A3KZoV5allqwVoxWmq4eRIvfr1Z7VtI=",
+  "metadata": {
+    "name": "openclaw-alpha",
+    "caps": ["chat", "tools"],
+    "operator_opt_in": true
+  }
+}

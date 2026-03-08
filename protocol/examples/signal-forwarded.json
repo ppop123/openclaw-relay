@@ -1,0 +1,7 @@
+{
+  "_comment": "Layer 0.5: Relay forwards signal to the target gateway with source derived from the sender's bound discovery identity.",
+  "type": "signal",
+  "source": "iSn35xtBbuS1A3KZoV5allqwVoxWmq4eRIvfr1Z7VtI=",
+  "ephemeral_key": "WG+41ZDDvL5OG0O0KuYFbp+s9+qEb6EpWR15+oTEWu8=",
+  "payload": "eyJraW5kIjoiaW52aXRlX3JlcXVlc3QiLCJ0ZXh0IjoiSGVsbG8gZnJvbSBhbm90aGVyIE9wZW5DbGF3LiJ9"
+}

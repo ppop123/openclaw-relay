@@ -126,9 +126,9 @@ func TestBase64DecodedLen(t *testing.T) {
 		{"Hello with padding", "SGVsbG8=", 5},
 		{"Hello without padding", "SGVsbG8", 5},
 		{"empty string", "", 0},
-		{"double padding", "YWI=", 2},        // "ab"
-		{"no padding needed", "AQID", 3},      // 3 bytes
-		{"single char", "YQ==", 1},            // "a"
+		{"double padding", "YWI=", 2},    // "ab"
+		{"no padding needed", "AQID", 3}, // 3 bytes
+		{"single char", "YQ==", 1},       // "a"
 	}
 
 	for _, tc := range tests {
@@ -481,5 +481,246 @@ func TestPresenceNotifications(t *testing.T) {
 	pf2 := readTestFrame(t, client)
 	if pf2.Type != "presence" || pf2.Role != "gateway" || pf2.Status != "offline" {
 		t.Errorf("expected gateway offline presence, got %+v", pf2)
+	}
+}
+
+func testKeyB64(fill byte) string {
+	raw := make([]byte, 32)
+	for i := range raw {
+		raw[i] = fill
+	}
+	return base64.StdEncoding.EncodeToString(raw)
+}
+
+func registerGatewayWithFrame(t *testing.T, url string, frame Frame) *websocket.Conn {
+	t.Helper()
+	conn := wsConnect(t, url)
+	sendTestFrame(t, conn, frame)
+	f := readTestFrame(t, conn)
+	if f.Type != "registered" {
+		t.Fatalf("expected registered, got %s (code=%s msg=%s)", f.Type, f.Code, f.Message)
+	}
+	return conn
+}
+
+func TestDiscoverGatewayOnly(t *testing.T) {
+	srv := setupTestRelay(t, RelayConfig{
+		MaxChannels:     10,
+		MaxClientsPerCh: 5,
+		RateLimit:       100,
+		MaxPayload:      1024,
+	})
+	defer srv.Close()
+
+	keyA := testKeyB64(0x11)
+	keyB := testKeyB64(0x22)
+	channelB := strings.Repeat("b", 64)
+
+	gwA := registerGatewayWithFrame(t, srv.URL, Frame{
+		Type:         "register",
+		Channel:      testChannelHash,
+		Discoverable: true,
+		PublicKey:    keyA,
+		Metadata:     json.RawMessage(`{"name":"alpha"}`),
+	})
+	defer gwA.Close(websocket.StatusNormalClosure, "")
+
+	gwB := registerGatewayWithFrame(t, srv.URL, Frame{
+		Type:         "register",
+		Channel:      channelB,
+		Discoverable: true,
+		PublicKey:    keyB,
+		Metadata:     json.RawMessage(`{"name":"beta"}`),
+	})
+	defer gwB.Close(websocket.StatusNormalClosure, "")
+
+	hidden := registerGatewayWithFrame(t, srv.URL, Frame{Type: "register", Channel: strings.Repeat("c", 64)})
+	defer hidden.Close(websocket.StatusNormalClosure, "")
+
+	sendTestFrame(t, hidden, Frame{Type: "discover"})
+	hiddenResult := readTestFrame(t, hidden)
+	if hiddenResult.Type != "discover_result" {
+		t.Fatalf("expected discover_result for non-discoverable gateway, got %s (code=%s msg=%s)", hiddenResult.Type, hiddenResult.Code, hiddenResult.Message)
+	}
+	if len(hiddenResult.Peers) != 2 {
+		t.Fatalf("expected 2 discovered peers for hidden gateway, got %d", len(hiddenResult.Peers))
+	}
+
+	sendTestFrame(t, gwA, Frame{Type: "discover"})
+	result := readTestFrame(t, gwA)
+	if result.Type != "discover_result" {
+		t.Fatalf("expected discover_result, got %s (code=%s msg=%s)", result.Type, result.Code, result.Message)
+	}
+	if len(result.Peers) != 1 {
+		t.Fatalf("expected 1 discovered peer, got %d", len(result.Peers))
+	}
+	if result.Peers[0].PublicKey != keyB {
+		t.Fatalf("expected peer public key %s, got %s", keyB, result.Peers[0].PublicKey)
+	}
+	if strings.Contains(string(result.Peers[0].Metadata), testChannelHash) || strings.Contains(string(result.Peers[0].Metadata), channelB) {
+		t.Fatal("discover_result metadata should not leak channel hashes")
+	}
+
+	client := joinClient(t, srv.URL, "human-1")
+	defer client.Close(websocket.StatusNormalClosure, "")
+	readTestFrame(t, gwA) // presence: human-1 online
+
+	sendTestFrame(t, client, Frame{Type: "discover"})
+	errFrame := readTestFrame(t, client)
+	if errFrame.Type != "error" || errFrame.Code != "gateway_only" {
+		t.Fatalf("expected gateway_only error, got type=%s code=%s msg=%s", errFrame.Type, errFrame.Code, errFrame.Message)
+	}
+}
+
+func TestRegisterDiscoverableValidation(t *testing.T) {
+	srv := setupTestRelay(t, RelayConfig{
+		MaxChannels:     10,
+		MaxClientsPerCh: 5,
+		RateLimit:       100,
+		MaxPayload:      1024,
+	})
+	defer srv.Close()
+
+	t.Run("invalid public key", func(t *testing.T) {
+		conn := wsConnect(t, srv.URL)
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		sendTestFrame(t, conn, Frame{Type: "register", Channel: testChannelHash, Discoverable: true, PublicKey: "bad-key"})
+		frame := readTestFrame(t, conn)
+		if frame.Type != "error" || frame.Code != "invalid_public_key" {
+			t.Fatalf("expected invalid_public_key, got type=%s code=%s msg=%s", frame.Type, frame.Code, frame.Message)
+		}
+	})
+
+	t.Run("non-discoverable cannot send metadata", func(t *testing.T) {
+		conn := wsConnect(t, srv.URL)
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		sendTestFrame(t, conn, Frame{Type: "register", Channel: strings.Repeat("e", 64), Metadata: json.RawMessage(`{"name":"oops"}`)})
+		frame := readTestFrame(t, conn)
+		if frame.Type != "error" || frame.Code != "invalid_frame" {
+			t.Fatalf("expected invalid_frame, got type=%s code=%s msg=%s", frame.Type, frame.Code, frame.Message)
+		}
+	})
+}
+
+func TestSignalForwardingAndSenderRestriction(t *testing.T) {
+	srv := setupTestRelay(t, RelayConfig{
+		MaxChannels:     10,
+		MaxClientsPerCh: 5,
+		RateLimit:       100,
+		MaxPayload:      1024,
+	})
+	defer srv.Close()
+
+	keyA := testKeyB64(0x31)
+	keyB := testKeyB64(0x32)
+	ephemeralKey := testKeyB64(0x7f)
+	channelB := strings.Repeat("b", 64)
+	channelC := strings.Repeat("c", 64)
+
+	gwA := registerGatewayWithFrame(t, srv.URL, Frame{
+		Type:         "register",
+		Channel:      testChannelHash,
+		Discoverable: true,
+		PublicKey:    keyA,
+		Metadata:     json.RawMessage(`{"name":"alpha"}`),
+	})
+	defer gwA.Close(websocket.StatusNormalClosure, "")
+
+	gwB := registerGatewayWithFrame(t, srv.URL, Frame{
+		Type:         "register",
+		Channel:      channelB,
+		Discoverable: true,
+		PublicKey:    keyB,
+		Metadata:     json.RawMessage(`{"name":"beta"}`),
+	})
+	defer gwB.Close(websocket.StatusNormalClosure, "")
+
+	payload := base64.StdEncoding.EncodeToString([]byte("opaque-ciphertext"))
+	sendTestFrame(t, gwA, Frame{Type: "signal", Target: keyB, EphemeralKey: ephemeralKey, Payload: payload})
+	forwarded := readTestFrame(t, gwB)
+	if forwarded.Type != "signal" {
+		t.Fatalf("expected forwarded signal, got %s (code=%s msg=%s)", forwarded.Type, forwarded.Code, forwarded.Message)
+	}
+	if forwarded.Source != keyA {
+		t.Fatalf("expected source %s, got %s", keyA, forwarded.Source)
+	}
+	if forwarded.Payload != payload {
+		t.Fatalf("expected payload %s, got %s", payload, forwarded.Payload)
+	}
+	if forwarded.EphemeralKey != ephemeralKey {
+		t.Fatalf("expected ephemeral key %s, got %s", ephemeralKey, forwarded.EphemeralKey)
+	}
+
+	nonDiscoverable := registerGatewayWithFrame(t, srv.URL, Frame{Type: "register", Channel: channelC})
+	defer nonDiscoverable.Close(websocket.StatusNormalClosure, "")
+	sendTestFrame(t, nonDiscoverable, Frame{Type: "signal", Target: keyB, EphemeralKey: ephemeralKey, Payload: payload})
+	errFrame := readTestFrame(t, nonDiscoverable)
+	if errFrame.Type != "signal_error" || errFrame.Code != "not_discoverable" {
+		t.Fatalf("expected signal_error/not_discoverable, got type=%s code=%s msg=%s", errFrame.Type, errFrame.Code, errFrame.Message)
+	}
+}
+
+func TestInviteAliasJoin(t *testing.T) {
+	srv := setupTestRelay(t, RelayConfig{
+		MaxChannels:     10,
+		MaxClientsPerCh: 5,
+		RateLimit:       100,
+		MaxPayload:      1024,
+	})
+	defer srv.Close()
+
+	keyB := testKeyB64(0x52)
+	channelB := strings.Repeat("b", 64)
+	inviteHash := strings.Repeat("d", 64)
+
+	gwB := registerGatewayWithFrame(t, srv.URL, Frame{
+		Type:         "register",
+		Channel:      channelB,
+		Discoverable: true,
+		PublicKey:    keyB,
+		Metadata:     json.RawMessage(`{"name":"beta"}`),
+	})
+	defer gwB.Close(websocket.StatusNormalClosure, "")
+
+	sendTestFrame(t, gwB, Frame{Type: "invite_create", InviteHash: inviteHash, MaxUses: 1, TTLSeconds: 300})
+	created := readTestFrame(t, gwB)
+	if created.Type != "invite_created" {
+		t.Fatalf("expected invite_created, got %s (code=%s msg=%s)", created.Type, created.Code, created.Message)
+	}
+	if created.InviteHash != inviteHash {
+		t.Fatalf("expected invite_hash %s, got %s", inviteHash, created.InviteHash)
+	}
+	if created.ExpiresAt == "" {
+		t.Fatal("expected invite_created to include expires_at")
+	}
+
+	peer := wsConnect(t, srv.URL)
+	defer peer.Close(websocket.StatusNormalClosure, "")
+	sendTestFrame(t, peer, Frame{Type: "join", Channel: inviteHash, ClientID: "peer-a"})
+	joined := readTestFrame(t, peer)
+	if joined.Type != "joined" {
+		t.Fatalf("expected joined, got %s (code=%s msg=%s)", joined.Type, joined.Code, joined.Message)
+	}
+	if joined.GatewayOnline == nil || !*joined.GatewayOnline {
+		t.Fatal("expected gateway_online=true when joining through invite alias")
+	}
+	presence := readTestFrame(t, gwB)
+	if presence.Type != "presence" || presence.ClientID != "peer-a" || presence.Status != "online" {
+		t.Fatalf("expected peer-a online presence, got %+v", presence)
+	}
+
+	payload := base64.StdEncoding.EncodeToString([]byte("hello via invite"))
+	sendTestFrame(t, gwB, Frame{Type: "data", To: "peer-a", Payload: payload})
+	forwarded := readTestFrame(t, peer)
+	if forwarded.Type != "data" || forwarded.Payload != payload {
+		t.Fatalf("expected invited peer data forwarding, got type=%s payload=%s", forwarded.Type, forwarded.Payload)
+	}
+
+	peer2 := wsConnect(t, srv.URL)
+	defer peer2.Close(websocket.StatusNormalClosure, "")
+	sendTestFrame(t, peer2, Frame{Type: "join", Channel: inviteHash, ClientID: "peer-b"})
+	joinErr := readTestFrame(t, peer2)
+	if joinErr.Type != "error" || joinErr.Code != "invite_invalid" {
+		t.Fatalf("expected invite_invalid on reused invite, got type=%s code=%s msg=%s", joinErr.Type, joinErr.Code, joinErr.Message)
 	}
 }

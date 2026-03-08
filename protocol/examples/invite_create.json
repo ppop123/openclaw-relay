@@ -1,0 +1,7 @@
+{
+  "_comment": "Layer 0.5: Discoverable gateway asks the relay to bind a short-lived single-use invite alias.",
+  "type": "invite_create",
+  "invite_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "max_uses": 1,
+  "ttl_seconds": 300
+}

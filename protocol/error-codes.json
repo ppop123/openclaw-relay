@@ -1,5 +1,5 @@
 {
-  "$schema_comment": "Canonical list of all protocol error codes. Layer 0 codes are relay-generated. Layer 2 codes are gateway-generated.",
+  "$schema_comment": "Canonical list of all protocol error codes. Layer 0 codes are relay-generated, including Layer 0.5 gateway-only discovery/signaling/invite control frames. Layer 2 codes are gateway-generated.",
   "protocol_version": 1,
   "error_codes": [
     {
@@ -35,13 +35,61 @@
     {
       "code": "rate_limited",
       "layer": 0,
-      "meaning": "Channel exceeded the relay's --rate-limit messages per second",
+      "meaning": "Sender exceeded a relay rate limit",
       "retryable": true
     },
     {
       "code": "client_id_required",
       "layer": 0,
-      "meaning": "Client sent a JOIN frame without a client_id field",
+      "meaning": "Client sent JOIN without a client_id field",
+      "retryable": false
+    },
+    {
+      "code": "public_key_required",
+      "layer": 0,
+      "meaning": "Discoverable gateway registration omitted public_key",
+      "retryable": false
+    },
+    {
+      "code": "invalid_public_key",
+      "layer": 0,
+      "meaning": "A discovery or signaling public key field is not a valid 32-byte base64 X25519 key",
+      "retryable": false
+    },
+    {
+      "code": "metadata_too_large",
+      "layer": 0,
+      "meaning": "Gateway discovery metadata exceeds the relay size limit",
+      "retryable": false
+    },
+    {
+      "code": "gateway_only",
+      "layer": 0,
+      "meaning": "The requested Layer 0.5 frame type is only available to registered gateway connections",
+      "retryable": false
+    },
+    {
+      "code": "not_discoverable",
+      "layer": 0,
+      "meaning": "The gateway is not currently bound as a discoverable identity on this relay",
+      "retryable": false
+    },
+    {
+      "code": "peer_offline",
+      "layer": 0,
+      "meaning": "The requested target public key is not currently discoverable on this relay",
+      "retryable": true
+    },
+    {
+      "code": "invite_limit_reached",
+      "layer": 0,
+      "meaning": "The gateway has reached the relay limit for pending in-memory invites",
+      "retryable": true
+    },
+    {
+      "code": "invite_invalid",
+      "layer": 0,
+      "meaning": "The invite alias is missing, expired, consumed, or no longer attached to an active gateway",
       "retryable": false
     },
     {

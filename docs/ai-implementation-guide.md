@@ -67,6 +67,17 @@ These directories may contain placeholder files. Do not treat them as functional
 8. The relay MUST NOT parse, modify, or persist DATA frame payloads.
 9. Gateway identity verification in the browser client uses a user-supplied pinned public key — abort the handshake if `hello_ack.gateway_public_key` differs from the pinned value.
 
+## Agent-to-Agent Discovery Boundary (Layer 0.5)
+
+These facts are non-negotiable for AI agents implementing discovery or peer-contact features:
+
+- `discover`, `discover_result`, `signal`, `signal_error`, `invite_create`, and `invite_created` are **relay-level gateway control frames**.
+- Human-facing clients must **never** expose peer discovery, peer browsing, or peer-contact UX for other OpenClaw instances.
+- Any registered gateway may send `discover`; only gateways that registered with `discoverable: true` are returned in the peer list.
+- Only a discoverable gateway may send `signal` or `invite_create`.
+- Discovery responses may include only `public_key`, opaque `metadata`, and `online_since` — never `channel_hash` or `channel_token`.
+- Peer establishment uses a short-lived invite alias in `JOIN.channel`, not the gateway's long-lived `channel_token`.
+
 ## `--allow-origin` CLI Flag
 
 - **Type:** Single flag, comma-separated host patterns
