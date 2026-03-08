@@ -31,7 +31,7 @@ Both sides connect **outbound** — no port forwarding, no public IP, no DNS set
 
 ## Latest Release / 最新发布
 
-`OpenClaw Relay v0.2.0` is now available. / `OpenClaw Relay v0.2.0` 已发布。
+`OpenClaw Relay v0.2.1` is now available. / `OpenClaw Relay v0.2.1` 已发布。
 
 Official release scope / 正式支持范围：
 
@@ -48,8 +48,8 @@ Excluded from official release scope / 不在正式发布范围内：
 
 Release notes / 发布说明：
 
-- 中文：[`docs/releases/v0.2.0-github-release.zh-CN.md`](docs/releases/v0.2.0-github-release.zh-CN.md)
-- English: [`docs/releases/v0.2.0-github-release.en.md`](docs/releases/v0.2.0-github-release.en.md)
+- 中文：[`docs/releases/v0.2.1-github-release.zh-CN.md`](docs/releases/v0.2.1-github-release.zh-CN.md)
+- English: [`docs/releases/v0.2.1-github-release.en.md`](docs/releases/v0.2.1-github-release.en.md)
 
 ## Project Status
 
@@ -91,7 +91,7 @@ cd sdk/python && pip install -e ".[dev]" && pytest -q  # Python SDK
 cd client && npm ci && npm test          # Web client
 cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests  # OpenClaw plugin
 cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit  # Plugin typecheck
-bash scripts/smoke-openclaw-plugin.sh  # OpenClaw plugin real-host smoke (local/manual)
+bash scripts/smoke-openclaw-plugin.sh  # OpenClaw plugin lifecycle smoke: pair/revoke/rotate/disable (local/manual)
 ```
 
 > **Gateway plugin:** Install `plugin/` into your own OpenClaw runtime with `openclaw plugins install --link /path/to/openclaw-relay/plugin`, then run `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`. See [Quick Start Guide](docs/quick-start.md).

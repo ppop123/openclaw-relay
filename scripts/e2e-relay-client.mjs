@@ -26,12 +26,14 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const mode = args._[0];
 if (!mode || !['pair', 'request'].includes(mode)) {
-  throw new Error('usage: node scripts/e2e-relay-client.mjs <pair|request> --config <path> --identity-file <path> [--client-id <id>]');
+  throw new Error('usage: node scripts/e2e-relay-client.mjs <pair|request> --config <path> --identity-file <path> [--client-id <id>] [--timeout-ms <n>]');
 }
 
 const configPath = resolve(String(args.config ?? ''));
 const identityPath = resolve(String(args['identity-file'] ?? ''));
 const clientId = String(args['client-id'] ?? 'smoke-client');
+const timeoutMsRaw = Number(args['timeout-ms'] ?? 10_000);
+const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0 ? timeoutMsRaw : 10_000;
 if (!configPath || !identityPath) {
   throw new Error('--config and --identity-file are required');
 }
@@ -77,10 +79,11 @@ class MessageQueue {
       else this.items.push(frame);
     });
   }
-  async next(timeoutMs = 10000) {
+
+  async next(timeout = timeoutMs) {
     if (this.items.length > 0) return this.items.shift();
     return await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('timeout waiting for message')), timeoutMs);
+      const timer = setTimeout(() => reject(new Error('timeout waiting for message')), timeout);
       this.waiters.push((frame) => {
         clearTimeout(timer);
         resolve(frame);

@@ -12,9 +12,9 @@
 | Python SDK | `sdk/python/` | Client SDK (protocol layers 0-2, client-side only) |
 | Web reference client | `client/` | Browser-based reference client |
 | Protocol specification | `protocol/` | Wire protocol specification (v1) |
-| OpenClaw gateway plugin | `plugin/` | TypeScript gateway plugin for installing relay support into your own OpenClaw runtime; includes a local smoke script for real-host verification |
+| OpenClaw gateway plugin | `plugin/` | TypeScript gateway plugin for installing relay support into your own OpenClaw runtime; includes a local lifecycle smoke script for real-host verification |
 
-These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.2.0`.
+These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.2.1`.
 
 ### Experimental (Not Officially Supported)
 

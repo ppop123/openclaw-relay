@@ -1,7 +1,7 @@
 {
   "$schema_comment": "Release candidate manifest. Machine-readable declaration of what this release includes, claims, and requires.",
   "release_candidate": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "protocol_version": 1,
   "official_components": [
     "relay/",
@@ -58,7 +58,7 @@
       "blocks_release": true
     },
     {
-      "name": "Plugin smoke test (local OpenClaw runtime)",
+      "name": "Plugin lifecycle smoke test (local OpenClaw runtime)",
       "command": "bash scripts/smoke-openclaw-plugin.sh",
       "blocks_release": false
     }

@@ -85,7 +85,7 @@ To allow specific cross-origin browser clients, pass a comma-separated list of *
 ```json
 {
   "name": "openclaw-relay",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "protocol_version": 1,
   "channels_active": 12,
   "channels_limit": 500,

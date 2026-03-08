@@ -6,7 +6,7 @@ This package contains the OpenClaw Relay gateway plugin. Install it into your ow
 
 - Implemented and covered by CI tests
 - Verified locally against a real OpenClaw runtime build
-- Officially supported as part of `v0.2.0`
+- Officially supported as part of `v0.2.1`
 - Requires a current OpenClaw runtime with channel and CLI plugin APIs enabled
 
 ## What it provides
@@ -63,4 +63,4 @@ For a real-host local smoke check:
 cd plugin && npm run smoke
 ```
 
-The smoke script uses an isolated OpenClaw state/config under `.tmp/`, starts a local relay, completes one pairing flow, then verifies a `system.status` request over the real relay path.
+The smoke script uses an isolated OpenClaw state/config under `.tmp/`, starts a local relay, completes pairing, verifies a `system.status` request over the real relay path, then validates `revoke`, re-pair, `rotate-token`, and `disable` behavior.

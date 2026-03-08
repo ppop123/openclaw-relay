@@ -92,4 +92,4 @@ For post-release or pre-release confidence against a real local OpenClaw runtime
 bash scripts/smoke-openclaw-plugin.sh
 ```
 
-This script installs `plugin/` into an isolated OpenClaw state directory, starts a local relay, performs pairing with a fresh client identity, starts a real OpenClaw gateway, and verifies `system.status` over the relay.
+This script installs `plugin/` into an isolated OpenClaw state directory, starts a local relay, performs pairing with a fresh client identity, starts a real OpenClaw gateway, verifies `system.status` over the relay, then exercises `revoke`, re-pair, `rotate-token`, and `disable`.

@@ -91,7 +91,7 @@ cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/no
 ```
 
 The Worker type check (`tsc --noEmit`) is informational and does not block release. Plugin tests and plugin type checking are part of the official release gate.
-For local release-manager verification, run `bash scripts/smoke-openclaw-plugin.sh` to exercise plugin install → pairing → real gateway request over a local relay. This smoke flow is intentionally local/manual because hosted CI does not ship with an OpenClaw runtime.
+For local release-manager verification, run `bash scripts/smoke-openclaw-plugin.sh` to exercise plugin install → pairing → real gateway request → revoke → re-pair → rotate-token → disable over a local relay. This smoke flow is intentionally local/manual because hosted CI does not ship with an OpenClaw runtime.
 
 ## Implementation-Specific Notes
 

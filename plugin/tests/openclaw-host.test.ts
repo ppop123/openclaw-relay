@@ -37,6 +37,32 @@ function buildApi(config: OpenClawConfig = {}): OpenClawPluginApi & {
   };
 }
 
+
+class FakeCommand {
+  readonly children = new Map<string, FakeCommand>();
+  actionHandler: ((options: any) => Promise<void> | void) | undefined;
+
+  constructor(readonly name: string) {}
+
+  command(name: string) {
+    const child = new FakeCommand(name);
+    this.children.set(name, child);
+    return child;
+  }
+
+  description() { return this; }
+  option() { return this; }
+  requiredOption() { return this; }
+  action(handler: (options: any) => Promise<void> | void) {
+    this.actionHandler = handler;
+    return this;
+  }
+}
+
+function buildProgram() {
+  return new FakeCommand('root');
+}
+
 describe('openclaw host bridge', () => {
   it('registers channel and CLI with the real plugin entry', () => {
     const api = buildApi();
@@ -153,4 +179,71 @@ describe('openclaw host bridge', () => {
       statusSpy.mockRestore();
     }
   });
+
+  it('uses adapter inspection to detect pairing completion', async () => {
+    const publicKey = Buffer.alloc(32).toString('base64');
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey,
+              },
+              approvedClients: {},
+            },
+          },
+        },
+      },
+    };
+    const startSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'start').mockResolvedValue(undefined);
+    const stopSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'stop').mockResolvedValue(undefined);
+    const statusSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'getStatus').mockResolvedValue({
+      state: 'registered',
+      health: 'healthy',
+      approvedClients: 0,
+      activeSessions: 0,
+    });
+    const inspectSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'inspectAccount')
+      .mockResolvedValue({
+        enabled: true,
+        server: 'ws://relay.example/ws',
+        channel: 'channel-hash',
+        gatewayPublicKey: publicKey,
+        approvedClients: [{ fingerprint: 'sha256:test' }],
+      });
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
+      logs.push(String(value ?? ''));
+    });
+
+    try {
+      const api = buildApi(config);
+      const preview = createRelayChannelDefinition();
+      const { registerCli } = createOpenClawRelayPlugin(api, preview);
+      const program = buildProgram();
+      registerCli();
+      const registrar = api.registeredCli as (ctx: { program: FakeCommand; logger: any }) => void;
+      registrar({ program, logger: { info() {}, warn() {}, error() {}, debug() {} } });
+      const pairAction = program.children.get('relay')?.children.get('pair')?.actionHandler;
+      expect(pairAction).toBeTypeOf('function');
+
+      await pairAction?.({ account: 'default', wait: '5' });
+
+      expect(inspectSpy).toHaveBeenCalled();
+      expect(logs.some((line) => line.includes('"paired": true'))).toBe(true);
+    } finally {
+      startSpy.mockRestore();
+      stopSpy.mockRestore();
+      statusSpy.mockRestore();
+      inspectSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
+
 });

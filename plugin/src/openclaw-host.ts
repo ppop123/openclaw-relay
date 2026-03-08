@@ -787,6 +787,7 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
           const waitSeconds = Number.isFinite(waitSecondsRaw) && waitSecondsRaw > 0 ? waitSecondsRaw : PAIR_WAIT_SECONDS;
           const store = new OpenClawRelayConfigStore(api.runtime);
           const before = (await store.load(accountId))?.approvedClients ?? {};
+          const beforeCount = Object.keys(before).length;
           const startedHere = !activeAccounts.has(accountId);
           const record = await ensureStartedAccount({ api, accountId, log: logger });
           const info = await handleRelayPair(store, record.pairing, accountId);
@@ -795,9 +796,9 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
           const deadline = Date.now() + waitSeconds * 1000;
           while (Date.now() < deadline) {
             await new Promise((resolve) => setTimeout(resolve, PAIR_WAIT_POLL_MS));
-            const current = await store.load(accountId);
-            const approved = current?.approvedClients ?? {};
-            if (Object.keys(approved).length > Object.keys(before).length) {
+            const inspection = await record.adapter.inspectAccount();
+            const approvedCount = inspection?.approvedClients.length ?? 0;
+            if (approvedCount > beforeCount) {
               console.log(JSON.stringify({ ok: true, paired: true, clients: await handleRelayClients(store, accountId) }, null, 2));
               if (startedHere) {
                 await record.stop();
