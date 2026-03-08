@@ -26,7 +26,7 @@ The current test suite is strongest at these guarantees:
 
 - `channelToken` is not persisted
 - historical stored `channelToken` is cleaned on startup
-- browser identity export / import round-trips correctly
+- browser identity export and import actions preserve the expected fingerprint
 - persisted identity storage uses the expected IndexedDB layout
 - transport falls back to page-memory identity if persistence fails
 - encrypted data is not allowed to fall back to plaintext parsing
@@ -59,8 +59,10 @@ When validating the web client manually, check the following:
 8. disconnect returns the UI to connect mode
 9. reconnect after transient relay loss restores chat functionality
 10. gateway public-key mismatch is rejected
-11. full page reload preserves the same client fingerprint when IndexedDB is available
-12. identity reset causes the next connect to present a different client fingerprint
+11. exporting the current identity downloads a JSON file successfully
+12. importing that identity restores the expected fingerprint
+13. full page reload preserves the same client fingerprint when IndexedDB is available
+14. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 
@@ -117,6 +119,22 @@ Effect:
 - the current page session can still connect successfully
 - reconnect continues to use the same in-memory identity
 - a full reload will create a new client fingerprint again
+
+### `Failed to import identity: ...`
+
+The selected identity file was malformed, unsupported, or did not match the supplied key material.
+
+Possible causes:
+
+- invalid JSON
+- missing `publicKey` / `privateKeyPkcs8` fields
+- unsupported file format or future version
+- hand-edited or corrupted export file
+
+Effect:
+
+- the existing browser identity stays unchanged
+- the UI remains on the connect panel
 
 ### `Stored browser identity was invalid and has been reset`
 

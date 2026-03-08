@@ -12,6 +12,9 @@ import { b64Encode, b64Decode, RelayCrypto } from './crypto.js';
 import { deleteStoredIdentity, loadStoredIdentity, saveStoredIdentity, supportsPersistentIdentity } from './identity-store.js';
 import { randomHex, generateMsgId } from './utils.js';
 
+const EXPORTED_IDENTITY_FORMAT = 'openclaw-relay-browser-identity';
+const EXPORTED_IDENTITY_VERSION = 1;
+
 export class RelayConnection {
   constructor() {
     this.ws = null;
@@ -77,9 +80,12 @@ export class RelayConnection {
   }
 
   getIdentitySummary() {
+    const exists = Boolean(this.crypto.keyPair) || Boolean(this._storedIdentityRecord);
     return {
-      exists: Boolean(this.crypto.keyPair) || Boolean(this._storedIdentityRecord),
-      canReset: Boolean(this.crypto.keyPair) || Boolean(this._storedIdentityRecord),
+      exists,
+      canReset: exists,
+      canExport: exists,
+      canImport: true,
       loaded: Boolean(this.crypto.keyPair),
       persistence: this.identityPersistence,
       persisted: this.identityPersistence === 'persisted',
@@ -140,6 +146,120 @@ export class RelayConnection {
       throw new Error('Failed to reset browser identity');
     }
     return this.getIdentitySummary();
+  }
+
+  async exportIdentityBundle() {
+    let identity = null;
+
+    if (this._storedIdentityRecord) {
+      identity = { ...this._storedIdentityRecord };
+    } else if (this.crypto.keyPair) {
+      identity = {
+        algorithm: 'X25519',
+        ...(await this.crypto.exportIdentity()),
+        createdAt: this.identityCreatedAt || new Date().toISOString(),
+      };
+    }
+
+    if (!identity) {
+      throw new Error('No browser identity is available to export');
+    }
+
+    return {
+      format: EXPORTED_IDENTITY_FORMAT,
+      version: EXPORTED_IDENTITY_VERSION,
+      algorithm: identity.algorithm || 'X25519',
+      publicKey: identity.publicKey,
+      privateKeyPkcs8: identity.privateKeyPkcs8,
+      fingerprint: identity.fingerprint || this.identityFingerprint,
+      createdAt: identity.createdAt || this.identityCreatedAt || new Date().toISOString(),
+      exportedAt: new Date().toISOString(),
+    };
+  }
+
+  async importIdentityBundle(bundle) {
+    const candidate = this._extractPortableIdentity(bundle);
+    const validator = new RelayCrypto();
+    await validator.importIdentity(candidate);
+    const fingerprint = await validator.getPublicKeyFingerprint();
+
+    if (candidate.fingerprint && candidate.fingerprint !== fingerprint) {
+      throw new Error('Identity fingerprint does not match the supplied keypair');
+    }
+
+    const normalized = {
+      publicKey: candidate.publicKey,
+      privateKeyPkcs8: candidate.privateKeyPkcs8,
+      fingerprint,
+      createdAt: candidate.createdAt || new Date().toISOString(),
+    };
+
+    this.disconnect();
+    this._identityLoadFailed = false;
+
+    if (!supportsPersistentIdentity()) {
+      await this.crypto.importIdentity(normalized);
+      this._storedIdentityRecord = null;
+      this.identityPersistence = 'memory';
+      this.identityFingerprint = fingerprint;
+      this.identityCreatedAt = normalized.createdAt;
+      return this.getIdentitySummary();
+    }
+
+    try {
+      const stored = await saveStoredIdentity(normalized);
+      this.crypto.clearIdentity();
+      this._storedIdentityRecord = stored;
+      this.identityPersistence = 'persisted';
+      this.identityFingerprint = stored.fingerprint || fingerprint;
+      this.identityCreatedAt = stored.createdAt || normalized.createdAt;
+      return this.getIdentitySummary();
+    } catch (err) {
+      console.warn('Failed to persist imported browser identity:', err);
+      await this.crypto.importIdentity(normalized);
+      this._storedIdentityRecord = null;
+      this.identityPersistence = 'memory';
+      this.identityFingerprint = fingerprint;
+      this.identityCreatedAt = normalized.createdAt;
+      this.onToast?.('Imported identity is active for this page only because persistence is unavailable.', 'warning');
+      return this.getIdentitySummary();
+    }
+  }
+
+  _extractPortableIdentity(bundle) {
+    if (!bundle || typeof bundle !== 'object') {
+      throw new Error('Identity file must contain an object');
+    }
+
+    if (bundle.format && bundle.format !== EXPORTED_IDENTITY_FORMAT) {
+      throw new Error('Unsupported identity file format');
+    }
+
+    const candidate = bundle.identity && typeof bundle.identity === 'object'
+      ? bundle.identity
+      : bundle;
+
+    if (candidate.algorithm && candidate.algorithm !== 'X25519') {
+      throw new Error('Only X25519 identities are supported');
+    }
+    if (typeof candidate.publicKey !== 'string' || !candidate.publicKey) {
+      throw new Error('Identity file missing publicKey');
+    }
+    if (typeof candidate.privateKeyPkcs8 !== 'string' || !candidate.privateKeyPkcs8) {
+      throw new Error('Identity file missing privateKeyPkcs8');
+    }
+
+    const version = bundle.version ?? candidate.version ?? EXPORTED_IDENTITY_VERSION;
+    if (version > EXPORTED_IDENTITY_VERSION) {
+      throw new Error('Identity file version is newer than this client supports');
+    }
+
+    return {
+      publicKey: candidate.publicKey,
+      privateKeyPkcs8: candidate.privateKeyPkcs8,
+      fingerprint: typeof candidate.fingerprint === 'string' ? candidate.fingerprint : '',
+      createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '',
+    };
   }
 
   async _doConnect() {

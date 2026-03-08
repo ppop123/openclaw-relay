@@ -206,6 +206,14 @@ main {
   margin-bottom: 8px;
 }
 
+.identity-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .identity-title {
   font-size: 13px;
   font-weight: 600;
@@ -580,10 +588,16 @@ main {
       <div class="identity-card">
         <div class="identity-card-header">
           <span class="identity-title">Client Identity</span>
-          <button type="button" class="secondary-btn" id="resetIdentityBtn" onclick="app.resetIdentity()" disabled>Reset</button>
+          <div class="identity-actions">
+            <button type="button" class="secondary-btn" id="exportIdentityBtn" onclick="app.exportIdentity()" disabled>Export</button>
+            <button type="button" class="secondary-btn" id="importIdentityBtn" onclick="app.triggerImportIdentity()">Import</button>
+            <button type="button" class="secondary-btn" id="resetIdentityBtn" onclick="app.resetIdentity()" disabled>Reset</button>
+          </div>
         </div>
         <div class="identity-mode" id="identityMode">Loading…</div>
         <div class="identity-fingerprint" id="identityFingerprint">Checking browser identity storage…</div>
+        <div class="identity-meta" id="identityMeta"></div>
+        <input type="file" id="identityImportInput" accept="application/json" style="display:none">
       </div>
 
       <button type="submit" class="connect-btn" id="connectBtn">Connect</button>

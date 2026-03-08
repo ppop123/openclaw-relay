@@ -222,6 +222,85 @@ describe('RelayConnection constructor', () => {
     expect(mockDeleteStoredIdentity).toHaveBeenCalled();
     expect(summary).toMatchObject({ exists: false, persistence: 'absent', fingerprint: '' });
   });
+
+  it('exports the stored identity bundle without loading the private key into runtime memory', async () => {
+    mockLoadStoredIdentity.mockResolvedValue({
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      fingerprint: 'sha256:savedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+    const conn = new RelayConnection();
+
+    await conn.hydratePersistedIdentity();
+    const bundle = await conn.exportIdentityBundle();
+
+    expect(bundle).toMatchObject({
+      format: 'openclaw-relay-browser-identity',
+      version: 1,
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      fingerprint: 'sha256:savedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+    expect(conn.crypto.keyPair).toBeNull();
+  });
+
+  it('imports a portable identity bundle into persisted storage', async () => {
+    const conn = new RelayConnection();
+
+    const summary = await conn.importIdentityBundle({
+      format: 'openclaw-relay-browser-identity',
+      version: 1,
+      publicKey: 'IMPORTED_PUB',
+      privateKeyPkcs8: 'IMPORTED_PRIV',
+      fingerprint: 'sha256:importedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+
+    expect(mockSaveStoredIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      publicKey: 'IMPORTED_PUB',
+      privateKeyPkcs8: 'IMPORTED_PRIV',
+      fingerprint: 'sha256:importedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    }));
+    expect(summary).toMatchObject({
+      exists: true,
+      persistence: 'persisted',
+      fingerprint: 'sha256:importedfingerprint',
+    });
+    expect(conn.crypto.keyPair).toBeNull();
+  });
+
+  it('falls back to a memory-only imported identity when persistence fails', async () => {
+    mockSaveStoredIdentity.mockRejectedValueOnce(new Error('quota exceeded'));
+    const conn = new RelayConnection();
+    conn.onToast = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const summary = await conn.importIdentityBundle({
+      format: 'openclaw-relay-browser-identity',
+      version: 1,
+      publicKey: 'IMPORTED_PUB',
+      privateKeyPkcs8: 'IMPORTED_PRIV',
+      fingerprint: 'sha256:importedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+
+    expect(summary).toMatchObject({ exists: true, persistence: 'memory' });
+    expect(conn.onToast).toHaveBeenCalledWith(
+      expect.stringMatching(/active for this page only/i),
+      'warning',
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('rejects unsupported identity file formats', async () => {
+    const conn = new RelayConnection();
+
+    await expect(conn.importIdentityBundle({ format: 'unexpected-format' }))
+      .rejects.toThrow(/Unsupported identity file format/);
+  });
 });
 
 // ─── _handleL2Message ────────────────────────────────────────────

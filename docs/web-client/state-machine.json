@@ -193,6 +193,25 @@
         "from": "memory_only",
         "to": "absent",
         "trigger": "identity reset clears the temporary identity"
+      },
+      {
+        "from": ["absent", "memory_only", "unsupported", "persisted_metadata", "loaded"],
+        "to": "persisted_metadata",
+        "trigger": "identity file import succeeds and persistence is available",
+        "effects": [
+          "replace any existing stored identity record",
+          "show imported fingerprint in connect panel",
+          "defer private-key import until next connect"
+        ]
+      },
+      {
+        "from": ["absent", "memory_only", "unsupported", "persisted_metadata", "loaded"],
+        "to": "memory_only",
+        "trigger": "identity file import succeeds but persistence is unavailable",
+        "effects": [
+          "load imported keypair into runtime memory",
+          "warn user that the import is page-scoped only"
+        ]
       }
     ]
   },

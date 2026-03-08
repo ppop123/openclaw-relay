@@ -98,6 +98,14 @@ This means old browser state is cleaned automatically.
 - the same cryptographic identity fingerprint remains stable
 - a fresh client nonce is generated for the new connection
 
+### Identity export and import
+
+- the connect panel can export the current browser identity to a portable JSON file
+- the exported file contains the X25519 public key, private key, fingerprint, and creation metadata
+- importing an identity file validates the keypair before replacing the current browser identity
+- when IndexedDB is available, an imported identity is saved and becomes the normal long-lived browser identity
+- when IndexedDB is unavailable, an imported identity can still be used for the current page session only
+
 ### Identity reset
 
 - the user may delete the stored browser identity from the connect panel
@@ -153,7 +161,6 @@ The browser client must continue to follow all of these rules:
 
 The current identity model is much stronger than the old page-memory-only behavior, but it still has limits:
 
-- there is no identity export / import workflow yet
 - moving the browser client between machines still creates a different cryptographic identity
 - clearing browser site data deletes the stored identity
 - if the browser blocks IndexedDB, identity persistence falls back to page memory only
@@ -162,7 +169,7 @@ The current identity model is much stronger than the old page-memory-only behavi
 
 A future product-grade browser client should additionally support:
 
-- explicit identity export / import for advanced users
+- passphrase-protected identity export files for advanced users
 - richer fingerprint presentation / QR display
 - multi-profile identity management
 - browser-specific recovery flows when IndexedDB is disabled by policy

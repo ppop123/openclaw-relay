@@ -18,7 +18,7 @@ The client is intentionally small and explicit so protocol behavior is easy to a
 |------|----------------|
 | `client/index.html` | DOM structure, styles, module bootstrap |
 | `client/js/app.js` | Application state, UI wiring, identity status rendering, settings persistence, chat flow |
-| `client/js/transport.js` | WebSocket lifecycle, Layer 0 framing, Layer 1 handshake orchestration, Layer 2 request lifecycle, browser identity loading/reset |
+| `client/js/transport.js` | WebSocket lifecycle, Layer 0 framing, Layer 1 handshake orchestration, Layer 2 request lifecycle, browser identity load/import/export/reset |
 | `client/js/crypto.js` | X25519 key generation/import/export, fingerprinting, HKDF session-key derivation, AES-GCM encrypt/decrypt, replay tracking |
 | `client/js/identity-store.js` | IndexedDB persistence for the browser identity keypair |
 | `client/js/markdown.js` | Safe Markdown subset renderer for assistant output |
@@ -132,7 +132,6 @@ Important details:
 The browser client deliberately does **not** try to do all of the following today:
 
 - provide a reusable SDK surface for external applications
-- implement identity export / import UX
 - maintain local message history across page refreshes
 - implement background reconnect queues or offline drafts
 - support multiple concurrent gateway profiles in one UI

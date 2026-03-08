@@ -63,6 +63,10 @@ export const app = {
         this.connection.state !== 'connected';
     });
 
+    document.getElementById('identityImportInput').addEventListener('change', (event) => {
+      void this.handleImportIdentity(event);
+    });
+
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
   },
@@ -131,7 +135,70 @@ export const app = {
     this._updateIdentityStatus();
   },
 
+  async exportIdentity() {
+    try {
+      const bundle = await this.connection.exportIdentityBundle();
+      const suffix = (bundle.fingerprint || 'identity').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'identity';
+      this._downloadJsonFile(`openclaw-relay-${suffix}.json`, bundle);
+      showToast('Client identity exported. Keep this file secret.', 'info');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  triggerImportIdentity() {
+    const input = document.getElementById('identityImportInput');
+    input.value = '';
+    input.click();
+  },
+
+  async handleImportIdentity(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    try {
+      const summary = this.connection.getIdentitySummary();
+      if (summary.exists && typeof confirm === 'function') {
+        const shouldReplace = confirm('Importing an identity file will replace the current browser identity. Continue?');
+        if (!shouldReplace) return;
+      }
+
+      const parsed = JSON.parse(await this._readTextFile(file));
+      const nextSummary = await this.connection.importIdentityBundle(parsed);
+      this._returnToConnectView();
+      document.getElementById('connectError').style.display = 'none';
+      this._updateIdentityStatus();
+
+      if (nextSummary.persistence === 'persisted') {
+        showToast('Identity imported and saved in this browser.', 'info');
+      } else {
+        showToast('Identity imported for this page only because persistence is unavailable.', 'warning');
+      }
+    } catch (err) {
+      showToast(`Failed to import identity: ${err.message}`, 'error');
+    } finally {
+      if (event?.target) {
+        event.target.value = '';
+      }
+    }
+  },
+
   async resetIdentity() {
+    const summary = this.connection.getIdentitySummary();
+    if (!summary.canReset) {
+      this._updateIdentityStatus();
+      return;
+    }
+
+    if (typeof confirm === 'function') {
+      const label = summary.fingerprint ? this._shortFingerprint(summary.fingerprint) : 'this browser identity';
+      const confirmed = confirm(`Reset ${label}? Existing gateway trust may need to be re-established.`);
+      if (!confirmed) {
+        this._updateIdentityStatus();
+        return;
+      }
+    }
+
     const btn = document.getElementById('resetIdentityBtn');
     btn.disabled = true;
 
@@ -376,10 +443,16 @@ export const app = {
   _updateIdentityStatus() {
     const modeEl = document.getElementById('identityMode');
     const fingerprintEl = document.getElementById('identityFingerprint');
+    const metaEl = document.getElementById('identityMeta');
+    const exportBtn = document.getElementById('exportIdentityBtn');
+    const importBtn = document.getElementById('importIdentityBtn');
     const resetBtn = document.getElementById('resetIdentityBtn');
     const summary = this.connection.getIdentitySummary();
 
     resetBtn.disabled = !summary.canReset;
+    exportBtn.disabled = !summary.canExport;
+    importBtn.disabled = !summary.canImport;
+    metaEl.textContent = summary.createdAt ? `Created: ${this._formatIdentityCreatedAt(summary.createdAt)}` : '';
 
     if (summary.persistence === 'persisted') {
       modeEl.textContent = 'Persistent browser identity';
@@ -394,6 +467,9 @@ export const app = {
         ? `Fingerprint: ${this._shortFingerprint(summary.fingerprint)} · not persisted`
         : 'This page is using a temporary identity only.';
       fingerprintEl.title = summary.fingerprint || '';
+      if (!metaEl.textContent) {
+        metaEl.textContent = 'This identity will be lost on full reload unless persistence becomes available.';
+      }
       return;
     }
 
@@ -401,12 +477,16 @@ export const app = {
       modeEl.textContent = 'Persistence unavailable';
       fingerprintEl.textContent = 'This browser cannot persist the client identity; a new key will be created after every reload.';
       fingerprintEl.title = '';
+      if (!metaEl.textContent) {
+        metaEl.textContent = 'You can still import an identity file for the current page session.';
+      }
       return;
     }
 
     modeEl.textContent = 'Not created yet';
     fingerprintEl.textContent = 'A stable client identity will be created on first connect and saved in this browser.';
     fingerprintEl.title = '';
+    metaEl.textContent = 'You can also import an existing identity file before connecting.';
   },
 
   // ── Settings persistence ──
@@ -428,6 +508,32 @@ export const app = {
   },
 
   // ── Helpers ──
+
+  _downloadJsonFile(filename, value) {
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      throw new Error('This browser cannot export files');
+    }
+
+    const blob = new Blob([JSON.stringify(value, null, 2) + '\n'], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  },
+
+  async _readTextFile(file) {
+    if (typeof file.text === 'function') {
+      return file.text();
+    }
+
+    throw new Error('This browser cannot read the selected file');
+  },
+
+  _formatIdentityCreatedAt(createdAt) {
+    return createdAt || '';
+  },
 
   _escapeHtml(str) {
     const d = document.createElement('div');

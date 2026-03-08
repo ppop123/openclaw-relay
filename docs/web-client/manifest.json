@@ -33,6 +33,7 @@
       "responsibilities": [
         "dom wiring",
         "identity status rendering",
+        "identity import/export actions",
         "settings load/save",
         "agent list state",
         "chat ui flow",
@@ -48,7 +49,7 @@
         "websocket lifecycle",
         "layer0 frame handling",
         "layer1 handshake orchestration",
-        "browser identity hydration/create/reset",
+        "browser identity hydration/import/export/create/reset",
         "layer2 request/response/stream management",
         "reconnect with backoff+jitter"
       ],
@@ -181,7 +182,6 @@
     ]
   },
   "known_limitations": [
-    "no identity export/import ui",
     "no browser-side history persistence",
     "if indexeddb is unavailable or blocked, identity falls back to page-memory only",
     "not a reusable javascript sdk"

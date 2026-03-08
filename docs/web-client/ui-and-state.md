@@ -31,7 +31,7 @@ It also includes a client-identity card that shows:
 
 - whether a persistent browser identity is available
 - the current client fingerprint summary when known
-- a reset button for intentionally rotating the browser identity
+- export, import, and reset actions for browser identity management
 
 The connect panel also displays a connection error box when handshake or WebSocket setup fails.
 
@@ -72,7 +72,7 @@ On `DOMContentLoaded`:
 3. the app wires transport callbacks
 4. the send button becomes input-driven and connection-aware
 5. the app hydrates any persisted browser identity
-6. the connect panel renders the current identity status and fingerprint summary
+6. the connect panel renders the current identity status, fingerprint summary, and identity actions
 
 ## Connect Flow
 
@@ -106,10 +106,31 @@ When the user submits the connect form:
 - clears the in-memory agent list
 - keeps persisted safe settings and the persisted browser identity intact
 
+## Identity Export Flow
+
+`app.exportIdentity()`:
+
+- asks `connection.exportIdentityBundle()` for the current browser identity
+- serializes a portable JSON file containing the X25519 keypair and fingerprint metadata
+- triggers a browser download from the connect panel
+- reminds the user that the exported file is secret material
+
+## Identity Import Flow
+
+`app.handleImportIdentity()`:
+
+- opens a local JSON file chooser from the connect panel
+- asks for confirmation before replacing an existing browser identity
+- parses the imported identity bundle
+- asks `connection.importIdentityBundle()` to validate and install it
+- returns the UI to connect mode and refreshes the identity card
+- shows whether the imported identity was persisted or is active for this page only
+
 ## Identity Reset Flow
 
 `app.resetIdentity()`:
 
+- asks for confirmation before rotating the current browser identity
 - disables the reset button while work is in progress
 - asks `connection.resetIdentity()` to clear the stored browser identity
 - returns the UI to connect mode if needed
@@ -199,7 +220,6 @@ Agent names are escaped before insertion to avoid UI injection.
 
 The current UI still lacks:
 
-- identity export / import actions
 - explicit pairing state display
 - persisted local conversation history
 - multi-profile relay configuration
