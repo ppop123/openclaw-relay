@@ -1,0 +1,6 @@
+State: CLOSED
+Next actor: none
+Action: Review round finished. Start a new round only if new findings appear.
+Note: Final review passed. Public release candidate approved under the documented scope: Go relay, Python client SDK, protocol docs, and web reference client. Worker remains experimental/excluded.
+Updated by: codex-reviewer
+Updated at: 2026-03-08T03:56:28Z

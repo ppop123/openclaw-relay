@@ -29,6 +29,28 @@ Both sides connect **outbound** — no port forwarding, no public IP, no DNS set
 - **Open protocol**: Anyone can build alternative clients or relay implementations
 - **Extensible**: The reference client is a starting point — build your own
 
+## Latest Release / 最新发布
+
+`OpenClaw Relay v0.1.0` is now available. / `OpenClaw Relay v0.1.0` 已发布。
+
+Official release scope / 正式支持范围：
+
+- `relay/` — Go relay server
+- `sdk/python/` — Python client SDK (Layers 0–2)
+- `client/` — Web reference client
+- `protocol/` — Protocol docs and canonical fixtures
+
+Excluded from official release scope / 不在正式发布范围内：
+
+- `deploy/cloudflare-worker/` — Experimental
+- `plugin/` — Not yet implemented
+- `sdk/js/` — Not yet implemented
+
+Release notes / 发布说明：
+
+- 中文：[`docs/releases/v0.1.0-github-release.zh-CN.md`](docs/releases/v0.1.0-github-release.zh-CN.md)
+- English: [`docs/releases/v0.1.0-github-release.en.md`](docs/releases/v0.1.0-github-release.en.md)
+
 ## Project Status
 
 The core relay stack (Go server, Python SDK, web client) is **implemented and tested**. The protocol specification, architecture design, and operational guides are also included.
@@ -41,7 +63,7 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 |-----------|-------------|--------|
 | [Protocol Spec](protocol/) | Wire protocol specification | v1 |
 | Relay Server (`relay/`) | Reference relay implementation (Go) | Implemented, tested |
-| Python SDK (`sdk/python/`) | Client and gateway SDK | Implemented, tested |
+| Python SDK (`sdk/python/`) | Client SDK (protocol layers 0-2) | Implemented, tested |
 | Reference Client (`client/`) | Browser-based web client | Implemented, tested |
 | Cloudflare Worker (`deploy/cloudflare-worker/`) | Edge relay on Workers + Durable Objects | **Experimental** |
 | JavaScript SDK (`sdk/js/`) | Protocol library for JS | Not yet implemented |

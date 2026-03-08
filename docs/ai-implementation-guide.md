@@ -26,7 +26,7 @@ These are implemented, tested in CI, and covered by stability guarantees:
 | Component | Path | Test Command |
 |-----------|------|-------------|
 | Go relay server | `relay/` | `cd relay && go test -v -count=1` |
-| Python SDK | `sdk/python/` | `cd sdk/python && pip install -e '.[dev]' && pytest -q` |
+| Python SDK (client-side only) | `sdk/python/` | `cd sdk/python && pip install -e '.[dev]' && pytest -q` |
 | Web reference client | `client/` | `cd client && npm ci && npm test` |
 | Protocol spec | `protocol/` | (no executable tests) |
 
@@ -89,6 +89,22 @@ cd client && npm ci && npm test
 ```
 
 The Worker type check (`tsc --noEmit`) is informational and does not block release.
+
+## Implementation-Specific Notes
+
+### Web Reference Client (`client/`)
+
+The web client's identity keypair is **in-memory only**. It is generated on the first handshake after page load and reused across reconnections within that browser session. On page reload, the keypair is lost and a new one is generated. This means:
+
+- The client sends a different `client_public_key` in HELLO after each page reload.
+- A gateway implementing client identity pinning would see this as a new client each time.
+- This is acceptable for a reference client. Production clients should persist the keypair (e.g. in IndexedDB) to maintain stable identity across sessions.
+
+### Python SDK (`sdk/python/`)
+
+The Python SDK exports `RelayClient` — a **client-side** SDK only. It does not include gateway-side abstractions (accepting connections, responding to requests, managing paired clients). The `KeyPair` export allows callers to persist and restore identity keys across process restarts.
+
+There is no gateway SDK. Implementing a gateway requires directly handling the Layer 0-2 protocol.
 
 ## Common Mistakes to Avoid
 

@@ -33,6 +33,16 @@
       "blocks_release": true
     },
     {
+      "name": "Protocol example validation",
+      "command": "python3 scripts/validate-protocol-examples.py",
+      "blocks_release": true
+    },
+    {
+      "name": "Documentation consistency check",
+      "command": "bash scripts/check-doc-consistency.sh",
+      "blocks_release": true
+    },
+    {
       "name": "Worker type check",
       "command": "cd deploy/cloudflare-worker && npm ci && npx tsc --noEmit",
       "blocks_release": false
@@ -45,7 +55,7 @@
     "forward_secrecy": false,
     "replay_protection": true,
     "relay_blindness": true,
-    "key_model": "Static X25519 identity keypairs (generated once at pairing). Session key uniqueness from fresh random nonces per connection mixed into HKDF salt. Both JS client and Python SDK use the same model.",
+    "key_model": "Static X25519 identity keypairs (generated once at pairing). Session key uniqueness from fresh random nonces per connection mixed into HKDF salt. The Python SDK supports persisting keypairs across restarts via the KeyPair export. The web reference client keeps its keypair in-memory only — it is stable across reconnections within one page session but lost on page reload (acceptable for a reference client; production clients should persist to IndexedDB).",
     "notes": "v1 does NOT provide forward secrecy. Compromising an identity private key allows computing the ECDH shared secret and (with captured session nonces) deriving all past and future session keys. ADR needed for v2 (consider Noise IK/XX)."
   },
   "known_limitations": [

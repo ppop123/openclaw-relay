@@ -9,7 +9,7 @@
 | Component | Path | Description |
 |-----------|------|-------------|
 | Go relay server | `relay/` | Production relay implementation |
-| Python SDK | `sdk/python/` | Client and gateway SDK for Python |
+| Python SDK | `sdk/python/` | Client SDK (protocol layers 0-2) |
 | Web reference client | `client/` | Browser-based reference client |
 
 These components are actively maintained, tested in CI, and covered by the project's stability guarantees.

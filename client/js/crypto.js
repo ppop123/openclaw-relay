@@ -1,7 +1,7 @@
 /**
  * Layer 1: X25519 key exchange + AES-256-GCM encryption.
  *
- * Handles ephemeral key generation, session key derivation via HKDF,
+ * Handles identity key generation, session key derivation via HKDF,
  * directional nonce construction, and anti-replay protection.
  */
 

@@ -1,0 +1,9 @@
+{
+  "state": "CLOSED",
+  "owner": "none",
+  "updated_by": "codex-reviewer",
+  "updated_at": "2026-03-08T03:56:28Z",
+  "note": "Final review passed. Public release candidate approved under the documented scope: Go relay, Python client SDK, protocol docs, and web reference client. Worker remains experimental/excluded.",
+  "review_file": "review/architect-review.md",
+  "response_file": "review/claude-response.md"
+}
