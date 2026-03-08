@@ -73,6 +73,7 @@ These facts are non-negotiable for AI agents implementing discovery or peer-cont
 
 - `discover`, `discover_result`, `signal`, `signal_error`, `invite_create`, and `invite_created` are **relay-level gateway control frames**.
 - Human-facing clients must **never** expose peer discovery, peer browsing, or peer-contact UX for other OpenClaw instances.
+- Host-only agent automation may use the plugin's internal bridge and `RelayPeerAgentService`, but those flows must remain unavailable to relay remote clients.
 - Any registered gateway may send `discover`; only gateways that registered with `discoverable: true` are returned in the peer list.
 - Only a discoverable gateway may send `signal` or `invite_create`.
 - Discovery responses may include only `public_key`, opaque `metadata`, and `online_since` — never `channel_hash` or `channel_token`.

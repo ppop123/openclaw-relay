@@ -16,6 +16,7 @@ export * from './openclaw-host.js';
 export * from './outbound.js';
 export * from './outbound-peer-session.js';
 export * from './pairing.js';
+export * from './peer-agent-service.js';
 export * from './peer-discovery.js';
 export * from './relay-connection.js';
 export * from './status.js';

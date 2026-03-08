@@ -8,6 +8,7 @@ import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { MemoryRelayConfigStore } from '../src/config.js';
 import { RelayGatewayAdapter } from '../src/gateway-adapter.js';
+import { createRelayPeerAgentService } from '../src/peer-agent-service.js';
 import { handleRelayEnable } from '../src/commands/enable.js';
 import { SessionCipher } from '../src/crypto.js';
 import type { RelayRuntimeAdapter } from '../src/types.js';
@@ -363,6 +364,105 @@ describe('plugin integration with real relay', () => {
       if (relayTempDir) {
         await rm(relayTempDir, { recursive: true, force: true });
       }
+    }
+  }, 45_000);
+
+  it('orchestrates the full peer flow through RelayPeerAgentService over a real relay', async () => {
+    let relayProcess: ChildProcessWithoutNullStreams | undefined;
+    let adapterA: RelayGatewayAdapter | undefined;
+    let adapterB: RelayGatewayAdapter | undefined;
+    let relayTempDir: string | undefined;
+
+    try {
+      let relayPort = 0;
+      try {
+        relayPort = await getFreePort();
+      } catch (error) {
+        if (isLocalListenBlocked(error)) return;
+        throw error;
+      }
+
+      const relayBuild = await buildRelayBinary();
+      relayTempDir = relayBuild.tempDir;
+      relayProcess = spawn(relayBuild.binaryPath, ['-port', String(relayPort), '-tls', 'off'], { cwd: relayCwd, stdio: 'pipe' });
+      await waitForRelayReady(relayProcess, `http://127.0.0.1:${relayPort}/status`, 15_000);
+
+      const serverUrl = `ws://127.0.0.1:${relayPort}/ws`;
+      const storeA = new MemoryRelayConfigStore();
+      const storeB = new MemoryRelayConfigStore();
+      await handleRelayEnable(storeA, serverUrl, 'default', { discoverable: true });
+      await handleRelayEnable(storeB, serverUrl, 'default', { discoverable: true });
+
+      adapterA = new RelayGatewayAdapter({ accountId: 'default', configStore: storeA, runtime: { systemStatus: async () => ({ version: 'gateway-a', uptime_seconds: 1, agents_active: 1, cron_tasks: 0, channels: { relay: 'running' } }) } });
+      adapterB = new RelayGatewayAdapter({ accountId: 'default', configStore: storeB, runtime: { systemStatus: async () => ({ version: 'gateway-b', uptime_seconds: 2, agents_active: 2, cron_tasks: 0, channels: { relay: 'running' } }) } });
+      await adapterA.start();
+      await adapterB.start();
+
+      const bridgeA = {
+        ensureStarted: async () => adapterA!.getStatus(),
+        stopAccount: async () => adapterA!.stop(),
+        getStatus: async () => adapterA!.getStatus(),
+        discoverPeers: async () => adapterA!.discoverPeers(),
+        sendPeerSignal: async (target: string, envelope: any) => adapterA!.sendPeerSignal(target, envelope),
+        createPeerInvite: async ({ ttlSeconds }: any = {}) => adapterA!.createPeerInvite(ttlSeconds ?? 300),
+        acceptPeerSignal: async (source: string, options: any = {}) => {
+          const ttlSeconds = options.ttlSeconds ?? 300;
+          const maxUses = options.maxUses ?? 1;
+          const authorization = await adapterA!.authorizePeerPublicKey(source, ttlSeconds, maxUses);
+          const invite = await adapterA!.createPeerInvite(ttlSeconds);
+          return { sourcePublicKey: source, fingerprint: authorization.fingerprint, peerAuthorizedUntil: authorization.expiresAt, ...invite };
+        },
+        dialPeerInvite: async (inviteToken: string, gatewayPublicKey: string, options: any = {}) => adapterA!.dialPeerInvite(inviteToken, gatewayPublicKey, options.clientId),
+        drainPeerSignals: () => adapterA!.drainPeerSignals(),
+        drainPeerSignalErrors: () => adapterA!.drainPeerSignalErrors(),
+      };
+      const bridgeB = {
+        ensureStarted: async () => adapterB!.getStatus(),
+        stopAccount: async () => adapterB!.stop(),
+        getStatus: async () => adapterB!.getStatus(),
+        discoverPeers: async () => adapterB!.discoverPeers(),
+        sendPeerSignal: async (target: string, envelope: any) => adapterB!.sendPeerSignal(target, envelope),
+        createPeerInvite: async ({ ttlSeconds }: any = {}) => adapterB!.createPeerInvite(ttlSeconds ?? 300),
+        acceptPeerSignal: async (source: string, options: any = {}) => {
+          const ttlSeconds = options.ttlSeconds ?? 300;
+          const maxUses = options.maxUses ?? 1;
+          const authorization = await adapterB!.authorizePeerPublicKey(source, ttlSeconds, maxUses);
+          const invite = await adapterB!.createPeerInvite(ttlSeconds);
+          return { sourcePublicKey: source, fingerprint: authorization.fingerprint, peerAuthorizedUntil: authorization.expiresAt, ...invite };
+        },
+        dialPeerInvite: async (inviteToken: string, gatewayPublicKey: string, options: any = {}) => adapterB!.dialPeerInvite(inviteToken, gatewayPublicKey, options.clientId),
+        drainPeerSignals: () => adapterB!.drainPeerSignals(),
+        drainPeerSignalErrors: () => adapterB!.drainPeerSignalErrors(),
+      };
+
+      const serviceA = createRelayPeerAgentService({ bridge: bridgeA as any });
+      const serviceB = createRelayPeerAgentService({ bridge: bridgeB as any });
+      const accountB = (await storeB.load('default'))!;
+
+      await serviceA.requestPeerInvite(accountB.gatewayKeyPair.publicKey, { reason: 'service-test' });
+
+      const requestSignal = await waitForValue(async () => {
+        const signals = serviceB.drainSignals().filter((signal) => signal.envelope.kind === 'invite_request');
+        return signals[0];
+      }, 10_000, 150);
+      await serviceB.acceptPeerRequest(requestSignal, { ttlSeconds: 60, maxUses: 1 }, { accepted_by: 'gateway-b' });
+
+      const offerSignal = await waitForValue(async () => {
+        const signals = serviceA.drainSignals().filter((signal) => signal.envelope.kind === 'invite_offer');
+        return signals[0];
+      }, 10_000, 150);
+      await serviceA.connectFromInviteOffer(offerSignal, { clientId: 'peer-service-client' });
+
+      await expect(serviceA.requestPeer(accountB.gatewayKeyPair.publicKey, 'system.status', {})).resolves.toMatchObject({ version: 'gateway-b', agents_active: 2 });
+      expect(serviceA.listConnectedPeers()).toEqual([accountB.gatewayKeyPair.publicKey]);
+
+      await serviceA.closeAllPeerSessions();
+    } finally {
+      if (adapterA) await adapterA.stop();
+      if (adapterB) await adapterB.stop();
+      relayProcess?.kill('SIGTERM');
+      await delay(200);
+      if (relayTempDir) await rm(relayTempDir, { recursive: true, force: true });
     }
   }, 45_000);
 });

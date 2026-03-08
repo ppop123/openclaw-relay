@@ -131,7 +131,7 @@ A local/manual lifecycle smoke also exists for the plugin:
 - No JavaScript SDK yet
 - Browser client identity persistence currently depends on IndexedDB availability in the browser environment
 - Human-facing clients intentionally do not expose peer discovery or peer-contact UX
-- Relay and plugin now implement the gateway-only Layer 0.5 control plane, but higher-level OpenClaw agent policy and automation flows are still being built on top
+- Relay and plugin now implement the gateway-only Layer 0.5 control plane, including a host-only agent bridge, invite-scoped peer acceptance, outbound invite dialing, and a local `RelayPeerAgentService` for agent-side orchestration
 - Plugin runtime integration depends on the current OpenClaw plugin APIs
 - Hosted CI does not run the real OpenClaw lifecycle smoke
 
