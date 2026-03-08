@@ -91,6 +91,7 @@ cd sdk/python && pip install -e ".[dev]" && pytest -q  # Python SDK
 cd client && npm ci && npm test          # Web client
 cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests  # OpenClaw plugin
 cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit  # Plugin typecheck
+bash scripts/smoke-openclaw-plugin.sh  # OpenClaw plugin real-host smoke (local/manual)
 ```
 
 > **Gateway plugin:** Install `plugin/` into your own OpenClaw runtime with `openclaw plugins install --link /path/to/openclaw-relay/plugin`, then run `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`. See [Quick Start Guide](docs/quick-start.md).

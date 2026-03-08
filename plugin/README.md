@@ -54,3 +54,13 @@ cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/no
 ```
 
 See `docs/plans/2026-03-08-gateway-plugin-design.md` for the design source and `docs/quick-start.md` for the short install flow.
+
+## Smoke validation
+
+For a real-host local smoke check:
+
+```bash
+cd plugin && npm run smoke
+```
+
+The smoke script uses an isolated OpenClaw state/config under `.tmp/`, starts a local relay, completes one pairing flow, then verifies a `system.status` request over the real relay path.

@@ -83,3 +83,13 @@ openclaw relay revoke --fingerprint <fingerprint>
 openclaw relay rotate-token
 openclaw relay disable
 ```
+
+## Local Smoke Validation
+
+For post-release or pre-release confidence against a real local OpenClaw runtime, run:
+
+```bash
+bash scripts/smoke-openclaw-plugin.sh
+```
+
+This script installs `plugin/` into an isolated OpenClaw state directory, starts a local relay, performs pairing with a fresh client identity, starts a real OpenClaw gateway, and verifies `system.status` over the relay.

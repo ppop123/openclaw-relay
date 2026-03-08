@@ -56,6 +56,11 @@
       "name": "Plugin type check",
       "command": "cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit",
       "blocks_release": true
+    },
+    {
+      "name": "Plugin smoke test (local OpenClaw runtime)",
+      "command": "bash scripts/smoke-openclaw-plugin.sh",
+      "blocks_release": false
     }
   ],
   "security_claims": {

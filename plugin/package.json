@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke": "bash ../scripts/smoke-openclaw-plugin.sh"
   },
   "peerDependencies": {
     "openclaw": ">=0.0.0"
