@@ -15,11 +15,11 @@ It does **not** see plaintext payloads, API keys, user prompts, model responses,
 
 The encryption pipeline uses:
 
-1. **X25519 ECDH** -- Both sides generate ephemeral Curve25519 keypairs. The shared secret is derived via Diffie-Hellman key agreement.
-2. **HKDF-SHA256** -- The raw shared secret is expanded into a 256-bit symmetric session key using HKDF with SHA-256.
+1. **X25519 ECDH** -- Each side has a static X25519 identity keypair generated once during pairing. The shared secret is derived via Diffie-Hellman key agreement using these long-lived keys.
+2. **HKDF-SHA256** -- The shared secret is expanded into a 256-bit session key using HKDF with SHA-256. A fresh random session nonce from each side is mixed into the HKDF salt, ensuring a unique session key per connection.
 3. **AES-256-GCM** -- All frames are encrypted and authenticated using AES-256-GCM with the derived session key.
 
-This combination provides strong key derivation (HKDF) and authenticated encryption (GCM). Each connection uses ephemeral session keys, so a compromised session key does not affect other sessions. However, v1 does **not** provide forward secrecy — the long-lived identity keys used during pairing are static, and compromising them would allow decryption of future sessions.
+The ECDH shared secret is the same across connections (static identity keys), but the session key is unique per connection because each side contributes a fresh 32-byte random nonce to the HKDF salt. A compromised session key does not affect other sessions. However, v1 does **not** provide forward secrecy — compromising an identity private key allows computing the shared secret and (combined with captured session nonces from HELLO/HELLO_ACK) deriving all past and future session keys.
 
 ## Nonce Structure
 

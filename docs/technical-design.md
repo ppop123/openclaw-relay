@@ -126,7 +126,7 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port` | 8080 | Listen port |
+| `--port` | 8443 | Listen port |
 | `--tls` | off | TLS mode: `off`, `auto` (ACME/Let's Encrypt), or `manual` |
 | `--cert` | — | TLS cert path (when `--tls manual`) |
 | `--key` | — | TLS key path (when `--tls manual`) |

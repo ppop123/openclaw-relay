@@ -53,24 +53,21 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 
 ```bash
 cd relay && go build -o openclaw-relay
-./openclaw-relay --port 8080
+./openclaw-relay
+# Listens on :8443 by default
 ```
 
 See [Deployment Guide](docs/deployment.md) for TLS, origin validation, and production configuration.
 
-### Run the Python SDK tests
+### Run tests
 
 ```bash
-cd sdk/python && pip install -e ".[dev]" && pytest -q
+cd relay && go test -v -count=1         # Go relay
+cd sdk/python && pip install -e ".[dev]" && pytest -q  # Python SDK
+cd client && npm ci && npm test          # Web client
 ```
 
-### Run the web client tests
-
-```bash
-cd client && npm ci && npm test
-```
-
-> **Planned (not yet runnable):** The `openclaw relay enable` CLI for zero-config gateway integration and the `openclaw relay pair` pairing flow depend on the gateway plugin (`plugin/`), which is not yet implemented. See `docs/technical-design.md` for the planned UX.
+> **Not yet implemented:** The `openclaw relay enable` and `openclaw relay pair` CLI commands depend on the gateway plugin (`plugin/`), which is not yet implemented. See [Quick Start Guide](docs/quick-start.md) for details on what is and isn't runnable.
 
 ### Contribute a public relay
 

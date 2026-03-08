@@ -2,5 +2,5 @@
   "_comment": "Layer 0: Relay rejects a frame that exceeds --max-payload. This is a relay-generated error, not encrypted.",
   "type": "error",
   "code": "payload_too_large",
-  "message": "Frame payload exceeds maximum size of 1048576 bytes"
+  "message": "payload exceeds maximum size"
 }

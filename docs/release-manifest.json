@@ -45,7 +45,8 @@
     "forward_secrecy": false,
     "replay_protection": true,
     "relay_blindness": true,
-    "notes": "v1 does NOT provide forward secrecy. Long-lived identity keys are used during pairing. Compromising identity keys allows decryption of future sessions. ADR needed for v2 (consider Noise IK/XX)."
+    "key_model": "Static X25519 identity keypairs (generated once at pairing). Session key uniqueness from fresh random nonces per connection mixed into HKDF salt. Both JS client and Python SDK use the same model.",
+    "notes": "v1 does NOT provide forward secrecy. Compromising an identity private key allows computing the ECDH shared secret and (with captured session nonces) deriving all past and future session keys. ADR needed for v2 (consider Noise IK/XX)."
   },
   "known_limitations": [
     "Single relay node only — no clustering, federation, or HA",

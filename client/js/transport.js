@@ -144,9 +144,14 @@ export class RelayConnection {
       throw new Error('Gateway is offline. Please ensure the gateway is running.');
     }
 
-    // Step 3: Generate ephemeral keypair and session nonce
-    this.crypto = new RelayCrypto();
-    await this.crypto.generateKeyPair();
+    // Step 3: Ensure identity keypair exists; always generate fresh session nonce.
+    // The keypair is static (generated once, reused across reconnections).
+    // Session uniqueness comes from the fresh nonce mixed into HKDF salt.
+    if (!this.crypto.keyPair) {
+      await this.crypto.generateKeyPair();
+    } else {
+      this.crypto.regenerateNonce();
+    }
 
     // Step 4: Send HELLO via DATA frame (unencrypted)
     const helloPayload = JSON.stringify({

@@ -18,14 +18,14 @@ go build -o openclaw-relay
 Basic usage:
 
 ```bash
-./openclaw-relay --port 8080
+./openclaw-relay
 ```
 
 ### CLI Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port` | `8080` | Listen port |
+| `--port` | `8443` | Listen port |
 | `--tls` | `off` | TLS mode: `off`, `auto`, or `manual` |
 | `--cert` | | Path to TLS certificate file (manual TLS mode) |
 | `--key` | | Path to TLS private key file (manual TLS mode) |
@@ -43,7 +43,7 @@ Basic usage:
 ### Off (development only)
 
 ```bash
-./openclaw-relay --port 8080
+./openclaw-relay
 ```
 
 No encryption on the transport layer. Use only for local development. The relay itself does not handle TLS; place it behind a reverse proxy for production if using this mode.

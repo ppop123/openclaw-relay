@@ -31,6 +31,14 @@ export class RelayCrypto {
     this.clientNonce = crypto.getRandomValues(new Uint8Array(32));
   }
 
+  /**
+   * Regenerate only the session nonce (for reconnections with the same identity keypair).
+   * The keypair stays the same; a fresh nonce ensures a unique session key.
+   */
+  regenerateNonce() {
+    this.clientNonce = crypto.getRandomValues(new Uint8Array(32));
+  }
+
   async deriveSessionKey(gatewayPubKeyBytes, gatewayNonce) {
     // Import the gateway's public key
     const gatewayPubKey = await crypto.subtle.importKey(
