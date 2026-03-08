@@ -35,6 +35,7 @@
         "identity status rendering",
         "identity import/export actions",
         "settings load/save",
+        "saved relay profile management",
         "agent list state",
         "chat ui flow",
         "status rendering"
@@ -127,12 +128,18 @@
     "localStorage": {
       "keys": [
         "openclaw-relay-settings",
+        "openclaw-relay-profiles",
         "openclaw-relay-client-id"
       ],
       "persisted_fields": [
         "relayUrl",
         "gatewayPubKey",
-        "clientId"
+        "selectedProfileId",
+        "clientId",
+        "profiles[].id",
+        "profiles[].name",
+        "profiles[].relayUrl",
+        "profiles[].gatewayPubKey"
       ]
     },
     "indexedDB": {

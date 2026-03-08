@@ -23,6 +23,8 @@ The header contains:
 
 The connect form collects:
 
+- saved relay profile selection
+- profile name for saving safe settings
 - relay URL
 - channel token
 - gateway public key
@@ -57,6 +59,7 @@ Transient status and error notifications are rendered into `#toastContainer`.
 |-------|---------|
 | `connection` | The single `RelayConnection` instance |
 | `agents` | Last loaded list from `agents.list` |
+| `profiles` | Saved relay profiles loaded from `localStorage` |
 | `sessionId` | Current Layer 3 chat session id, if any |
 | `currentStreamEl` | Active DOM node for the assistant stream in progress |
 | `currentStreamText` | Accumulated assistant text during streaming |
@@ -68,11 +71,42 @@ Identity metadata itself is owned by `connection`; `app.js` only renders it.
 On `DOMContentLoaded`:
 
 1. the app cleans any historical `channelToken` from persisted settings
-2. the app restores `relayUrl` and `gatewayPubKey`
+2. the app restores the selected saved profile or the last safe custom settings
 3. the app wires transport callbacks
 4. the send button becomes input-driven and connection-aware
 5. the app hydrates any persisted browser identity
 6. the connect panel renders the current identity status, fingerprint summary, and identity actions
+
+## Profile Management Flow
+
+`app.js` manages named saved relay profiles containing only non-secret fields.
+
+### Save profile
+
+`app.saveProfile()`:
+
+- validates that `relayUrl` and `gatewayPubKey` are present
+- normalizes the relay URL for storage
+- updates the selected profile or creates a new one
+- persists the profile list to `openclaw-relay-profiles`
+- persists the selected profile id in safe settings
+
+### Select profile
+
+`app.handleProfileSelectChange()`:
+
+- applies the chosen profile to the connect form
+- keeps `channelToken` untouched because it is never stored
+- updates the selected profile id in safe settings
+
+### Delete profile
+
+`app.deleteProfile()`:
+
+- requires a selected saved profile
+- asks for confirmation before deletion
+- removes that profile from `openclaw-relay-profiles`
+- keeps the current connect form in custom/unsaved mode afterwards
 
 ## Connect Flow
 
@@ -222,7 +256,6 @@ The current UI still lacks:
 
 - explicit pairing state display
 - persisted local conversation history
-- multi-profile relay configuration
 - richer diagnostics beyond status text, fingerprint display, and toasts
 
 These are product improvements, not missing protocol primitives.

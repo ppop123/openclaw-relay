@@ -21,7 +21,7 @@ The browser uses two storage backends.
 
 ### `localStorage`
 
-The browser uses two `localStorage` keys:
+The browser uses three `localStorage` keys:
 
 #### `openclaw-relay-settings`
 
@@ -29,6 +29,17 @@ JSON object containing only non-secret fields:
 
 - `relayUrl`
 - `gatewayPubKey`
+- `selectedProfileId`
+
+#### `openclaw-relay-profiles`
+
+JSON array of saved safe profiles. Each profile stores:
+
+- `id`
+- `name`
+- `relayUrl`
+- `gatewayPubKey`
+- creation/update timestamps
 
 #### `openclaw-relay-client-id`
 
@@ -171,7 +182,7 @@ A future product-grade browser client should additionally support:
 
 - passphrase-protected identity export files for advanced users
 - richer fingerprint presentation / QR display
-- multi-profile identity management
+- profile sync across browsers or devices
 - browser-specific recovery flows when IndexedDB is disabled by policy
 
 That work does not exist yet; this document describes the current implementation only.

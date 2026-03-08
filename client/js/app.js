@@ -10,7 +10,7 @@ import { RelayConnection } from './transport.js';
 
 // ── Storage keys ──
 const STORAGE_KEY_SETTINGS = 'openclaw-relay-settings';
-const STORAGE_KEY_CLIENT_ID = 'openclaw-relay-client-id';
+const STORAGE_KEY_PROFILES = 'openclaw-relay-profiles';
 
 // ── Toast notifications ──
 
@@ -32,6 +32,7 @@ export function showToast(message, type = 'info', duration = 4000) {
 export const app = {
   connection: new RelayConnection(),
   agents: [],
+  profiles: [],
   sessionId: null,
   currentStreamEl: null,
   currentStreamText: '',
@@ -46,10 +47,26 @@ export const app = {
       } catch {}
     }
 
-    // Restore safe settings
-    if (saved.relayUrl) document.getElementById('relayUrl').value = saved.relayUrl;
-    // channelToken is never persisted — user must enter each session
-    if (saved.gatewayPubKey) document.getElementById('gatewayPubKey').value = saved.gatewayPubKey;
+    this.profiles = this._loadProfiles();
+    this._renderProfiles(saved.selectedProfileId || '');
+
+    const selectedProfile = saved.selectedProfileId ? this._findProfile(saved.selectedProfileId) : null;
+    if (selectedProfile) {
+      this._applyProfileToForm(selectedProfile);
+      this._setProfileSelection(selectedProfile.id);
+    } else if (saved.relayUrl || saved.gatewayPubKey) {
+      if (saved.relayUrl) document.getElementById('relayUrl').value = saved.relayUrl;
+      if (saved.gatewayPubKey) document.getElementById('gatewayPubKey').value = saved.gatewayPubKey;
+      document.getElementById('profileName').value = '';
+      this._setProfileSelection('');
+    } else if (this.profiles[0]) {
+      this._applyProfileToForm(this.profiles[0]);
+      this._setProfileSelection(this.profiles[0].id);
+    } else {
+      document.getElementById('profileName').value = '';
+      this._setProfileSelection('');
+    }
+    this._updateProfileActionState();
 
     // Wire transport callbacks to UI
     this.connection.onStateChange = (state) => this._updateStatus(state);
@@ -65,6 +82,9 @@ export const app = {
 
     document.getElementById('identityImportInput').addEventListener('change', (event) => {
       void this.handleImportIdentity(event);
+    });
+    document.getElementById('profileSelect').addEventListener('change', () => {
+      this.handleProfileSelectChange();
     });
 
     await this.connection.hydratePersistedIdentity();
@@ -83,14 +103,15 @@ export const app = {
     // Validate
     if (!relayUrl || !channelToken || !gatewayPubKey) return false;
 
-    // Ensure URL ends with /ws if it doesn't already
-    let url = relayUrl;
-    if (!url.includes('/ws')) {
-      url = url.replace(/\/$/, '') + '/ws';
-    }
+    const url = this._normalizeRelayUrl(relayUrl);
 
     // Save settings (channelToken is stripped by _saveSettings)
-    this._saveSettings({ relayUrl: url, channelToken, gatewayPubKey });
+    this._saveSettings({
+      relayUrl: url,
+      channelToken,
+      gatewayPubKey,
+      selectedProfileId: this._getSelectedProfileId(),
+    });
 
     const btn = document.getElementById('connectBtn');
     const errorEl = document.getElementById('connectError');
@@ -133,6 +154,100 @@ export const app = {
 
     this._returnToConnectView();
     this._updateIdentityStatus();
+  },
+
+  handleProfileSelectChange() {
+    const profileId = this._getSelectedProfileId();
+    if (!profileId) {
+      document.getElementById('profileName').value = '';
+      this._updateProfileActionState();
+      this._saveSettings({
+        relayUrl: document.getElementById('relayUrl').value.trim(),
+        gatewayPubKey: document.getElementById('gatewayPubKey').value.trim(),
+        selectedProfileId: '',
+      });
+      return;
+    }
+
+    const profile = this._findProfile(profileId);
+    if (!profile) {
+      this._setProfileSelection('');
+      this._updateProfileActionState();
+      return;
+    }
+
+    this._applyProfileToForm(profile);
+    this._updateProfileActionState();
+    this._saveSettings({
+      relayUrl: profile.relayUrl,
+      gatewayPubKey: profile.gatewayPubKey,
+      selectedProfileId: profile.id,
+    });
+  },
+
+  saveProfile() {
+    const relayUrl = this._normalizeRelayUrl(document.getElementById('relayUrl').value.trim());
+    const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim();
+    if (!relayUrl || !gatewayPubKey) {
+      showToast('Relay URL and gateway public key are required to save a profile.', 'warning');
+      return;
+    }
+
+    const nameInput = document.getElementById('profileName');
+    const existingId = this._getSelectedProfileId();
+    const now = new Date().toISOString();
+    const profile = {
+      id: existingId || this._generateProfileId(),
+      name: nameInput.value.trim() || this._deriveProfileName(relayUrl),
+      relayUrl,
+      gatewayPubKey,
+      createdAt: existingId ? (this._findProfile(existingId)?.createdAt || now) : now,
+      updatedAt: now,
+    };
+
+    if (existingId) {
+      this.profiles = this.profiles.map((item) => item.id === existingId ? profile : item);
+    } else {
+      this.profiles = [...this.profiles, profile];
+    }
+
+    this._saveProfiles();
+    this._renderProfiles(profile.id);
+    this._applyProfileToForm(profile);
+    this._saveSettings({ relayUrl, gatewayPubKey, selectedProfileId: profile.id });
+    showToast(existingId ? 'Profile updated.' : 'Profile saved.', 'info');
+  },
+
+  deleteProfile() {
+    const profileId = this._getSelectedProfileId();
+    if (!profileId) {
+      showToast('Select a saved profile to delete.', 'warning');
+      return;
+    }
+
+    const profile = this._findProfile(profileId);
+    if (!profile) {
+      this._setProfileSelection('');
+      this._updateProfileActionState();
+      return;
+    }
+
+    if (typeof confirm === 'function') {
+      const confirmed = confirm(`Delete saved profile "${profile.name}"?`);
+      if (!confirmed) return;
+    }
+
+    this.profiles = this.profiles.filter((item) => item.id !== profileId);
+    this._saveProfiles();
+    this._renderProfiles('');
+    this._setProfileSelection('');
+    this._updateProfileActionState();
+    this._saveSettings({
+      relayUrl: document.getElementById('relayUrl').value.trim(),
+      gatewayPubKey: document.getElementById('gatewayPubKey').value.trim(),
+      selectedProfileId: '',
+    });
+    showToast('Profile deleted.', 'info');
   },
 
   async exportIdentity() {
@@ -533,6 +648,81 @@ export const app = {
 
   _formatIdentityCreatedAt(createdAt) {
     return createdAt || '';
+  },
+
+  _normalizeRelayUrl(relayUrl) {
+    if (!relayUrl) return '';
+    return relayUrl.includes('/ws') ? relayUrl : relayUrl.replace(/\/$/, '') + '/ws';
+  },
+
+  _loadProfiles() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY_PROFILES) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
+
+  _saveProfiles() {
+    try {
+      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(this.profiles));
+    } catch {}
+  },
+
+  _renderProfiles(selectedId = '') {
+    const select = document.getElementById('profileSelect');
+    select.innerHTML = '';
+
+    const custom = document.createElement('option');
+    custom.value = '';
+    custom.textContent = 'Custom / unsaved';
+    select.appendChild(custom);
+
+    for (const profile of this.profiles) {
+      const option = document.createElement('option');
+      option.value = profile.id;
+      option.textContent = profile.name;
+      select.appendChild(option);
+    }
+
+    select.value = selectedId || '';
+    this._updateProfileActionState();
+  },
+
+  _setProfileSelection(profileId) {
+    document.getElementById('profileSelect').value = profileId || '';
+    this._updateProfileActionState();
+  },
+
+  _getSelectedProfileId() {
+    return document.getElementById('profileSelect').value || '';
+  },
+
+  _findProfile(profileId) {
+    return this.profiles.find((profile) => profile.id === profileId) || null;
+  },
+
+  _applyProfileToForm(profile) {
+    document.getElementById('profileName').value = profile.name || '';
+    document.getElementById('relayUrl').value = profile.relayUrl || '';
+    document.getElementById('gatewayPubKey').value = profile.gatewayPubKey || '';
+  },
+
+  _updateProfileActionState() {
+    document.getElementById('deleteProfileBtn').disabled = !this._getSelectedProfileId();
+  },
+
+  _deriveProfileName(relayUrl) {
+    try {
+      return new URL(relayUrl).host || relayUrl;
+    } catch {
+      return relayUrl || `Profile ${this.profiles.length + 1}`;
+    }
+  },
+
+  _generateProfileId() {
+    return `profile_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   },
 
   _escapeHtml(str) {

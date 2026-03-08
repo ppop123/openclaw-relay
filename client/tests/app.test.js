@@ -76,6 +76,7 @@ globalThis.URL.revokeObjectURL = vi.fn();
 const { app } = await import('../js/app.js');
 
 const STORAGE_KEY = 'openclaw-relay-settings';
+const PROFILES_KEY = 'openclaw-relay-profiles';
 const defaultExportIdentityBundle = app.connection.exportIdentityBundle.bind(app.connection);
 const defaultImportIdentityBundle = app.connection.importIdentityBundle.bind(app.connection);
 const defaultResetIdentity = app.connection.resetIdentity.bind(app.connection);
@@ -93,6 +94,7 @@ beforeEach(() => {
   app.connection.importIdentityBundle = defaultImportIdentityBundle;
   app.connection.resetIdentity = defaultResetIdentity;
 
+  app.profiles = [];
   app.connection.crypto.clearIdentity();
   app.connection.identityPersistence = 'unsupported';
   app.connection.identityFingerprint = '';
@@ -248,5 +250,70 @@ describe('identity actions', () => {
     await app.resetIdentity();
 
     expect(app.connection.resetIdentity).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('saved profiles', () => {
+  it('saves a safe relay profile without persisting channelToken', () => {
+    getElement('relayUrl').value = 'wss://relay.example.com';
+    getElement('gatewayPubKey').value = 'BASE64KEY';
+    getElement('profileName').value = 'Office relay';
+    getElement('profileSelect').value = '';
+
+    app.saveProfile();
+
+    const profiles = JSON.parse(store.get(PROFILES_KEY));
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0]).toMatchObject({
+      name: 'Office relay',
+      relayUrl: 'wss://relay.example.com/ws',
+      gatewayPubKey: 'BASE64KEY',
+    });
+    expect(JSON.stringify(profiles[0])).not.toMatch(/channelToken/);
+  });
+
+  it('restores the selected saved profile on init', async () => {
+    store.set(PROFILES_KEY, JSON.stringify([
+      {
+        id: 'profile_saved',
+        name: 'Saved relay',
+        relayUrl: 'wss://saved.example.com/ws',
+        gatewayPubKey: 'SAVEDKEY',
+      },
+    ]));
+    store.set(STORAGE_KEY, JSON.stringify({
+      relayUrl: 'wss://stale.example.com/ws',
+      gatewayPubKey: 'STALEKEY',
+      selectedProfileId: 'profile_saved',
+    }));
+
+    await app.init();
+
+    expect(getElement('profileSelect').value).toBe('profile_saved');
+    expect(getElement('profileName').value).toBe('Saved relay');
+    expect(getElement('relayUrl').value).toBe('wss://saved.example.com/ws');
+    expect(getElement('gatewayPubKey').value).toBe('SAVEDKEY');
+    expect(getElement('deleteProfileBtn').disabled).toBe(false);
+  });
+
+  it('deletes the selected saved profile after confirmation', () => {
+    app.profiles = [
+      {
+        id: 'profile_saved',
+        name: 'Saved relay',
+        relayUrl: 'wss://saved.example.com/ws',
+        gatewayPubKey: 'SAVEDKEY',
+      },
+    ];
+    app._renderProfiles('profile_saved');
+    getElement('relayUrl').value = 'wss://saved.example.com/ws';
+    getElement('gatewayPubKey').value = 'SAVEDKEY';
+
+    app.deleteProfile();
+
+    expect(app.profiles).toHaveLength(0);
+    expect(JSON.parse(store.get(PROFILES_KEY))).toEqual([]);
+    expect(getElement('profileSelect').value).toBe('');
   });
 });

@@ -36,6 +36,7 @@ It currently provides:
 - real browser-side Layer 0 / 1 / 2 behavior
 - gateway public-key pinning via user-supplied pinned key
 - stable browser cryptographic identity across reloads in the same browser profile
+- named saved relay profiles for non-secret connection settings
 - identity fingerprint plus export / import / reset actions in the connect UI
 - streaming `chat.send`
 - agent list loading via `agents.list`
@@ -66,7 +67,7 @@ Its largest current limitations are:
 |-------|------------------|
 | Runtime model | Plain browser modules loaded from `client/index.html` |
 | Build step | None |
-| LocalStorage | `openclaw-relay-settings` (`relayUrl`, `gatewayPubKey`) and `openclaw-relay-client-id` (`clientId`) |
+| LocalStorage | `openclaw-relay-settings` (`relayUrl`, `gatewayPubKey`, `selectedProfileId`), `openclaw-relay-profiles` (saved relay profiles), and `openclaw-relay-client-id` (`clientId`) |
 | IndexedDB | `openclaw-relay-browser` → `identity` store for the browser X25519 keypair |
 | Never persisted to browser storage | `channelToken`, session keys, decrypted messages |
 | Identity keypair | Loaded from IndexedDB on startup when available; otherwise created on first connect and then persisted if possible |

@@ -25,6 +25,7 @@ cd client && npm ci && npm test
 The current test suite is strongest at these guarantees:
 
 - `channelToken` is not persisted
+- saved relay profiles persist only non-secret connection settings
 - historical stored `channelToken` is cleaned on startup
 - browser identity export and import actions preserve the expected fingerprint
 - persisted identity storage uses the expected IndexedDB layout
@@ -51,18 +52,20 @@ When validating the web client manually, check the following:
 
 1. page loads and form fields render correctly
 2. saved `relayUrl` and `gatewayPubKey` restore correctly
-3. `channelToken` does not restore after refresh
-4. identity card shows whether a browser identity is already available
-5. connect succeeds against a live gateway
-6. `agents.list` populates the selector
-7. `chat.send` streams chunks and final text renders correctly
-8. disconnect returns the UI to connect mode
-9. reconnect after transient relay loss restores chat functionality
-10. gateway public-key mismatch is rejected
-11. exporting the current identity downloads a JSON file successfully
-12. importing that identity restores the expected fingerprint
-13. full page reload preserves the same client fingerprint when IndexedDB is available
-14. identity reset causes the next connect to present a different client fingerprint
+3. saving a relay profile persists only profile name, relay URL, and gateway public key
+4. selecting a saved profile repopulates the form without restoring `channelToken`
+5. `channelToken` does not restore after refresh
+6. identity card shows whether a browser identity is already available
+7. connect succeeds against a live gateway
+8. `agents.list` populates the selector
+9. `chat.send` streams chunks and final text renders correctly
+10. disconnect returns the UI to connect mode
+11. reconnect after transient relay loss restores chat functionality
+12. gateway public-key mismatch is rejected
+13. exporting the current identity downloads a JSON file successfully
+14. importing that identity restores the expected fingerprint
+15. full page reload preserves the same client fingerprint when IndexedDB is available
+16. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 

@@ -1,7 +1,7 @@
 {
   "$schema_comment": "Machine-readable browser storage contract for the web reference client.",
   "component": "web-client",
-  "version": 2,
+  "version": 3,
   "backends": {
     "localStorage": {
       "keys": {
@@ -21,6 +21,12 @@
               "required": false,
               "secret": false,
               "description": "Pinned gateway public key in base64"
+            },
+            "selectedProfileId": {
+              "type": "string",
+              "required": false,
+              "secret": false,
+              "description": "Currently selected saved profile id, if any"
             }
           },
           "forbidden_fields": [
@@ -35,6 +41,52 @@
               "field": "channelToken"
             }
           ]
+        },
+        "profiles": {
+          "key": "openclaw-relay-profiles",
+          "type": "json-array",
+          "secret": false,
+          "items": {
+            "type": "object",
+            "fields": {
+              "id": {
+                "type": "string",
+                "required": true,
+                "secret": false,
+                "description": "Stable saved-profile id"
+              },
+              "name": {
+                "type": "string",
+                "required": true,
+                "secret": false,
+                "description": "User-facing saved profile name"
+              },
+              "relayUrl": {
+                "type": "string",
+                "required": true,
+                "secret": false,
+                "description": "Normalized relay websocket url for the profile"
+              },
+              "gatewayPubKey": {
+                "type": "string",
+                "required": true,
+                "secret": false,
+                "description": "Pinned gateway public key for the profile"
+              },
+              "createdAt": {
+                "type": "string",
+                "required": false,
+                "secret": false,
+                "description": "ISO timestamp when the profile was first saved"
+              },
+              "updatedAt": {
+                "type": "string",
+                "required": false,
+                "secret": false,
+                "description": "ISO timestamp when the profile was last updated"
+              }
+            }
+          }
         },
         "client_id": {
           "key": "openclaw-relay-client-id",
@@ -126,6 +178,7 @@
     "identity private key must never be written to localStorage",
     "identity private key may be persisted only inside the IndexedDB identity store for same-browser reuse",
     "session key must not be persisted",
-    "gateway public key is safe to persist but security-relevant"
+    "gateway public key is safe to persist but security-relevant",
+    "saved relay profiles may persist relayUrl and gatewayPubKey only; channelToken remains forbidden"
   ]
 }
