@@ -28,6 +28,7 @@ These are implemented, tested in CI, and covered by stability guarantees:
 | Go relay server | `relay/` | `cd relay && go test -v -count=1` |
 | Python SDK (client-side only) | `sdk/python/` | `cd sdk/python && pip install -e '.[dev]' && pytest -q` |
 | Web reference client | `client/` | `cd client && npm ci && npm test` |
+| OpenClaw gateway plugin | `plugin/` | `cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests && cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit` |
 | Protocol spec | `protocol/` | (no executable tests) |
 
 ## Experimental (NOT Officially Supported)
@@ -41,7 +42,6 @@ These are implemented, tested in CI, and covered by stability guarantees:
 | Component | Path |
 |-----------|------|
 | JavaScript SDK | `sdk/js/` |
-| OpenClaw gateway plugin | `plugin/` |
 
 These directories may contain placeholder files. Do not treat them as functional.
 
@@ -86,9 +86,11 @@ All commands in `docs/release-manifest.json` → `required_test_commands` where 
 cd relay && go test -v -count=1
 cd sdk/python && pip install -e '.[dev]' && pytest -q
 cd client && npm ci && npm test
+cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
+cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit
 ```
 
-The Worker type check (`tsc --noEmit`) is informational and does not block release.
+The Worker type check (`tsc --noEmit`) is informational and does not block release. Plugin tests and plugin type checking are part of the official release gate.
 
 ## Implementation-Specific Notes
 
@@ -113,4 +115,4 @@ There is no gateway SDK. Implementing a gateway requires directly handling the L
 3. Do not persist `channelToken` on the client — it is a bearer secret.
 4. Do not use `--allow-origin` with full URLs — it takes host patterns only.
 5. Do not fall back to plaintext after session key is established — this breaks E2E integrity.
-6. Do not treat `docs/technical-design.md` code examples for JS SDK or gateway plugin as real — those components are not yet implemented.
+6. Do not treat `docs/technical-design.md` code examples for the JS SDK as real — `sdk/js/` is still not implemented. The gateway plugin under `plugin/` is officially supported for current OpenClaw runtime builds, but the Worker remains experimental.

@@ -27,7 +27,7 @@ Send a message to an agent and receive a response.
 - `agent`: Agent name. If omitted, uses the default agent.
 - `message`: User message text.
 - `session_id`: Resume an existing session. `null` to start a new one.
-- `stream`: If `true`, gateway responds with STREAM_START/STREAM_CHUNK/STREAM_END. If `false`, responds with a single RESPONSE.
+- `stream`: If `true`, gateway responds with STREAM_START/STREAM_CHUNK/STREAM_END. If final metadata is available, it may follow with a trailing RESPONSE carrying the final result envelope. If `false`, the gateway responds with a single RESPONSE.
 
 **Streaming Response:**
 
@@ -38,8 +38,8 @@ Send a message to an agent and receive a response.
   "session_id": "sess_abc123"
 }
 
-// stream_end (final chunk carries metadata):
-// followed by a RESPONSE:
+// stream_end (signals end of chunks):
+// followed by an optional trailing RESPONSE with final metadata:
 {
   "result": {
     "session_id": "sess_abc123",
@@ -61,6 +61,8 @@ Send a message to an agent and receive a response.
   }
 }
 ```
+
+`tokens` is optional. Gateways SHOULD include it when the upstream runtime exposes token usage, and MAY omit it when unavailable.
 
 ### agents.list
 

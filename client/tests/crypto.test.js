@@ -211,11 +211,12 @@ describe('RelayCrypto.decrypt', () => {
 
   it('rejects counter that is too old', async () => {
     const { client } = await makePair();
+    await client.decrypt(await encryptAsGateway(client.sessionKey, 'zero', 0));
     // Advance recvCounterMax past the replay window by decrypting counter=100
     const advancePayload = await encryptAsGateway(client.sessionKey, 'advance', 100);
     await client.decrypt(advancePayload);
-    // Now counter=0 is way behind (100 - 64 = 36, 0 <= 36 → too_old)
-    const oldPayload = await encryptAsGateway(client.sessionKey, 'old', 0);
+    // Now counter=1 is way behind (100 - 64 = 36, 1 <= 36 → too_old)
+    const oldPayload = await encryptAsGateway(client.sessionKey, 'old', 1);
     await expect(client.decrypt(oldPayload))
       .rejects.toThrow('Replay detected: counter too old');
   });
@@ -237,9 +238,16 @@ describe('RelayCrypto.decrypt', () => {
     await expect(client.decrypt(tampered)).rejects.toThrow();
   });
 
-  it('accepts out-of-order counters within the replay window', async () => {
+  it('rejects a non-zero first inbound counter', async () => {
     const { client } = await makePair();
-    // Send counter 5 first, then 3 (within window)
+    const payload = await encryptAsGateway(client.sessionKey, 'bad-first', 1);
+    await expect(client.decrypt(payload))
+      .rejects.toThrow('Replay detected: first counter must be zero');
+  });
+
+  it('accepts out-of-order counters within the replay window after counter zero', async () => {
+    const { client } = await makePair();
+    await client.decrypt(await encryptAsGateway(client.sessionKey, 'zero', 0));
     const p5 = await encryptAsGateway(client.sessionKey, 'five', 5);
     const p3 = await encryptAsGateway(client.sessionKey, 'three', 3);
     await client.decrypt(p5);
@@ -299,9 +307,14 @@ describe('buildNonce', () => {
 // ===========================================================================
 
 describe('checkReplay', () => {
-  it('accepts the first counter (recvCounterMax = -1)', () => {
+  it('accepts counter zero as the first inbound frame', () => {
     const window = new Set();
     expect(checkReplay(0, -1, window)).toBe('ok');
+  });
+
+  it('rejects a non-zero first inbound counter', () => {
+    const window = new Set();
+    expect(checkReplay(1, -1, window)).toBe('invalid_first_counter');
   });
 
   it('accepts sequential counters', () => {

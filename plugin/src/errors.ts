@@ -12,6 +12,20 @@ export class RelayConfigError extends Error {
   }
 }
 
+export class InvalidParamsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidParamsError';
+  }
+}
+
+export class UnsupportedRuntimeMethodError extends Error {
+  constructor(method: string) {
+    super(`${method} is not supported by this runtime`);
+    this.name = 'UnsupportedRuntimeMethodError';
+  }
+}
+
 export class RelayFatalError extends Error {
   readonly code: string;
 

@@ -48,6 +48,25 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  plugin-tests:
+    name: OpenClaw Plugin Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Vitest toolchain
+        working-directory: client
+        run: npm ci
+      - name: Run plugin tests
+        run: client/node_modules/.bin/vitest run plugin/tests
+      - name: Install TypeScript toolchain
+        working-directory: deploy/cloudflare-worker
+        run: npm ci
+      - name: Type check plugin
+        run: deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit
+
   docs-contracts:
     name: Documentation & Protocol Contracts
     runs-on: ubuntu-latest

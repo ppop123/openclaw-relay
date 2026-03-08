@@ -4,6 +4,9 @@ import { ConnectionState, ErrorFrame, GatewayStatus, PingFrame, RegisteredFrame,
 const WS_OPEN = 1;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
+const MIN_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 60_000;
+const RECONNECT_JITTER_RATIO = 0.2;
 
 export interface RelayConnectionOptions {
   url: string;
@@ -27,12 +30,18 @@ function isPingFrame(frame: RelayFrame): frame is PingFrame {
   return frame.type === 'ping' && typeof (frame as PingFrame).ts === 'number';
 }
 
+export function computeReconnectDelay(baseDelayMs: number, randomValue = Math.random()): number {
+  const boundedRandom = Number.isFinite(randomValue) ? Math.min(1, Math.max(0, randomValue)) : 0.5;
+  const jitterMultiplier = 1 - RECONNECT_JITTER_RATIO + (boundedRandom * RECONNECT_JITTER_RATIO * 2);
+  return Math.max(250, Math.round(baseDelayMs * jitterMultiplier));
+}
+
 export class RelayConnection {
   private readonly webSocketFactory: WebSocketFactory;
   private ws: WebSocketLike | null = null;
   private stopped = false;
   private registered = false;
-  private reconnectDelayMs = 1000;
+  private reconnectDelayMs = MIN_RECONNECT_DELAY_MS;
   private heartbeatGeneration = 0;
   private awaitingPongTs: number | null = null;
   private connectPromise: Promise<void> | null = null;
@@ -107,7 +116,7 @@ export class RelayConnection {
           if (!this.registered) {
             if (isRegisteredFrame(frame)) {
               this.registered = true;
-              this.reconnectDelayMs = 1000;
+              this.reconnectDelayMs = MIN_RECONNECT_DELAY_MS;
               this.lastRegisteredAt = new Date().toISOString();
               this.lastFatalErrorCode = undefined;
               this.setState('registered');
@@ -162,8 +171,8 @@ export class RelayConnection {
       }
       if (!this.stopped) {
         this.setState('reconnecting');
-        await this.delay(this.reconnectDelayMs);
-        this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 60_000);
+        await this.delay(computeReconnectDelay(this.reconnectDelayMs));
+        this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS);
         this.connectPromise = this.connectOnce();
         await this.connectPromise;
       } else {
@@ -200,8 +209,8 @@ export class RelayConnection {
         return;
       }
       this.setState('reconnecting');
-      await this.delay(this.reconnectDelayMs);
-      this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 60_000);
+      await this.delay(computeReconnectDelay(this.reconnectDelayMs));
+      this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS);
       this.connectPromise = this.connectOnce();
       try {
         await this.connectPromise;

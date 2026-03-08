@@ -37,6 +37,7 @@ export class GatewayTransport {
   private readonly sessionsByClientId = new Map<string, GatewaySession>();
   private readonly activeClientIdByFingerprint = new Map<string, string>();
   private readonly negotiatedCapabilitiesByClientId = new Map<string, string[]>();
+  private pairingClaimed = false;
 
   constructor(private readonly options: GatewayTransportOptions) {}
 
@@ -73,6 +74,7 @@ export class GatewayTransport {
     const payload = await session.cipher.encryptJson(message as Record<string, unknown>);
     await this.options.sendFrame({
       type: 'data',
+      from: 'gateway',
       to: clientId,
       payload,
     });
@@ -110,6 +112,18 @@ export class GatewayTransport {
     return Object.entries(approved).find(([, record]) => record.lastSeenClientId === clientId);
   }
 
+  private tryClaimPairingWindow(): boolean {
+    if (!this.options.pairingActive() || this.pairingClaimed) {
+      return false;
+    }
+    this.pairingClaimed = true;
+    return true;
+  }
+
+  private releasePairingWindow(): void {
+    this.pairingClaimed = false;
+  }
+
   private async processHello(clientId: string, payload: string): Promise<void> {
     const hello = JSON.parse(payload) as HelloMessage;
     if (hello.type !== 'hello') {
@@ -139,17 +153,21 @@ export class GatewayTransport {
     }
 
     if (!approved) {
-      if (!this.options.pairingActive()) {
+      if (!this.tryClaimPairingWindow()) {
         return;
       }
-      const savedFingerprint = await this.options.approveUnknownClient?.(hello.client_public_key, clientId);
-      if (!savedFingerprint) {
-        return;
-      }
-      this.options.endPairing();
-      approved = this.options.accountConfig().approvedClients[savedFingerprint];
-      if (!approved) {
-        return;
+      try {
+        const savedFingerprint = await this.options.approveUnknownClient?.(hello.client_public_key, clientId);
+        if (!savedFingerprint) {
+          return;
+        }
+        this.options.endPairing();
+        approved = this.options.accountConfig().approvedClients[savedFingerprint];
+        if (!approved) {
+          return;
+        }
+      } finally {
+        this.releasePairingWindow();
       }
     }
 
@@ -184,6 +202,7 @@ export class GatewayTransport {
 
     await this.options.sendFrame({
       type: 'data',
+      from: 'gateway',
       to: clientId,
       payload: JSON.stringify(ack),
     });

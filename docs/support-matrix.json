@@ -62,9 +62,11 @@
     {
       "name": "OpenClaw gateway plugin",
       "path": "plugin/",
-      "status": "not_implemented",
-      "release_scope": "excluded",
-      "description": "Gateway channel plugin (planned)"
+      "status": "supported",
+      "release_scope": "official",
+      "description": "TypeScript OpenClaw gateway plugin (gateway-side relay adapter)",
+      "test_command": "cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests && cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit",
+      "test_framework": "vitest + tsc"
     }
   ]
 }

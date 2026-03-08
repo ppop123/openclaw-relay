@@ -1,6 +1,6 @@
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { MethodNotFoundError, dispatchRequest } from './dispatch.js';
-import { Layer2ResponseError, RelayFatalError } from './errors.js';
+import { InvalidParamsError, Layer2ResponseError, RelayFatalError, UnsupportedRuntimeMethodError } from './errors.js';
 import { importGatewayIdentity } from './crypto.js';
 import { RelayOutbound } from './outbound.js';
 import { PairingManager, approveClient } from './pairing.js';
@@ -242,7 +242,7 @@ export class RelayGatewayAdapter {
     const maxPerClient = this.options.maxConcurrentPerClient ?? 4;
     const maxGlobal = this.options.maxConcurrentGlobal ?? 16;
     if (this.countPendingForClient(session.clientId) >= maxPerClient || this.pendingRequests.size >= maxGlobal) {
-      await this.outbound.sendError(session.clientId, message.id, 'internal_error', 'gateway request limit reached');
+      await this.outbound.sendError(session.clientId, message.id, 'rate_limited', 'gateway request limit reached');
       return;
     }
 
@@ -342,16 +342,16 @@ export class RelayGatewayAdapter {
     if (error instanceof Layer2ResponseError) {
       return { code: error.code, text: error.message };
     }
+    if (error instanceof InvalidParamsError) {
+      return { code: 'invalid_params', text: error.message };
+    }
+    if (error instanceof UnsupportedRuntimeMethodError) {
+      return { code: 'method_not_found', text: error.message };
+    }
     if (error instanceof DOMException && error.name === 'AbortError') {
       return { code: 'cancelled', text: 'request cancelled' };
     }
     if (error instanceof Error) {
-      if (error.message.includes('required') || error.message.includes('must be') || error.message.includes('does not accept')) {
-        return { code: 'invalid_params', text: error.message };
-      }
-      if (error.message.includes('not supported by this runtime')) {
-        return { code: 'method_not_found', text: error.message };
-      }
       return { code: 'internal_error', text: error.message };
     }
     return { code: 'internal_error', text: 'unexpected gateway error' };

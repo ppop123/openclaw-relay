@@ -66,7 +66,11 @@ export class SessionCipher {
     }
 
     const counter = view.getUint32(4) * 0x100000000 + view.getUint32(8);
-    if (this.recvCounterMax >= 0) {
+    if (this.recvCounterMax < 0) {
+      if (counter !== 0) {
+        throw new Error('Replay detected: first counter must be zero');
+      }
+    } else {
       if (counter <= this.recvCounterMax - REPLAY_WINDOW) {
         throw new Error('Replay detected: counter too old');
       }

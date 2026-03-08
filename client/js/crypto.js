@@ -124,7 +124,11 @@ export class RelayCrypto {
     const counter = high * 0x100000000 + low;
 
     // Anti-replay check
-    if (this.recvCounterMax >= 0) {
+    if (this.recvCounterMax < 0) {
+      if (counter !== 0) {
+        throw new Error('Replay detected: first counter must be zero');
+      }
+    } else {
       if (counter <= this.recvCounterMax - REPLAY_WINDOW) {
         throw new Error('Replay detected: counter too old');
       }
@@ -172,9 +176,10 @@ export function buildNonce(direction, counter) {
  * Exported for testing.
  */
 export function checkReplay(counter, recvCounterMax, recvWindow) {
-  if (recvCounterMax >= 0) {
-    if (counter <= recvCounterMax - REPLAY_WINDOW) return 'too_old';
-    if (counter <= recvCounterMax && recvWindow.has(counter)) return 'duplicate';
+  if (recvCounterMax < 0) {
+    return counter === 0 ? 'ok' : 'invalid_first_counter';
   }
+  if (counter <= recvCounterMax - REPLAY_WINDOW) return 'too_old';
+  if (counter <= recvCounterMax && recvWindow.has(counter)) return 'duplicate';
   return 'ok';
 }

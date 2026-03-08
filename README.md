@@ -39,11 +39,11 @@ Official release scope / 正式支持范围：
 - `sdk/python/` — Python client SDK (Layers 0–2)
 - `client/` — Web reference client
 - `protocol/` — Protocol docs and canonical fixtures
+- `plugin/` — OpenClaw gateway plugin
 
 Excluded from official release scope / 不在正式发布范围内：
 
 - `deploy/cloudflare-worker/` — Experimental
-- `plugin/` — Not yet implemented
 - `sdk/js/` — Not yet implemented
 
 Release notes / 发布说明：
@@ -53,7 +53,7 @@ Release notes / 发布说明：
 
 ## Project Status
 
-The core relay stack (Go server, Python SDK, web client) is **implemented and tested**. The protocol specification, architecture design, and operational guides are also included.
+The core relay stack (Go server, Python SDK, web client), the OpenClaw gateway plugin, and the protocol specification are **implemented and tested**. Architecture design and operational guides are also included.
 
 v1 targets a **single relay node** deployment. Clustering, federation, and high-availability are explicitly out of scope.
 
@@ -67,7 +67,7 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 | Reference Client (`client/`) | Browser-based web client | Implemented, tested |
 | Cloudflare Worker (`deploy/cloudflare-worker/`) | Edge relay on Workers + Durable Objects | **Experimental** |
 | JavaScript SDK (`sdk/js/`) | Protocol library for JS | Not yet implemented |
-| OpenClaw Plugin (`plugin/`) | Gateway channel plugin | Not yet implemented |
+| OpenClaw Plugin (`plugin/`) | Gateway channel plugin | Implemented, tested |
 
 > **Cloudflare Worker (Experimental):** The Worker deployment under `deploy/cloudflare-worker/` is an experimental alternative relay that runs on Cloudflare's edge network using Durable Objects. It uses **URL-based routing** (`?role=gateway&id=...`) instead of the standard in-band `register`/`join` protocol — standard SDK clients and the reference client **cannot connect to it directly**. It requires a purpose-built adapter. Do not use it in production.
 
@@ -89,9 +89,11 @@ See [Deployment Guide](docs/deployment.md) for TLS, origin validation, and produ
 cd relay && go test -v -count=1         # Go relay
 cd sdk/python && pip install -e ".[dev]" && pytest -q  # Python SDK
 cd client && npm ci && npm test          # Web client
+cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests  # OpenClaw plugin
+cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit  # Plugin typecheck
 ```
 
-> **Not yet implemented:** The `openclaw relay enable` and `openclaw relay pair` CLI commands depend on the gateway plugin (`plugin/`), which is not yet implemented. See [Quick Start Guide](docs/quick-start.md) for details on what is and isn't runnable.
+> **Gateway plugin:** Install `plugin/` into your own OpenClaw runtime with `openclaw plugins install --link /path/to/openclaw-relay/plugin`, then run `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`. See [Quick Start Guide](docs/quick-start.md).
 
 ### Contribute a public relay
 

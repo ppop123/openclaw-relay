@@ -4,10 +4,6 @@
   "type": "response",
   "result": {
     "session_id": "sess_abc123",
-    "agent": "tangseng",
-    "tokens": {
-      "input": 150,
-      "output": 420
-    }
+    "agent": "tangseng"
   }
 }

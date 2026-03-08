@@ -1,3 +1,4 @@
+import { InvalidParamsError, UnsupportedRuntimeMethodError } from '../errors.js';
 import { RelayRuntimeAdapter, RelayRequestContext, RelayStreamResult } from '../types.js';
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -14,20 +15,20 @@ export async function handleChatSend(
   ctx: RelayRequestContext,
 ): Promise<Record<string, unknown> | RelayStreamResult> {
   if (typeof params.message !== 'string' || params.message.length === 0) {
-    throw new Error('message is required');
+    throw new InvalidParamsError('message is required');
   }
   if (params.agent !== undefined && typeof params.agent !== 'string') {
-    throw new Error('agent must be a string when provided');
+    throw new InvalidParamsError('agent must be a string when provided');
   }
   if (params.session_id !== undefined && params.session_id !== null && typeof params.session_id !== 'string') {
-    throw new Error('session_id must be string or null');
+    throw new InvalidParamsError('session_id must be string or null');
   }
   if (params.stream !== undefined && typeof params.stream !== 'boolean') {
-    throw new Error('stream must be boolean when provided');
+    throw new InvalidParamsError('stream must be boolean when provided');
   }
 
   if (!runtime.chatSend) {
-    throw new Error('chat.send is not supported by this runtime');
+    throw new UnsupportedRuntimeMethodError('chat.send');
   }
 
   const result = await runtime.chatSend(params, ctx);

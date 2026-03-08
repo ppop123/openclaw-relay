@@ -163,3 +163,29 @@ Use `--log-format json` for structured logging in production environments. This 
 ```
 
 Text format (default) is intended for local development and human reading.
+
+
+## Installing the OpenClaw Gateway Plugin
+
+Install the plugin into your own OpenClaw runtime:
+
+```bash
+openclaw plugins install --link /path/to/openclaw-relay/plugin
+```
+
+Then enable and pair it against your relay:
+
+```bash
+openclaw relay enable --server wss://relay.example.com/ws
+openclaw relay pair --wait 30
+openclaw relay status
+```
+
+Useful operational commands:
+
+```bash
+openclaw relay clients
+openclaw relay revoke --fingerprint <fingerprint>
+openclaw relay rotate-token
+openclaw relay disable
+```

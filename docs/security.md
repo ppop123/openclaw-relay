@@ -38,6 +38,7 @@ The direction prefix prevents nonce reuse between the two communication directio
 
 A **sliding window** of 64 counters is maintained per direction. Incoming frames are checked against this window:
 
+- The first frame in each direction must use counter `0`.
 - Frames with a counter below the window floor are rejected.
 - Frames with a counter already seen within the window are rejected.
 - Valid frames advance the window.

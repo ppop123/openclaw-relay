@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RelayConnection } from '../src/relay-connection.js';
+import { RelayConnection, computeReconnectDelay } from '../src/relay-connection.js';
 import type { WebSocketLike } from '../src/types.js';
 
 class FakeWebSocket implements WebSocketLike {
@@ -57,5 +57,14 @@ describe('RelayConnection heartbeat', () => {
     expect(ws.readyState).toBe(1);
 
     vi.useRealTimers();
+  });
+});
+
+describe('computeReconnectDelay', () => {
+  it('applies bounded jitter to reconnect backoff', () => {
+    expect(computeReconnectDelay(1_000, 0)).toBe(800);
+    expect(computeReconnectDelay(1_000, 0.5)).toBe(1000);
+    expect(computeReconnectDelay(1_000, 1)).toBe(1200);
+    expect(computeReconnectDelay(60_000, 1)).toBe(72_000);
   });
 });

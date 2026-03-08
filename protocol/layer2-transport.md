@@ -92,7 +92,7 @@ Gateway sends a chunk of streaming data:
 
 ### STREAM_END
 
-Gateway signals the end of a streaming response:
+Gateway signals the end of streamed chunks:
 
 ```json
 {
@@ -101,6 +101,8 @@ Gateway signals the end of a streaming response:
   "seq": 42
 }
 ```
+
+`stream_end` closes the chunk stream only. For Layer 3 methods that expose final metadata (for example `chat.send` returning the resolved `session_id` or token usage), the gateway MAY send a trailing `response` message with the same `id` after `stream_end`.
 
 ### CANCEL
 

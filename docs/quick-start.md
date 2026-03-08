@@ -29,6 +29,10 @@ cd sdk/python && pip install -e ".[dev]" && pytest -q
 
 # Web client
 cd client && npm ci && npm test
+
+# OpenClaw gateway plugin
+cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
+cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit
 ```
 
 ## Self-Hosted Relay with TLS (implemented)
@@ -55,43 +59,27 @@ async with RelayClient(
         print(chunk.delta, end="")
 ```
 
----
+## Installing the OpenClaw Gateway Plugin (implemented)
 
-## Planned: Gateway Plugin Integration (not yet implemented)
-
-> The commands below require the gateway plugin (`plugin/`), which is **not yet implemented**. They describe the planned user experience.
-
-### Zero-config with a public relay
+Install the plugin into your own OpenClaw runtime:
 
 ```bash
-# On your OpenClaw machine
-openclaw relay enable
-# → Discovers a public relay automatically
-# → Displays a pairing code / QR
-
-# On your client device
-# Open the web client, enter pairing code → connected
+openclaw plugins install --link /path/to/openclaw-relay/plugin
 ```
 
-### Connect to a specific relay
+Enable relay access for your local OpenClaw gateway:
 
 ```bash
-openclaw relay enable --server wss://relay.yourdomain.com
+openclaw relay enable --server wss://relay.example.com/ws
+openclaw relay pair --wait 30
+openclaw relay status
 ```
 
-### Managing clients
+Manage approved clients:
 
 ```bash
-openclaw relay pair              # Pair a new client
-openclaw relay clients           # List connected clients
-openclaw relay revoke <client_id> # Revoke a client
-openclaw relay disable           # Disable relay
-```
-
-### Switching relays
-
-Your encryption keys are independent of the relay. To switch:
-
-```bash
-openclaw relay enable --server wss://new-relay.example.com
+openclaw relay clients
+openclaw relay revoke --fingerprint <fingerprint>
+openclaw relay rotate-token
+openclaw relay disable
 ```

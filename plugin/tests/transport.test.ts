@@ -13,6 +13,20 @@ async function createClientHello() {
   return { keyPair, publicKeyBytes, clientNonce };
 }
 
+function encodeBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function helloPayload(client: { publicKeyBytes: Uint8Array; clientNonce: Uint8Array }): string {
+  return JSON.stringify({
+    type: 'hello',
+    client_public_key: encodeBase64(client.publicKeyBytes),
+    session_nonce: encodeBase64(client.clientNonce),
+    protocol_version: 1,
+    capabilities: ['chat'],
+  });
+}
+
 async function deriveClientCipher(gatewayPublicKeyBytes: Uint8Array, gatewayNonce: Uint8Array, clientNonce: Uint8Array, clientKeyPair: CryptoKeyPair, clientPublicKeyBytes: Uint8Array) {
   const gatewayPublicKey = await crypto.subtle.importKey('raw', gatewayPublicKeyBytes, { name: 'X25519' }, true, []);
   const sharedSecret = await crypto.subtle.deriveBits(
@@ -125,13 +139,7 @@ describe('GatewayTransport', () => {
       type: 'data',
       from: 'client-1',
       to: 'gateway',
-      payload: JSON.stringify({
-        type: 'hello',
-        client_public_key: btoa(String.fromCharCode(...client.publicKeyBytes)),
-        session_nonce: btoa(String.fromCharCode(...client.clientNonce)),
-        protocol_version: 1,
-        capabilities: ['chat'],
-      }),
+      payload: helloPayload(client),
     });
 
     expect(sentFrames).toHaveLength(0);
@@ -168,16 +176,9 @@ describe('GatewayTransport', () => {
     });
 
     const client = await createClientHello();
-    const helloPayload = JSON.stringify({
-      type: 'hello',
-      client_public_key: btoa(String.fromCharCode(...client.publicKeyBytes)),
-      session_nonce: btoa(String.fromCharCode(...client.clientNonce)),
-      protocol_version: 1,
-      capabilities: ['chat'],
-    });
-
-    await transport.handleDataFrame({ type: 'data', from: 'client-1', to: 'gateway', payload: helloPayload });
+    await transport.handleDataFrame({ type: 'data', from: 'client-1', to: 'gateway', payload: helloPayload(client) });
     expect(sentFrames).toHaveLength(1);
+    expect(sentFrames[0]).toMatchObject({ type: 'data', from: 'gateway', to: 'client-1' });
     expect(pairing.isActive()).toBe(false);
     expect(transport.sessionCount).toBe(1);
 
@@ -201,5 +202,59 @@ describe('GatewayTransport', () => {
 
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(onRequest.mock.calls[0][1]).toEqual(request);
+
+    await transport.sendLayer2('client-1', { id: 'msg_2', type: 'response', result: { ok: true } });
+    expect(sentFrames[1]).toMatchObject({ type: 'data', from: 'gateway', to: 'client-1' });
+  });
+
+  it('consumes the pairing window only once for concurrent unknown clients', async () => {
+    const identity = await generateGatewayIdentity();
+    let account = makeAccountConfig(identity.serialized);
+    const sentFrames: DataFrame[] = [];
+    let pairingActive = true;
+    let releaseApproval!: () => void;
+    const approvalGate = new Promise<void>((resolve) => {
+      releaseApproval = resolve;
+    });
+    const approveUnknownClient = vi.fn(async (publicKey: string, clientId: string) => {
+      await approvalGate;
+      const store = new MemoryRelayConfigStore({ default: account });
+      const { approveClient } = await import('../src/pairing.js');
+      const fingerprint = await approveClient(store, 'default', publicKey, clientId);
+      account = (await store.load('default'))!;
+      return fingerprint;
+    });
+
+    const transport = new GatewayTransport({
+      accountId: 'default',
+      identity,
+      accountConfig: () => account,
+      pairingActive: () => pairingActive,
+      endPairing: () => {
+        pairingActive = false;
+      },
+      capabilities: () => ['chat'],
+      sendFrame: async (frame) => sentFrames.push(frame),
+      approveUnknownClient,
+      onRequest: async () => {},
+    });
+
+    const client1 = await createClientHello();
+    const client2 = await createClientHello();
+    const first = transport.handleDataFrame({ type: 'data', from: 'client-1', to: 'gateway', payload: helloPayload(client1) });
+    const second = transport.handleDataFrame({ type: 'data', from: 'client-2', to: 'gateway', payload: helloPayload(client2) });
+
+    await vi.waitFor(() => {
+      expect(approveUnknownClient).toHaveBeenCalledTimes(1);
+    });
+    expect(sentFrames).toHaveLength(0);
+
+    releaseApproval();
+    await Promise.all([first, second]);
+
+    expect(pairingActive).toBe(false);
+    expect(transport.sessionCount).toBe(1);
+    expect(sentFrames).toHaveLength(1);
+    expect(sentFrames[0]).toMatchObject({ type: 'data', from: 'gateway', to: 'client-1' });
   });
 });

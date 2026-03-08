@@ -68,6 +68,42 @@ describe('plugin crypto', () => {
     await expect(gatewayCipher.decryptToText(encrypted)).rejects.toThrow('Wrong nonce direction');
   });
 
+  it('rejects a non-zero first inbound counter', async () => {
+    const gateway = await generateGatewayIdentity();
+    const clientKeyPair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']) as CryptoKeyPair;
+    const clientPublicKeyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', clientKeyPair.publicKey));
+    const clientNonce = crypto.getRandomValues(new Uint8Array(32));
+
+    const { gatewayNonce, cipher: gatewayCipher } = await deriveGatewaySession(gateway, clientPublicKeyBytes, clientNonce);
+    const clientCipher = await deriveClientCipher(gateway.publicKeyBytes, gatewayNonce, clientNonce, clientKeyPair, clientPublicKeyBytes);
+
+    const encrypted = await gatewayCipher.encryptText('first-frame');
+    const raw = Uint8Array.from(atob(encrypted), (char) => char.charCodeAt(0));
+    const mutated = raw.slice();
+    const view = new DataView(mutated.buffer, mutated.byteOffset, 12);
+    view.setUint32(8, 1);
+    const tampered = btoa(String.fromCharCode(...mutated));
+    await expect(clientCipher.decryptToText(tampered)).rejects.toThrow('Replay detected: first counter must be zero');
+  });
+
+  it('accepts out-of-order counters after counter zero has been observed', async () => {
+    const gateway = await generateGatewayIdentity();
+    const clientKeyPair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']) as CryptoKeyPair;
+    const clientPublicKeyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', clientKeyPair.publicKey));
+    const clientNonce = crypto.getRandomValues(new Uint8Array(32));
+
+    const { gatewayNonce, cipher: gatewayCipher } = await deriveGatewaySession(gateway, clientPublicKeyBytes, clientNonce);
+    const clientCipher = await deriveClientCipher(gateway.publicKeyBytes, gatewayNonce, clientNonce, clientKeyPair, clientPublicKeyBytes);
+
+    const first = await gatewayCipher.encryptText('zero');
+    const sixth = await gatewayCipher.encryptText('five');
+    const fourth = await gatewayCipher.encryptText('three');
+
+    expect(await clientCipher.decryptToText(first)).toBe('zero');
+    expect(await clientCipher.decryptToText(sixth)).toBe('five');
+    expect(await clientCipher.decryptToText(fourth)).toBe('three');
+  });
+
   it('builds a 12-byte directional nonce', () => {
     const nonce = buildNonce(2, 42);
     expect(nonce).toHaveLength(12);

@@ -159,6 +159,7 @@ describe('plugin integration with real relay', () => {
 
       const helloAckFrame = await waitForMessage(ws);
       expect(helloAckFrame.type).toBe('data');
+      expect(helloAckFrame.from).toBe('gateway');
       const helloAck = JSON.parse(helloAckFrame.payload);
       expect(helloAck.type).toBe('hello_ack');
 
@@ -179,6 +180,7 @@ describe('plugin integration with real relay', () => {
       ws.send(JSON.stringify({ type: 'data', to: 'gateway', payload: requestPayload }));
 
       const responseFrame = await waitForMessage(ws);
+      expect(responseFrame.from).toBe('gateway');
       const decrypted = await clientCipher.decryptToText(responseFrame.payload);
       const response = JSON.parse(decrypted);
       expect(response.type).toBe('response');

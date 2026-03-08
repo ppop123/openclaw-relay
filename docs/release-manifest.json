@@ -7,14 +7,14 @@
     "relay/",
     "sdk/python/",
     "client/",
-    "protocol/"
+    "protocol/",
+    "plugin/"
   ],
   "experimental_components": [
     "deploy/cloudflare-worker/"
   ],
   "not_implemented": [
-    "sdk/js/",
-    "plugin/"
+    "sdk/js/"
   ],
   "required_test_commands": [
     {
@@ -46,6 +46,16 @@
       "name": "Worker type check",
       "command": "cd deploy/cloudflare-worker && npm ci && npx tsc --noEmit",
       "blocks_release": false
+    },
+    {
+      "name": "Plugin tests",
+      "command": "cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests",
+      "blocks_release": true
+    },
+    {
+      "name": "Plugin type check",
+      "command": "cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit",
+      "blocks_release": true
     }
   ],
   "security_claims": {
@@ -64,6 +74,7 @@
     "Stream resumption not supported — interrupted streams require new request",
     "Requests are not idempotent by default — no automatic retries for state-changing methods",
     "TOFU model for gateway identity — no certificate authority or out-of-band verification beyond pairing",
-    "Gateway plugin and JS SDK are not yet implemented — zero-config CLI flow is not functional"
+    "JavaScript SDK is not yet implemented",
+    "OpenClaw gateway plugin requires a current OpenClaw runtime with channel and CLI plugin APIs enabled"
   ]
 }
