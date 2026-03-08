@@ -28,6 +28,7 @@ The current test suite is strongest at these guarantees:
 - `channelToken` is not persisted
 - saved relay profiles persist only non-secret connection settings
 - selected-agent preference persists only as safe UI state and restores when the agent is still available
+- the current local transcript can be exported explicitly without enabling automatic history persistence
 - historical stored `channelToken` is cleaned on startup
 - browser identity export and import actions preserve the expected fingerprint
 - identity fingerprint/public-key copy actions surface the full values without exposing storage secrets
@@ -65,16 +66,17 @@ When validating the web client manually, check the following:
 9. `agents.list` populates the selector and restores the saved agent when available
 10. changing the selected agent updates safe settings without affecting secrets
 11. `chat.send` streams chunks and final text renders correctly
-12. `New Chat` clears the local transcript and resets `sessionId` without disconnecting
-13. disconnect returns the UI to connect mode
-14. reconnect after transient relay loss restores chat functionality
-15. gateway public-key mismatch is rejected
-16. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
-17. importing that protected file with the same passphrase restores the expected fingerprint
-18. fingerprint and public-key copy actions place the full values on the clipboard
-19. exporting without a passphrase shows a confirmation warning
-20. full page reload preserves the same client fingerprint when IndexedDB is available
-21. identity reset causes the next connect to present a different client fingerprint
+12. `Export Chat` downloads the current local transcript without persisting it automatically
+13. `New Chat` clears the local transcript and resets `sessionId` without disconnecting
+14. disconnect returns the UI to connect mode
+15. reconnect after transient relay loss restores chat functionality
+16. gateway public-key mismatch is rejected
+17. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
+18. importing that protected file with the same passphrase restores the expected fingerprint
+19. fingerprint and public-key copy actions place the full values on the clipboard
+20. exporting without a passphrase shows a confirmation warning
+21. full page reload preserves the same client fingerprint when IndexedDB is available
+22. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 

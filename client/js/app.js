@@ -35,6 +35,7 @@ export const app = {
   agents: [],
   profiles: [],
   selectedAgentPreference: '',
+  chatTranscript: [],
   sessionId: null,
   currentStreamEl: null,
   currentStreamText: '',
@@ -166,6 +167,24 @@ export const app = {
     this._updateDiagnostics();
   },
 
+  exportCurrentChat() {
+    if (!this.chatTranscript.length) {
+      showToast('No local chat transcript is available yet.', 'warning');
+      return;
+    }
+
+    const relayUrl = this.connection.relayUrl || this._normalizeRelayUrl(document.getElementById('relayUrl').value.trim());
+    const suffix = (this.sessionId || 'new-chat').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'chat';
+    this._downloadJsonFile(`openclaw-relay-chat-${suffix}.json`, {
+      exportedAt: new Date().toISOString(),
+      relayUrl: relayUrl || '',
+      clientId: this.connection.clientId || null,
+      sessionId: this.sessionId || null,
+      messages: this.chatTranscript.map((entry) => ({ ...entry })),
+    });
+    showToast('Current chat exported.', 'info');
+  },
+
   startNewChat() {
     if (this.connection.state !== 'connected') {
       showToast('Connect before starting a new chat.', 'warning');
@@ -173,6 +192,7 @@ export const app = {
     }
 
     document.getElementById('messages').innerHTML = '';
+    this.chatTranscript = [];
     this.sessionId = null;
     this.currentStreamEl = null;
     this.currentStreamText = '';
@@ -422,6 +442,7 @@ export const app = {
 
     // Clear messages
     document.getElementById('messages').innerHTML = '';
+    this.chatTranscript = [];
     this.sessionId = null;
     this.agents = [];
     this._updateDiagnostics();
@@ -490,6 +511,7 @@ export const app = {
     }
 
     // Add user message
+    this._appendTranscriptEntry('user', text);
     this._addMessage('user', text);
 
     // Clear input
@@ -498,6 +520,7 @@ export const app = {
     document.getElementById('sendBtn').disabled = true;
 
     // Create streaming message element
+    const assistantEntry = this._appendTranscriptEntry('assistant', '', { agentName: agent });
     const msgEl = this._addMessage('assistant', '', agent);
     const contentEl = msgEl.querySelector('.msg-content');
     this.currentStreamEl = contentEl;
@@ -521,6 +544,7 @@ export const app = {
           // Handle stream chunk
           if (chunk && chunk.delta) {
             this.currentStreamText += chunk.delta;
+            assistantEntry.text = this.currentStreamText;
             contentEl.innerHTML = renderMarkdown(this.currentStreamText);
             // Re-add cursor during streaming
             const c = document.createElement('span');
@@ -538,15 +562,21 @@ export const app = {
       // Stream complete: remove cursor and do final render
       if (result && result.session_id) {
         this.sessionId = result.session_id;
+        assistantEntry.sessionId = result.session_id;
         this._updateDiagnostics();
       }
+      assistantEntry.text = this.currentStreamText;
       contentEl.innerHTML = renderMarkdown(this.currentStreamText);
       this._scrollToBottom();
 
     } catch (err) {
+      assistantEntry.text = this.currentStreamText || `(Error: ${err.message})`;
+      assistantEntry.error = err.message;
       contentEl.innerHTML = renderMarkdown(this.currentStreamText || '(Error: ' + err.message + ')');
       if (!this.currentStreamText) {
         msgEl.remove();
+        this.chatTranscript.pop();
+        this._updateDiagnostics();
         showToast('Failed to send: ' + err.message, 'error');
       }
     } finally {
@@ -573,12 +603,25 @@ export const app = {
   },
 
   _addSystemMessage(text) {
+    this._appendTranscriptEntry('system', text);
     const container = document.getElementById('messages');
     const el = document.createElement('div');
     el.className = 'message system';
     el.textContent = text;
     container.appendChild(el);
     this._scrollToBottom();
+  },
+
+  _appendTranscriptEntry(role, text, extra = {}) {
+    const entry = {
+      role,
+      text,
+      createdAt: new Date().toISOString(),
+      ...extra,
+    };
+    this.chatTranscript.push(entry);
+    this._updateDiagnostics();
+    return entry;
   },
 
   _scrollToBottom() {
@@ -654,8 +697,9 @@ export const app = {
     const profileEl = document.getElementById('profileValue');
     const gatewayEl = document.getElementById('gatewayValue');
     const newChatBtn = document.getElementById('newChatBtn');
+    const exportChatBtn = document.getElementById('exportChatBtn');
 
-    if (!sessionEl || !clientEl || !profileEl || !gatewayEl || !newChatBtn) {
+    if (!sessionEl || !clientEl || !profileEl || !gatewayEl || !newChatBtn || !exportChatBtn) {
       return;
     }
 
@@ -671,6 +715,7 @@ export const app = {
     gatewayEl.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
     gatewayEl.title = gatewayPubKey;
     newChatBtn.disabled = this.connection.state !== 'connected';
+    exportChatBtn.disabled = this.chatTranscript.length === 0;
   },
 
   _updateIdentityStatus() {

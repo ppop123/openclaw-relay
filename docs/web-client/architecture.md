@@ -49,6 +49,7 @@ app (UI + state)
 - agent list state
 - selected-agent preference persistence
 - current chat session id
+- current in-memory chat transcript for export
 - streaming text accumulation for the active assistant response
 - status and toast display
 

@@ -49,6 +49,7 @@ The chat panel contains:
 - scrollable message list
 - multiline message input
 - send button
+- `Export Chat` button for current-transcript download
 - `New Chat` button for local session reset
 
 ### Toast Layer
@@ -148,6 +149,12 @@ When the user submits the connect form:
 - keeps persisted safe settings and the persisted browser identity intact
 
 ## Session Diagnostics and New Chat
+
+`app.exportCurrentChat()`:
+
+- exports the current in-memory transcript only when the local chat panel has messages
+- downloads a JSON artifact containing relay URL, client id, session id, and ordered messages
+- does not persist the transcript automatically in browser storage
 
 The chat panel diagnostics bar shows:
 

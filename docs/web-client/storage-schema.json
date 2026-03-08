@@ -178,6 +178,10 @@
       "persisted": false,
       "lifecycle": "runtime only"
     },
+    "local_transcript": {
+      "persisted": false,
+      "lifecycle": "runtime-only ordered chat messages kept for the current tab and explicit export"
+    },
     "identity_file_passphrase": {
       "persisted": false,
       "lifecycle": "held only in the connect-panel password input while exporting or importing identity files"

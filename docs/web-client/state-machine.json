@@ -242,6 +242,17 @@
       "timeout rejects the affected pending request"
     ]
   },
+  "local_transcript_model": {
+    "storage": "memory_only",
+    "cleared_on": [
+      "app.startNewChat()",
+      "app.disconnect()",
+      "identity reset return-to-connect flow"
+    ],
+    "user_actions": [
+      "export_current_chat"
+    ]
+  },
   "identity_ui": {
     "card_actions": [
       "copy_fingerprint",

@@ -111,6 +111,7 @@ beforeEach(() => {
 
   app.profiles = [];
   app.selectedAgentPreference = '';
+  app.chatTranscript = [];
   app.connection.crypto.clearIdentity();
   app.connection.identityPersistence = 'unsupported';
   app.connection.identityFingerprint = '';
@@ -491,6 +492,7 @@ describe('diagnostics and session controls', () => {
   it('renders session, client, profile, and gateway diagnostics', () => {
     app.connection.clientId = 'web_deadbeef';
     app.sessionId = 'sess_123';
+    app.chatTranscript = [{ role: 'system', text: 'Connected.' }];
     app.profiles = [
       {
         id: 'profile_saved',
@@ -508,6 +510,32 @@ describe('diagnostics and session controls', () => {
     expect(getElement('clientValue').textContent).toBe('web_deadbeef');
     expect(getElement('profileValue').textContent).toBe('Saved relay');
     expect(getElement('gatewayValue').textContent).toMatch(/SAVEDKEY/);
+    expect(getElement('exportChatBtn').disabled).toBe(false);
+  });
+
+  it('exports the current chat transcript as a downloadable file', () => {
+    app.connection.clientId = 'web_deadbeef';
+    app.connection.relayUrl = 'wss://relay.example.com/ws';
+    app.sessionId = 'sess_123';
+    app.chatTranscript = [
+      { role: 'system', text: 'Connected.', createdAt: '2026-03-08T00:00:00.000Z' },
+      { role: 'user', text: 'Hello', createdAt: '2026-03-08T00:00:01.000Z' },
+    ];
+    const downloadSpy = vi.spyOn(app, '_downloadJsonFile').mockImplementation(() => {});
+
+    app.exportCurrentChat();
+
+    expect(downloadSpy).toHaveBeenCalledWith(
+      expect.stringContaining('openclaw-relay-chat-'),
+      expect.objectContaining({
+        relayUrl: 'wss://relay.example.com/ws',
+        clientId: 'web_deadbeef',
+        sessionId: 'sess_123',
+        messages: app.chatTranscript,
+      }),
+    );
+
+    downloadSpy.mockRestore();
   });
 
   it('starts a new chat without disconnecting', () => {

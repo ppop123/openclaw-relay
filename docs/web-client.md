@@ -43,6 +43,7 @@ It currently provides:
 - preferred agent restore across reconnects and reloads when that agent is still available
 - in-chat diagnostics for session, client, profile, and gateway key state
 - local `New Chat` control that resets `sessionId` without disconnecting
+- explicit export of the current in-memory chat transcript as JSON
 - secure Markdown rendering for assistant output
 - automated tests for UI state, identity persistence, crypto, transport, and Markdown safety
 

@@ -42,6 +42,7 @@
         "selected-agent preference persistence",
         "agent list state",
         "chat ui flow",
+        "current transcript tracking and export",
         "session diagnostics rendering",
         "local new-chat session reset",
         "status rendering"
