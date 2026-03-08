@@ -6,7 +6,7 @@ import {
   type ApprovedClientRecord,
   type InspectApprovedClient,
 } from './types.js';
-import { nowIso, publicKeyFingerprint, sha256Hex } from './utils.js';
+import { b64Decode, nowIso, publicKeyFingerprint, sha256Hex } from './utils.js';
 
 function cloneConfig<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -106,7 +106,7 @@ export async function upsertApprovedClient(
   clientId?: string,
   label?: string,
 ): Promise<{ fingerprint: string; next: RelayAccountConfig }> {
-  const fingerprint = await publicKeyFingerprint(new Uint8Array(atob(clientPublicKey).split('').map((char) => char.charCodeAt(0))));
+  const fingerprint = await publicKeyFingerprint(b64Decode(clientPublicKey));
   const next = cloneConfig(config);
   const existing = next.approvedClients[fingerprint];
   const lastSeenAt = nowIso();

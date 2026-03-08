@@ -28,7 +28,12 @@ export class PairingManager {
 
 export async function ensureEnabledAccountConfig(existing: RelayAccountConfig | undefined, server: string): Promise<RelayAccountConfig> {
   if (existing) {
-    return { ...existing, enabled: true, server };
+    return {
+      ...existing,
+      enabled: true,
+      server,
+      peerDiscovery: existing.peerDiscovery ?? { enabled: false },
+    };
   }
   const identity = await generateGatewayIdentity();
   return {
@@ -37,7 +42,7 @@ export async function ensureEnabledAccountConfig(existing: RelayAccountConfig | 
     channelToken: randomToken(24),
     gatewayKeyPair: identity.serialized,
     approvedClients: {},
-    discovery: { enabled: false },
+    peerDiscovery: { enabled: false },
   };
 }
 

@@ -31,8 +31,13 @@ async function importPublicKey(publicKeyBase64: string): Promise<{ key: CryptoKe
   return { key, bytes };
 }
 
-async function deriveSignalKey(privateKey: CryptoKey, ephemeralPublicKeyBytes: Uint8Array, targetPublicKeyBytes: Uint8Array): Promise<CryptoKey> {
-  const publicKey = await crypto.subtle.importKey('raw', arrayBufferFrom(ephemeralPublicKeyBytes), x25519Algorithm(), true, []);
+async function deriveSignalKey(
+  privateKey: CryptoKey,
+  peerPublicKeyBytes: Uint8Array,
+  ephemeralPublicKeyBytes: Uint8Array,
+  targetPublicKeyBytes: Uint8Array,
+): Promise<CryptoKey> {
+  const publicKey = await crypto.subtle.importKey('raw', arrayBufferFrom(peerPublicKeyBytes), x25519Algorithm(), true, []);
   const sharedSecret = await crypto.subtle.deriveBits({ name: 'X25519', public: publicKey }, privateKey, 256);
   const salt = await crypto.subtle.digest('SHA-256', arrayBufferFrom(concatBuffers(ephemeralPublicKeyBytes, targetPublicKeyBytes)));
   const hkdfKey = await crypto.subtle.importKey('raw', sharedSecret, 'HKDF', false, ['deriveKey']);
@@ -72,7 +77,7 @@ export async function encryptPeerSignalEnvelope(
   const target = await importPublicKey(targetPublicKeyBase64);
   const ephemeral = await crypto.subtle.generateKey(x25519Algorithm(), true, ['deriveBits']) as CryptoKeyPair;
   const ephemeralPublicKeyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
-  const signalKey = await deriveSignalKey(ephemeral.privateKey, ephemeralPublicKeyBytes, target.bytes);
+  const signalKey = await deriveSignalKey(ephemeral.privateKey, target.bytes, ephemeralPublicKeyBytes, target.bytes);
   const iv = crypto.getRandomValues(new Uint8Array(SIGNAL_IV_BYTES));
   const plaintext = new TextEncoder().encode(JSON.stringify(envelope));
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: arrayBufferFrom(iv) }, signalKey, plaintext);
@@ -84,7 +89,7 @@ export async function encryptPeerSignalEnvelope(
 
 export async function decryptPeerSignalEnvelope(identity: GatewayIdentity, frame: SignalForwardFrame): Promise<PeerSignalEnvelope> {
   const ephemeralPublicKeyBytes = b64Decode(frame.ephemeral_key);
-  const signalKey = await deriveSignalKey(identity.privateKey, ephemeralPublicKeyBytes, identity.publicKeyBytes);
+  const signalKey = await deriveSignalKey(identity.privateKey, ephemeralPublicKeyBytes, ephemeralPublicKeyBytes, identity.publicKeyBytes);
   const raw = b64Decode(frame.payload);
   if (raw.length < MIN_SIGNAL_PAYLOAD_BYTES) {
     throw new Error('signal payload too short');
@@ -99,7 +104,7 @@ export async function decryptPeerSignalEnvelope(identity: GatewayIdentity, frame
   if ('body' in parsed && parsed.body !== undefined && !isObject(parsed.body)) {
     throw new Error('peer signal body must be an object when present');
   }
-  return parsed as PeerSignalEnvelope;
+  return parsed as unknown as PeerSignalEnvelope;
 }
 
 export async function createInviteAlias(byteLength = 24): Promise<{ inviteToken: string; inviteHash: string }> {

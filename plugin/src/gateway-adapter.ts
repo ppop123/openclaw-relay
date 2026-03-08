@@ -4,7 +4,7 @@ import { InvalidParamsError, Layer2ResponseError, RelayFatalError, UnsupportedRu
 import { importGatewayIdentity } from './crypto.js';
 import { RelayOutbound } from './outbound.js';
 import { PairingManager, approveClient } from './pairing.js';
-import { GatewayPeerDiscovery, SignalErrorListener, SignalListener } from './peer-discovery.js';
+import { PeerDiscoveryService } from './peer-discovery.js';
 import { RelayConnection } from './relay-connection.js';
 import { GatewayTransport, GatewaySession } from './transport.js';
 import {
@@ -13,15 +13,16 @@ import {
   DataFrame,
   ErrorFrame,
   GatewayStatus,
+  PeerSignalEnvelope,
+  ReceivedPeerSignal,
   RelayAccountConfig,
   RelayConfigStore,
-  DiscoveryPeer,
-  InviteCreatedFrame,
   RelayFrame,
   RelayRequestContext,
   RelayRuntimeAdapter,
   RelayStreamResult,
   RequestMessage,
+  SignalErrorFrame,
   WebSocketFactory,
 } from './types.js';
 
@@ -43,7 +44,7 @@ export interface RelayGatewayAdapterOptions {
 }
 
 function isDataFrame(frame: RelayFrame): frame is DataFrame {
-  return frame.type === 'data' && typeof frame.to === 'string' && typeof frame.payload === 'string';
+  return frame.type === 'data' && typeof (frame as DataFrame).to === 'string' && typeof (frame as DataFrame).payload === 'string';
 }
 
 function isStreamResult(value: Record<string, unknown> | RelayStreamResult): value is RelayStreamResult {
@@ -57,7 +58,7 @@ export class RelayGatewayAdapter {
   private connection: RelayConnection | undefined;
   private transport: GatewayTransport | undefined;
   private outbound: RelayOutbound | undefined;
-  private peerDiscovery: GatewayPeerDiscovery | undefined;
+  private peerDiscovery: PeerDiscoveryService | undefined;
   private lastFatalErrorCode: string | undefined;
   private connectionState: ConnectionState = 'disconnected';
   private readonly pendingRequests = new Map<string, PendingExecution>();
@@ -77,6 +78,16 @@ export class RelayGatewayAdapter {
     this.channelHash = await deriveChannelHash(config.channelToken);
 
     const identity = await importGatewayIdentity(config.gatewayKeyPair);
+
+    this.peerDiscovery = new PeerDiscoveryService({
+      identity,
+      discoveryConfig: () => this.currentConfig?.peerDiscovery,
+      capabilities: () => this.computeCapabilities(),
+      sendFrame: async (frame) => {
+        if (!this.connection) throw new Error('relay connection not initialized');
+        await this.connection.send(frame);
+      },
+    });
 
     this.transport = new GatewayTransport({
       accountId: this.accountId,
@@ -127,25 +138,14 @@ export class RelayGatewayAdapter {
     });
 
     this.outbound = new RelayOutbound(this.transport);
-    this.peerDiscovery = new GatewayPeerDiscovery({
-      sendFrame: async (frame) => {
-        if (!this.connection) throw new Error('relay connection not initialized');
-        await this.connection.send(frame);
-      },
-    });
 
     this.connection = new RelayConnection({
       url: config.server,
       channel: this.channelHash,
-      ...(config.discovery?.enabled ? {
-        register: {
-          discoverable: true,
-          public_key: config.gatewayKeyPair.publicKey,
-          metadata: this.buildDiscoveryMetadata(),
-        },
-      } : {}),
+      registerFields: this.peerDiscovery.getRegisterFields(),
       onStateChange: (state) => {
         this.connectionState = state;
+        this.peerDiscovery?.handleConnectionState(state);
       },
       onRegistered: () => {
         this.lastFatalErrorCode = undefined;
@@ -154,7 +154,7 @@ export class RelayGatewayAdapter {
         await this.handleErrorFrame(frame);
       },
       onFrame: async (frame) => {
-        if (await this.peerDiscovery?.handleFrame(frame)) {
+        if (this.peerDiscovery && await this.peerDiscovery.handleFrame(frame)) {
           return;
         }
         if (frame.type === 'presence' && frame.role === 'client' && frame.status === 'offline' && typeof frame.client_id === 'string') {
@@ -187,7 +187,6 @@ export class RelayGatewayAdapter {
     this.connection = undefined;
     this.transport = undefined;
     this.outbound = undefined;
-    this.peerDiscovery?.close();
     this.peerDiscovery = undefined;
     this.connectionState = 'disconnected';
   }
@@ -196,33 +195,31 @@ export class RelayGatewayAdapter {
     this.pairingManager.begin();
   }
 
+  async discoverPeers() {
+    if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
+    return this.peerDiscovery.discoverPeers();
+  }
+
+  async sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope): Promise<void> {
+    if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
+    await this.peerDiscovery.sendSignal(targetPublicKey, envelope);
+  }
+
+  async createPeerInvite(ttlSeconds = 300): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }> {
+    if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
+    return this.peerDiscovery.createInvite(ttlSeconds);
+  }
+
+  drainPeerSignals(): ReceivedPeerSignal[] {
+    return this.peerDiscovery?.drainSignals() ?? [];
+  }
+
+  drainPeerSignalErrors(): SignalErrorFrame[] {
+    return this.peerDiscovery?.drainSignalErrors() ?? [];
+  }
+
   async disconnectFingerprint(fingerprint: string, reason = 'revoked'): Promise<void> {
     await this.transport?.endSessionsByFingerprint(fingerprint, reason);
-  }
-
-  async listDiscoverablePeers(): Promise<DiscoveryPeer[]> {
-    if (!this.peerDiscovery) throw new Error('peer discovery not initialized');
-    return this.peerDiscovery.listPeers();
-  }
-
-  async createPeerInvite(inviteHash: string, ttlSeconds = 300): Promise<InviteCreatedFrame> {
-    if (!this.peerDiscovery) throw new Error('peer discovery not initialized');
-    return this.peerDiscovery.createInvite(inviteHash, ttlSeconds);
-  }
-
-  async sendPeerSignal(target: string, ephemeralKey: string, payload: string): Promise<void> {
-    if (!this.peerDiscovery) throw new Error('peer discovery not initialized');
-    await this.peerDiscovery.sendSignal(target, ephemeralKey, payload);
-  }
-
-  onPeerSignal(listener: SignalListener): () => void {
-    if (!this.peerDiscovery) throw new Error('peer discovery not initialized');
-    return this.peerDiscovery.onSignal(listener);
-  }
-
-  onPeerSignalError(listener: SignalErrorListener): () => void {
-    if (!this.peerDiscovery) throw new Error('peer discovery not initialized');
-    return this.peerDiscovery.onSignalError(listener);
   }
 
   async getStatus(): Promise<GatewayStatus> {
@@ -235,9 +232,14 @@ export class RelayGatewayAdapter {
       health: this.computeHealth(),
       approvedClients,
       activeSessions,
+      peerDiscovery: {
+        enabled: this.currentConfig?.peerDiscovery?.enabled === true,
+        ...(this.currentConfig?.peerDiscovery?.enabled ? { publicKey: this.currentConfig.gatewayKeyPair.publicKey } : {}),
+        pendingSignals: this.peerDiscovery?.pendingSignalCount ?? 0,
+        pendingSignalErrors: this.peerDiscovery?.pendingSignalErrorCount ?? 0,
+      },
       ...(this.currentConfig?.server ? { server: this.currentConfig.server } : {}),
       ...(channel ? { channel } : {}),
-      discoveryEnabled: Boolean(this.currentConfig?.discovery?.enabled),
       ...(base?.lastRegisteredAt ? { lastRegisteredAt: base.lastRegisteredAt } : {}),
       ...(this.lastFatalErrorCode ?? base?.lastFatalErrorCode ? { lastFatalErrorCode: this.lastFatalErrorCode ?? base?.lastFatalErrorCode! } : {}),
     };
@@ -246,14 +248,6 @@ export class RelayGatewayAdapter {
   async inspectAccount() {
     if (!this.currentConfig) return this.options.configStore.inspectAccount(this.accountId);
     return inspectAccount(this.currentConfig);
-  }
-
-  private buildDiscoveryMetadata(): Record<string, unknown> {
-    return {
-      product: 'openclaw',
-      channel: 'relay',
-      capabilities: this.computeCapabilities(),
-    };
   }
 
   private computeCapabilities(): string[] {
@@ -383,6 +377,14 @@ export class RelayGatewayAdapter {
       case 'payload_too_large':
       case 'invalid_frame':
       case 'channel_full':
+      case 'public_key_required':
+      case 'invalid_public_key':
+      case 'metadata_too_large':
+      case 'gateway_only':
+      case 'not_discoverable':
+      case 'peer_offline':
+      case 'invite_limit_reached':
+      case 'invite_invalid':
       default:
         break;
     }

@@ -27,9 +27,12 @@ openclaw plugins install --link /path/to/openclaw-relay/plugin
 
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws
+openclaw relay enable --server wss://relay.example.com/ws --discoverable
 openclaw relay pair --wait 30
 openclaw relay status
 ```
+
+Use `--discoverable` only when the operator explicitly wants this gateway to participate in the agent-only discovery layer. It does **not** enable any human-facing peer browsing UX.
 
 ## Manage clients
 
@@ -46,7 +49,7 @@ The plugin now understands the relay's gateway-only Layer 0.5 control plane, but
 
 - Human-facing clients still talk only to their own OpenClaw instance.
 - Human-facing clients must not browse or contact other OpenClaw instances through this plugin.
-- Operator opt-in for discoverability is controlled by `channels.relay.accounts.<id>.discovery.enabled` in the OpenClaw config.
+- Operator opt-in for discoverability is controlled by `channels.relay.accounts.<id>.peerDiscovery.enabled` in the OpenClaw config.
 - The plugin currently reuses the gateway X25519 identity as the discovery public key and advertises generated metadata based on gateway capabilities.
 - Internal gateway-side methods exist for `discover`, `signal`, and `invite_create`, but higher-level OpenClaw agent policy is still being built on top.
 

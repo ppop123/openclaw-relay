@@ -13,9 +13,10 @@ describe('pairing and config commands', () => {
     const store = new MemoryRelayConfigStore();
     const pairing = new PairingManager(60_000);
 
-    const account = await handleRelayEnable(store, 'wss://relay.example.com', 'default');
+    const account = await handleRelayEnable(store, 'wss://relay.example.com', 'default', { discoverable: true });
     expect(account.enabled).toBe(true);
     expect(account.channelToken.length).toBeGreaterThan(10);
+    expect(account.peerDiscovery?.enabled).toBe(true);
 
     const info = await handleRelayPair(store, pairing, 'default');
     expect(pairing.isActive()).toBe(true);
@@ -25,6 +26,7 @@ describe('pairing and config commands', () => {
 
     const inspect = await store.inspectAccount('default');
     expect(inspect?.gatewayPublicKey).toBe(account.gatewayKeyPair.publicKey);
+    expect(inspect?.peerDiscoveryEnabled).toBe(true);
     expect(JSON.stringify(inspect)).not.toContain(account.channelToken);
     expect(JSON.stringify(inspect)).not.toContain(account.gatewayKeyPair.privateKey);
   });

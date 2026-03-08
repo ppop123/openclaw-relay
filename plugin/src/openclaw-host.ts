@@ -140,7 +140,7 @@ function resolveRelayAccount(cfg: OpenClawConfig, accountId = DEFAULT_ACCOUNT_ID
       ? raw.gatewayKeyPair
       : { privateKey: '', publicKey: '' },
     approvedClients: configured ? raw.approvedClients : {},
-    discovery: configured ? { enabled: Boolean(raw.discovery?.enabled) } : { enabled: false },
+    peerDiscovery: configured ? { enabled: Boolean(raw.peerDiscovery?.enabled), ...(raw.peerDiscovery?.metadata ? { metadata: cloneConfig(raw.peerDiscovery.metadata) } : {}) } : { enabled: false },
     configured,
   };
 }
@@ -152,7 +152,7 @@ function summarizeAccount(account: ResolvedRelayAccount): ChannelAccountSnapshot
     enabled: account.enabled,
     configured: account.configured,
     publicKey: account.gatewayKeyPair.publicKey || null,
-    discoveryEnabled: Boolean(account.discovery?.enabled),
+    peerDiscoveryEnabled: Boolean(account.peerDiscovery?.enabled),
   };
 }
 
@@ -601,6 +601,7 @@ function buildSnapshot(account: ResolvedRelayAccount, gatewayStatus?: {
     lastConnectedAt: gatewayStatus?.lastRegisteredAt ? Date.parse(gatewayStatus.lastRegisteredAt) : null,
     lastError: gatewayStatus?.lastFatalErrorCode ?? null,
     publicKey: account.gatewayKeyPair.publicKey || null,
+    peerDiscoveryEnabled: account.peerDiscovery?.enabled === true,
   };
 }
 
@@ -771,10 +772,16 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
         .command('enable')
         .requiredOption('--server <url>', 'Relay WebSocket URL')
         .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
-        .action(async (options: { server: string; account?: string }) => {
+        .option('--discoverable', 'Explicitly opt this gateway into agent-only peer discovery')
+        .action(async (options: { server: string; account?: string; discoverable?: boolean }) => {
           const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
           const store = new OpenClawRelayConfigStore(api.runtime);
-          await handleRelayEnable(store, options.server, accountId);
+          await handleRelayEnable(
+            store,
+            options.server,
+            accountId,
+            options.discoverable === true ? { discoverable: true } : {},
+          );
           api.runtime.system.requestHeartbeatNow?.();
           const inspection = await store.inspectAccount(accountId);
           console.log(JSON.stringify({ ok: true, accountId, inspection }, null, 2));
@@ -930,7 +937,7 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
                     type: 'object',
                   },
                 },
-                discovery: {
+                peerDiscovery: {
                   type: 'object',
                   additionalProperties: false,
                   properties: {
@@ -948,7 +955,7 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
         'accounts.default.channelToken': { label: 'Channel Token', sensitive: true },
         'accounts.default.gatewayKeyPair.privateKey': { label: 'Gateway Private Key', sensitive: true, advanced: true },
         'accounts.default.gatewayKeyPair.publicKey': { label: 'Gateway Public Key', advanced: true },
-        'accounts.default.discovery.enabled': { label: 'Enable Agent Discovery', help: 'Allow this OpenClaw gateway to advertise itself to other gateways on the same relay. Human-facing clients still cannot browse peers.' },
+        'accounts.default.peerDiscovery.enabled': { label: 'Enable Agent Discovery', help: 'Allow this OpenClaw gateway to advertise itself to other gateways on the same relay. Human-facing clients still cannot browse peers.' },
       },
     },
     config: {

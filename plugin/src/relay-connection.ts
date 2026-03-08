@@ -1,5 +1,15 @@
 import { RelayFatalError } from './errors.js';
-import { ConnectionState, ErrorFrame, GatewayStatus, PingFrame, RegisterFrame, RegisteredFrame, RelayFrame, WebSocketFactory, WebSocketLike } from './types.js';
+import {
+  ConnectionState,
+  ErrorFrame,
+  GatewayStatus,
+  PingFrame,
+  RegisterFrame,
+  RegisteredFrame,
+  RelayFrame,
+  WebSocketFactory,
+  WebSocketLike,
+} from './types.js';
 
 const WS_OPEN = 1;
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -11,7 +21,7 @@ const RECONNECT_JITTER_RATIO = 0.2;
 export interface RelayConnectionOptions {
   url: string;
   channel: string;
-  register?: Pick<RegisterFrame, 'discoverable' | 'public_key' | 'metadata'>;
+  registerFields?: Partial<Omit<RegisterFrame, 'type' | 'channel' | 'version'>>;
   webSocketFactory?: WebSocketFactory;
   onFrame: (frame: RelayFrame) => Promise<void> | void;
   onErrorFrame?: (frame: ErrorFrame) => Promise<void> | void;
@@ -104,15 +114,12 @@ export class RelayConnection {
 
       const onOpen = () => {
         try {
-          const registerFrame: RegisterFrame = {
+          ws.send(JSON.stringify({
             type: 'register',
             channel: this.options.channel,
             version: 1,
-            ...(this.options.register?.discoverable ? { discoverable: true } : {}),
-            ...(this.options.register?.public_key ? { public_key: this.options.register.public_key } : {}),
-            ...(this.options.register?.metadata ? { metadata: this.options.register.metadata } : {}),
-          };
-          ws.send(JSON.stringify(registerFrame));
+            ...(this.options.registerFields ?? {}),
+          } satisfies RegisterFrame));
         } catch (error) {
           cleanup();
           reject(error);
