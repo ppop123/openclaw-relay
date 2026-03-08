@@ -643,6 +643,26 @@ main {
       <span class="agent-status" id="agentStatus"></span>
     </div>
 
+    <div class="session-bar">
+      <div class="session-item">
+        <span class="session-label">Session</span>
+        <span class="session-value" id="sessionValue">New chat</span>
+      </div>
+      <div class="session-item">
+        <span class="session-label">Client</span>
+        <span class="session-value" id="clientValue">Pending</span>
+      </div>
+      <div class="session-item">
+        <span class="session-label">Profile</span>
+        <span class="session-value" id="profileValue">Custom / unsaved</span>
+      </div>
+      <div class="session-item">
+        <span class="session-label">Gateway Key</span>
+        <span class="session-value" id="gatewayValue">Not set</span>
+      </div>
+      <button class="secondary-btn session-action" id="newChatBtn" onclick="app.startNewChat()" disabled>New Chat</button>
+    </div>
+
     <div class="messages" id="messages"></div>
 
     <div class="input-area">

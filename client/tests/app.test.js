@@ -317,3 +317,44 @@ describe('saved profiles', () => {
     expect(getElement('profileSelect').value).toBe('');
   });
 });
+
+
+describe('diagnostics and session controls', () => {
+  it('renders session, client, profile, and gateway diagnostics', () => {
+    app.connection.clientId = 'web_deadbeef';
+    app.sessionId = 'sess_123';
+    app.profiles = [
+      {
+        id: 'profile_saved',
+        name: 'Saved relay',
+        relayUrl: 'wss://saved.example.com/ws',
+        gatewayPubKey: 'SAVEDKEY1234567890',
+      },
+    ];
+    getElement('profileSelect').value = 'profile_saved';
+    getElement('gatewayPubKey').value = 'SAVEDKEY1234567890';
+
+    app._updateDiagnostics();
+
+    expect(getElement('sessionValue').textContent).toBe('sess_123');
+    expect(getElement('clientValue').textContent).toBe('web_deadbeef');
+    expect(getElement('profileValue').textContent).toBe('Saved relay');
+    expect(getElement('gatewayValue').textContent).toMatch(/SAVEDKEY/);
+  });
+
+  it('starts a new chat without disconnecting', () => {
+    app.connection.state = 'connected';
+    app.sessionId = 'sess_123';
+    const addSystemSpy = vi.spyOn(app, '_addSystemMessage').mockImplementation(() => {});
+    const diagnosticsSpy = vi.spyOn(app, '_updateDiagnostics').mockImplementation(() => {});
+
+    app.startNewChat();
+
+    expect(app.sessionId).toBeNull();
+    expect(addSystemSpy).toHaveBeenCalledWith('Started a new chat thread.');
+    expect(diagnosticsSpy).toHaveBeenCalled();
+
+    addSystemSpy.mockRestore();
+    diagnosticsSpy.mockRestore();
+  });
+});

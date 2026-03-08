@@ -38,6 +38,8 @@
         "saved relay profile management",
         "agent list state",
         "chat ui flow",
+        "session diagnostics rendering",
+        "local new-chat session reset",
         "status rendering"
       ]
     },

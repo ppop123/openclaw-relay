@@ -89,6 +89,7 @@ export const app = {
 
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
+    this._updateDiagnostics();
   },
 
   // ── Connection ──
@@ -122,6 +123,7 @@ export const app = {
     try {
       await this.connection.connect(url, channelToken, gatewayPubKey);
       this._updateIdentityStatus();
+      this._updateDiagnostics();
 
       // Switch to chat view
       document.getElementById('connectPanel').style.display = 'none';
@@ -144,6 +146,7 @@ export const app = {
       btn.disabled = false;
       btn.textContent = 'Connect';
       this._updateIdentityStatus();
+      this._updateDiagnostics();
     }
 
     return false;
@@ -154,6 +157,21 @@ export const app = {
 
     this._returnToConnectView();
     this._updateIdentityStatus();
+    this._updateDiagnostics();
+  },
+
+  startNewChat() {
+    if (this.connection.state !== 'connected') {
+      showToast('Connect before starting a new chat.', 'warning');
+      return;
+    }
+
+    document.getElementById('messages').innerHTML = '';
+    this.sessionId = null;
+    this.currentStreamEl = null;
+    this.currentStreamText = '';
+    this._addSystemMessage('Started a new chat thread.');
+    this._updateDiagnostics();
   },
 
   handleProfileSelectChange() {
@@ -166,6 +184,7 @@ export const app = {
         gatewayPubKey: document.getElementById('gatewayPubKey').value.trim(),
         selectedProfileId: '',
       });
+      this._updateDiagnostics();
       return;
     }
 
@@ -183,6 +202,7 @@ export const app = {
       gatewayPubKey: profile.gatewayPubKey,
       selectedProfileId: profile.id,
     });
+    this._updateDiagnostics();
   },
 
   saveProfile() {
@@ -215,6 +235,7 @@ export const app = {
     this._renderProfiles(profile.id);
     this._applyProfileToForm(profile);
     this._saveSettings({ relayUrl, gatewayPubKey, selectedProfileId: profile.id });
+    this._updateDiagnostics();
     showToast(existingId ? 'Profile updated.' : 'Profile saved.', 'info');
   },
 
@@ -247,6 +268,7 @@ export const app = {
       gatewayPubKey: document.getElementById('gatewayPubKey').value.trim(),
       selectedProfileId: '',
     });
+    this._updateDiagnostics();
     showToast('Profile deleted.', 'info');
   },
 
@@ -283,6 +305,7 @@ export const app = {
       this._returnToConnectView();
       document.getElementById('connectError').style.display = 'none';
       this._updateIdentityStatus();
+      this._updateDiagnostics();
 
       if (nextSummary.persistence === 'persisted') {
         showToast('Identity imported and saved in this browser.', 'info');
@@ -322,6 +345,7 @@ export const app = {
       this._returnToConnectView();
       document.getElementById('connectError').style.display = 'none';
       this._updateIdentityStatus();
+      this._updateDiagnostics();
       showToast('Client identity reset. A new identity will be created on next connect.', 'info');
     } catch (err) {
       showToast(err.message, 'error');
@@ -340,6 +364,7 @@ export const app = {
     document.getElementById('messages').innerHTML = '';
     this.sessionId = null;
     this.agents = [];
+    this._updateDiagnostics();
   },
 
   // ── Agents ──
@@ -441,6 +466,7 @@ export const app = {
           }
           if (chunk && chunk.session_id) {
             this.sessionId = chunk.session_id;
+            this._updateDiagnostics();
           }
         }
       );
@@ -448,6 +474,7 @@ export const app = {
       // Stream complete: remove cursor and do final render
       if (result && result.session_id) {
         this.sessionId = result.session_id;
+        this._updateDiagnostics();
       }
       contentEl.innerHTML = renderMarkdown(this.currentStreamText);
       this._scrollToBottom();
@@ -553,6 +580,33 @@ export const app = {
       details.textContent = '';
       document.getElementById('sendBtn').disabled = true;
     }
+
+    this._updateDiagnostics();
+  },
+
+  _updateDiagnostics() {
+    const sessionEl = document.getElementById('sessionValue');
+    const clientEl = document.getElementById('clientValue');
+    const profileEl = document.getElementById('profileValue');
+    const gatewayEl = document.getElementById('gatewayValue');
+    const newChatBtn = document.getElementById('newChatBtn');
+
+    if (!sessionEl || !clientEl || !profileEl || !gatewayEl || !newChatBtn) {
+      return;
+    }
+
+    const selectedProfile = this._findProfile(this._getSelectedProfileId());
+    const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim() || this.connection.gatewayPubKeyB64 || '';
+
+    sessionEl.textContent = this.sessionId || 'New chat';
+    sessionEl.title = this.sessionId || '';
+    clientEl.textContent = this.connection.clientId || 'Pending';
+    clientEl.title = this.connection.clientId || '';
+    profileEl.textContent = selectedProfile?.name || 'Custom / unsaved';
+    profileEl.title = selectedProfile?.name || '';
+    gatewayEl.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
+    gatewayEl.title = gatewayPubKey;
+    newChatBtn.disabled = this.connection.state !== 'connected';
   },
 
   _updateIdentityStatus() {
@@ -723,6 +777,12 @@ export const app = {
 
   _generateProfileId() {
     return `profile_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  },
+
+  _shortKey(value) {
+    if (!value) return '';
+    if (value.length <= 20) return value;
+    return `${value.slice(0, 12)}…${value.slice(-6)}`;
   },
 
   _escapeHtml(str) {

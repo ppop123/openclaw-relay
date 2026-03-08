@@ -40,6 +40,8 @@ It currently provides:
 - identity fingerprint plus export / import / reset actions in the connect UI
 - streaming `chat.send`
 - agent list loading via `agents.list`
+- in-chat diagnostics for session, client, profile, and gateway key state
+- local `New Chat` control that resets `sessionId` without disconnecting
 - secure Markdown rendering for assistant output
 - automated tests for UI state, identity persistence, crypto, transport, and Markdown safety
 

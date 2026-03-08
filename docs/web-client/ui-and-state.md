@@ -43,9 +43,11 @@ The chat panel contains:
 
 - agent selector
 - selected agent status line
+- session diagnostics bar
 - scrollable message list
 - multiline message input
 - send button
+- `New Chat` button for local session reset
 
 ### Toast Layer
 
@@ -123,6 +125,7 @@ When the user submits the connect form:
    - agent list is fetched
    - a system message announces encrypted connection
    - the identity card is refreshed with the active fingerprint summary
+   - the diagnostics bar refreshes session/client/profile/gateway status
 7. on failure:
    - the connect error panel is populated
    - the form remains visible
@@ -138,7 +141,25 @@ When the user submits the connect form:
 - clears rendered messages
 - clears current `sessionId`
 - clears the in-memory agent list
+- resets the diagnostics bar back to connect-mode values
 - keeps persisted safe settings and the persisted browser identity intact
+
+## Session Diagnostics and New Chat
+
+The chat panel diagnostics bar shows:
+
+- the current `sessionId` or `New chat` when no session exists yet
+- the current relay-side `clientId`
+- the selected saved profile name or `Custom / unsaved`
+- a shortened summary of the pinned gateway public key
+
+`app.startNewChat()`:
+
+- requires an active connected session
+- clears the rendered transcript in the current tab
+- resets local `sessionId` to `null`
+- keeps the relay connection, selected agent, and browser identity intact
+- updates the diagnostics bar immediately
 
 ## Identity Export Flow
 
@@ -199,7 +220,8 @@ When the user sends a message:
 6. assistant text is re-rendered through `renderMarkdown()` on every chunk
 7. a cursor marker is shown while streaming is in progress
 8. the final `response` may update `sessionId`
-9. final text is rendered without the cursor
+9. diagnostics refresh whenever `sessionId` changes
+10. final text is rendered without the cursor
 
 If the request fails:
 
@@ -233,6 +255,8 @@ When connected, `statusDetails` shows:
 - `(encrypted)` when Layer 1 succeeded
 - a shortened identity fingerprint when known
 
+The chat-panel diagnostics bar separately shows session/client/profile/gateway context.
+
 The send button is enabled only when:
 
 - the connection state is `connected`
@@ -256,6 +280,5 @@ The current UI still lacks:
 
 - explicit pairing state display
 - persisted local conversation history
-- richer diagnostics beyond status text, fingerprint display, and toasts
 
 These are product improvements, not missing protocol primitives.

@@ -57,15 +57,17 @@ When validating the web client manually, check the following:
 5. `channelToken` does not restore after refresh
 6. identity card shows whether a browser identity is already available
 7. connect succeeds against a live gateway
-8. `agents.list` populates the selector
-9. `chat.send` streams chunks and final text renders correctly
-10. disconnect returns the UI to connect mode
-11. reconnect after transient relay loss restores chat functionality
-12. gateway public-key mismatch is rejected
-13. exporting the current identity downloads a JSON file successfully
-14. importing that identity restores the expected fingerprint
-15. full page reload preserves the same client fingerprint when IndexedDB is available
-16. identity reset causes the next connect to present a different client fingerprint
+8. the diagnostics bar shows session/client/profile/gateway context after connect
+9. `agents.list` populates the selector
+10. `chat.send` streams chunks and final text renders correctly
+11. `New Chat` clears the local transcript and resets `sessionId` without disconnecting
+12. disconnect returns the UI to connect mode
+13. reconnect after transient relay loss restores chat functionality
+14. gateway public-key mismatch is rejected
+15. exporting the current identity downloads a JSON file successfully
+16. importing that identity restores the expected fingerprint
+17. full page reload preserves the same client fingerprint when IndexedDB is available
+18. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 

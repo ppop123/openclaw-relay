@@ -252,6 +252,7 @@
       "chat_panel": {
         "visible_sections": [
           "agent bar",
+          "session diagnostics bar",
           "messages",
           "input area"
         ],
@@ -270,6 +271,16 @@
         "from": "chat_panel",
         "to": "connect_panel",
         "trigger": "user disconnect or identity reset"
+      },
+      {
+        "from": "chat_panel",
+        "to": "chat_panel",
+        "trigger": "user starts a new chat locally",
+        "effects": [
+          "clear rendered transcript",
+          "reset local sessionId",
+          "keep transport connection and selected agent"
+        ]
       }
     ]
   }
