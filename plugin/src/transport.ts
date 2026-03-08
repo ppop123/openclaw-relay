@@ -26,6 +26,7 @@ export interface GatewayTransportOptions {
   capabilities: () => string[];
   sendFrame: (frame: DataFrame) => Promise<void> | void;
   approveUnknownClient?: (publicKeyB64: string, clientId: string) => Promise<string | undefined>;
+  authorizePeerClient?: (publicKeyB64: string, clientId: string, fingerprint: string) => Promise<boolean>;
   touchApprovedClient?: (fingerprint: string, clientId: string) => Promise<void>;
   onRequest: (session: GatewaySession, message: RequestMessage) => Promise<void> | void;
   onCancel?: (session: GatewaySession, message: CancelMessage) => Promise<void> | void;
@@ -146,6 +147,7 @@ export class GatewayTransport {
     const fingerprint = await publicKeyFingerprint(clientPublicKeyBytes);
     const approvedClients = this.options.accountConfig().approvedClients;
     let approved = approvedClients[fingerprint];
+    let peerAuthorized = false;
     const previouslySeen = this.findApprovedClientByClientId(clientId);
 
     if (previouslySeen && previouslySeen[0] !== fingerprint && !this.options.pairingActive()) {
@@ -153,25 +155,30 @@ export class GatewayTransport {
     }
 
     if (!approved) {
-      if (!this.tryClaimPairingWindow()) {
-        return;
-      }
-      try {
-        const savedFingerprint = await this.options.approveUnknownClient?.(hello.client_public_key, clientId);
-        if (!savedFingerprint) {
+      peerAuthorized = await this.options.authorizePeerClient?.(hello.client_public_key, clientId, fingerprint) === true;
+      if (!peerAuthorized) {
+        if (!this.tryClaimPairingWindow()) {
           return;
         }
-        this.options.endPairing();
-        approved = this.options.accountConfig().approvedClients[savedFingerprint];
-        if (!approved) {
-          return;
+        try {
+          const savedFingerprint = await this.options.approveUnknownClient?.(hello.client_public_key, clientId);
+          if (!savedFingerprint) {
+            return;
+          }
+          this.options.endPairing();
+          approved = this.options.accountConfig().approvedClients[savedFingerprint];
+          if (!approved) {
+            return;
+          }
+        } finally {
+          this.releasePairingWindow();
         }
-      } finally {
-        this.releasePairingWindow();
       }
     }
 
-    await this.options.touchApprovedClient?.(fingerprint, clientId);
+    if (approved) {
+      await this.options.touchApprovedClient?.(fingerprint, clientId);
+    }
 
     const existingClientId = this.activeClientIdByFingerprint.get(fingerprint);
     if (existingClientId && existingClientId !== clientId) {

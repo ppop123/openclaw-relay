@@ -488,10 +488,11 @@ Potential future extensions can be added later without changing the MVP model:
 1. Add operator-level `discoverable` config.
 2. Add a stable discovery public key source.
 3. Add metadata generation policy.
-4. Add `DISCOVER` call path.
-5. Add `SIGNAL` send/receive logic.
-6. Add invite creation and acceptance policy.
-7. Add peer-initiated channel bootstrap logic.
+4. Add a host-only internal bridge for local OpenClaw agents; do not expose discovery through human-facing relay RPC methods.
+5. Add `DISCOVER` call path.
+6. Add `SIGNAL` send/receive logic.
+7. Add invite creation and acceptance policy, including invite-scoped in-memory peer admission on the target gateway.
+8. Add peer-initiated channel bootstrap logic.
 
 ### Human-Facing Clients
 

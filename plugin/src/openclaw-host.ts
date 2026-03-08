@@ -6,9 +6,30 @@ import { handleRelayPair } from './commands/pair.js';
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { RelayGatewayAdapter } from './gateway-adapter.js';
 import { PairingManager } from './pairing.js';
-import type { RelayAccountConfig, RelayAccountInspection, RelayConfigStore, RelayRequestContext, RelayRuntimeAdapter, RelayStreamResult } from './types.js';
+import type {
+  DiscoveryPeer,
+  GatewayStatus,
+  PeerSignalEnvelope,
+  ReceivedPeerSignal,
+  RelayAccountConfig,
+  RelayAccountInspection,
+  RelayConfigStore,
+  RelayRequestContext,
+  RelayRuntimeAdapter,
+  RelayStreamResult,
+  SignalErrorFrame,
+} from './types.js';
 import { generateMessageId, randomHex } from './utils.js';
-import type { AgentConfigEntry, ChannelAccountSnapshot, ChannelGatewayContext, ChannelPlugin, OpenClawConfig, OpenClawPluginApi, OpenClawRuntime } from './host-types.js';
+import type {
+  AgentConfigEntry,
+  ChannelAccountSnapshot,
+  ChannelGatewayContext,
+  ChannelPlugin,
+  OpenClawConfig,
+  OpenClawPluginApi,
+  OpenClawRuntime,
+  PluginLogger,
+} from './host-types.js';
 
 const RELAY_CHANNEL_ID = 'relay';
 const DEFAULT_ACCOUNT_ID = 'default';
@@ -25,6 +46,34 @@ type ActiveRelayRecord = {
   pairing: PairingManager;
   stop: () => Promise<void>;
 };
+
+export interface RelayAgentBridgeStartOptions {
+  accountId?: string;
+  channelRuntime?: ChannelGatewayContext['channelRuntime'];
+  setStatus?: (snapshot: ChannelAccountSnapshot) => void;
+  abortSignal?: AbortSignal;
+  log?: PluginLogger;
+}
+
+export interface RelayAgentInviteOptions extends RelayAgentBridgeStartOptions {
+  ttlSeconds?: number;
+}
+
+export interface RelayAgentAcceptPeerOptions extends RelayAgentInviteOptions {
+  maxUses?: number;
+}
+
+export interface RelayAgentBridge {
+  ensureStarted(options?: RelayAgentBridgeStartOptions): Promise<GatewayStatus>;
+  stopAccount(accountId?: string): Promise<void>;
+  getStatus(accountId?: string): Promise<GatewayStatus | undefined>;
+  discoverPeers(options?: RelayAgentBridgeStartOptions): Promise<DiscoveryPeer[]>;
+  sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope, options?: RelayAgentBridgeStartOptions): Promise<void>;
+  createPeerInvite(options?: RelayAgentInviteOptions): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }>;
+  acceptPeerSignal(sourcePublicKey: string, options?: RelayAgentAcceptPeerOptions): Promise<{ sourcePublicKey: string; fingerprint: string; peerAuthorizedUntil: string; inviteToken: string; inviteHash: string; expiresAt: string }>;
+  drainPeerSignals(accountId?: string): ReceivedPeerSignal[];
+  drainPeerSignalErrors(accountId?: string): SignalErrorFrame[];
+}
 
 class AsyncQueue<T> {
   private readonly items: T[] = [];
@@ -695,6 +744,76 @@ async function ensureStartedAccount(params: {
   }
 
   return record;
+}
+
+async function ensureRelayAgentRecord(api: OpenClawPluginApi, options: RelayAgentBridgeStartOptions = {}): Promise<{ accountId: string; record: ActiveRelayRecord }> {
+  const accountId = options.accountId ?? DEFAULT_ACCOUNT_ID;
+  const record = await ensureStartedAccount({
+    api,
+    accountId,
+    ...(options.channelRuntime ? { channelRuntime: options.channelRuntime } : {}),
+    ...(options.setStatus ? { setStatus: options.setStatus } : {}),
+    ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
+    ...(options.log ? { log: options.log } : {}),
+  });
+  api.runtime.system.requestHeartbeatNow?.();
+  return { accountId, record };
+}
+
+export function createRelayAgentBridge(api: OpenClawPluginApi): RelayAgentBridge {
+  return {
+    ensureStarted: async (options = {}) => {
+      const { record } = await ensureRelayAgentRecord(api, options);
+      return record.adapter.getStatus();
+    },
+
+    stopAccount: async (accountId = DEFAULT_ACCOUNT_ID) => {
+      await stopActiveAccount(accountId);
+      api.runtime.system.requestHeartbeatNow?.();
+    },
+
+    getStatus: async (accountId = DEFAULT_ACCOUNT_ID) => {
+      const record = activeAccounts.get(accountId);
+      return record ? record.adapter.getStatus() : undefined;
+    },
+
+    discoverPeers: async (options = {}) => {
+      const { record } = await ensureRelayAgentRecord(api, options);
+      return record.adapter.discoverPeers();
+    },
+
+    sendPeerSignal: async (targetPublicKey, envelope, options = {}) => {
+      const { record } = await ensureRelayAgentRecord(api, options);
+      await record.adapter.sendPeerSignal(targetPublicKey, envelope);
+    },
+
+    createPeerInvite: async (options = {}) => {
+      const { ttlSeconds = 300, ...startOptions } = options;
+      const { record } = await ensureRelayAgentRecord(api, startOptions);
+      return record.adapter.createPeerInvite(ttlSeconds);
+    },
+
+    acceptPeerSignal: async (sourcePublicKey, options = {}) => {
+      const { ttlSeconds = 300, maxUses = 1, ...startOptions } = options;
+      const { record } = await ensureRelayAgentRecord(api, startOptions);
+      const authorization = await record.adapter.authorizePeerPublicKey(sourcePublicKey, ttlSeconds, maxUses);
+      const invite = await record.adapter.createPeerInvite(ttlSeconds);
+      return {
+        sourcePublicKey,
+        fingerprint: authorization.fingerprint,
+        peerAuthorizedUntil: authorization.expiresAt,
+        ...invite,
+      };
+    },
+
+    drainPeerSignals: (accountId = DEFAULT_ACCOUNT_ID) => {
+      return activeAccounts.get(accountId)?.adapter.drainPeerSignals() ?? [];
+    },
+
+    drainPeerSignalErrors: (accountId = DEFAULT_ACCOUNT_ID) => {
+      return activeAccounts.get(accountId)?.adapter.drainPeerSignalErrors() ?? [];
+    },
+  };
 }
 
 export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin: ChannelPlugin<ResolvedRelayAccount>): { channelPlugin: ChannelPlugin<ResolvedRelayAccount>; registerCli: () => void } {

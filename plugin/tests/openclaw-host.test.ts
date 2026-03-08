@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import relayPlugin from '../src/index.js';
-import { createOpenClawRelayPlugin, createRelayChannelDefinition } from '../src/openclaw-host.js';
+import { createOpenClawRelayPlugin, createRelayAgentBridge, createRelayChannelDefinition } from '../src/openclaw-host.js';
 import { RelayGatewayAdapter } from '../src/gateway-adapter.js';
 import type { OpenClawConfig, OpenClawPluginApi } from '../src/host-types.js';
 
@@ -109,6 +109,104 @@ describe('openclaw host bridge', () => {
       publicKey: 'pub',
       peerDiscoveryEnabled: true,
     });
+  });
+
+  it('provides a host-only agent bridge for peer discovery controls', async () => {
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey: 'pub',
+              },
+              approvedClients: {},
+              peerDiscovery: { enabled: true },
+            },
+          },
+        },
+      },
+    };
+
+    const peers = [{ public_key: 'peer-key', metadata: { label: 'Peer' }, online_since: '2026-03-09T00:00:00.000Z' }];
+    const signals = [{
+      source: 'peer-key',
+      envelope: { version: 1 as const, kind: 'invite_request', body: { hello: 'world' } },
+      receivedAt: '2026-03-09T00:00:00.000Z',
+      raw: { type: 'signal', source: 'peer-key', ephemeral_key: 'ephemeral', payload: 'payload' },
+    }];
+    const signalErrors = [{ type: 'signal_error', code: 'peer_offline', message: 'offline', target: 'peer-key' }];
+
+    const startSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'start').mockResolvedValue(undefined);
+    const stopSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'stop').mockResolvedValue(undefined);
+    const statusSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'getStatus').mockResolvedValue({
+      state: 'registered',
+      health: 'healthy',
+      approvedClients: 0,
+      activeSessions: 0,
+      peerDiscovery: { enabled: true, publicKey: 'pub', pendingSignals: 1, pendingSignalErrors: 1 },
+    });
+    const discoverSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'discoverPeers').mockResolvedValue(peers as any);
+    const sendSignalSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'sendPeerSignal').mockResolvedValue(undefined);
+    const authorizePeerSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'authorizePeerPublicKey').mockResolvedValue({
+      fingerprint: 'sha256:peer',
+      expiresAt: '2026-03-09T00:05:00.000Z',
+    });
+    const createInviteSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'createPeerInvite').mockResolvedValue({
+      inviteToken: 'invite-token',
+      inviteHash: 'invite-hash',
+      expiresAt: '2026-03-09T00:05:00.000Z',
+    });
+    const drainSignalsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignals').mockReturnValue(signals as any);
+    const drainSignalErrorsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignalErrors').mockReturnValue(signalErrors as any);
+
+    try {
+      const api = buildApi(config);
+      const bridge = createRelayAgentBridge(api);
+
+      await expect(bridge.discoverPeers()).resolves.toEqual(peers);
+      await expect(bridge.ensureStarted()).resolves.toMatchObject({ state: 'registered' });
+      await bridge.sendPeerSignal('peer-key', { version: 1, kind: 'invite_request', body: { hello: 'world' } });
+      await expect(bridge.createPeerInvite({ ttlSeconds: 90 })).resolves.toEqual({
+        inviteToken: 'invite-token',
+        inviteHash: 'invite-hash',
+        expiresAt: '2026-03-09T00:05:00.000Z',
+      });
+      await expect(bridge.acceptPeerSignal('peer-key', { ttlSeconds: 45, maxUses: 1 })).resolves.toEqual({
+        sourcePublicKey: 'peer-key',
+        fingerprint: 'sha256:peer',
+        peerAuthorizedUntil: '2026-03-09T00:05:00.000Z',
+        inviteToken: 'invite-token',
+        inviteHash: 'invite-hash',
+        expiresAt: '2026-03-09T00:05:00.000Z',
+      });
+      expect(bridge.drainPeerSignals()).toEqual(signals);
+      expect(bridge.drainPeerSignalErrors()).toEqual(signalErrors);
+      await expect(bridge.getStatus()).resolves.toMatchObject({ state: 'registered' });
+
+      expect(startSpy).toHaveBeenCalledTimes(1);
+      expect(discoverSpy).toHaveBeenCalledTimes(1);
+      expect(sendSignalSpy).toHaveBeenCalledWith('peer-key', { version: 1, kind: 'invite_request', body: { hello: 'world' } });
+      expect(authorizePeerSpy).toHaveBeenCalledWith('peer-key', 45, 1);
+      expect(createInviteSpy).toHaveBeenNthCalledWith(1, 90);
+      expect(createInviteSpy).toHaveBeenNthCalledWith(2, 45);
+      await bridge.stopAccount();
+      expect(stopSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      startSpy.mockRestore();
+      stopSpy.mockRestore();
+      statusSpy.mockRestore();
+      discoverSpy.mockRestore();
+      sendSignalSpy.mockRestore();
+      authorizePeerSpy.mockRestore();
+      createInviteSpy.mockRestore();
+      drainSignalsSpy.mockRestore();
+      drainSignalErrorsSpy.mockRestore();
+    }
   });
 
   it('keeps gateway startAccount pending until abort', async () => {

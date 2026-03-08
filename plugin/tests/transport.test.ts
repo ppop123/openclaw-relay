@@ -146,6 +146,41 @@ describe('GatewayTransport', () => {
     expect(transport.sessionCount).toBe(0);
   });
 
+  it('accepts an invite-authorized peer hello outside pairing mode', async () => {
+    const identity = await generateGatewayIdentity();
+    const account = makeAccountConfig(identity.serialized);
+    const sentFrames: DataFrame[] = [];
+    const authorizePeerClient = vi.fn(async () => true);
+    const touchApprovedClient = vi.fn(async () => undefined);
+
+    const transport = new GatewayTransport({
+      accountId: 'default',
+      identity,
+      accountConfig: () => account,
+      pairingActive: () => false,
+      endPairing: () => {},
+      capabilities: () => ['chat', 'stream'],
+      sendFrame: async (frame) => sentFrames.push(frame),
+      authorizePeerClient,
+      touchApprovedClient,
+      onRequest: async () => {},
+    });
+
+    const client = await createClientHello();
+    await transport.handleDataFrame({
+      type: 'data',
+      from: 'peer-client-1',
+      to: 'gateway',
+      payload: helloPayload(client),
+    });
+
+    expect(authorizePeerClient).toHaveBeenCalledTimes(1);
+    expect(touchApprovedClient).not.toHaveBeenCalled();
+    expect(sentFrames).toHaveLength(1);
+    expect(sentFrames[0]).toMatchObject({ type: 'data', from: 'gateway', to: 'peer-client-1' });
+    expect(transport.sessionCount).toBe(1);
+  });
+
   it('pairs unknown client during pairing mode and dispatches encrypted request', async () => {
     const identity = await generateGatewayIdentity();
     let account = makeAccountConfig(identity.serialized);

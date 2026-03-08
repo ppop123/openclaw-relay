@@ -1,7 +1,7 @@
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { MethodNotFoundError, dispatchRequest } from './dispatch.js';
 import { InvalidParamsError, Layer2ResponseError, RelayFatalError, UnsupportedRuntimeMethodError } from './errors.js';
-import { importGatewayIdentity } from './crypto.js';
+import { fingerprintFromPublicKeyBase64, importGatewayIdentity } from './crypto.js';
 import { RelayOutbound } from './outbound.js';
 import { PairingManager, approveClient } from './pairing.js';
 import { PeerDiscoveryService } from './peer-discovery.js';
@@ -62,6 +62,7 @@ export class RelayGatewayAdapter {
   private lastFatalErrorCode: string | undefined;
   private connectionState: ConnectionState = 'disconnected';
   private readonly pendingRequests = new Map<string, PendingExecution>();
+  private readonly pendingPeerApprovals = new Map<string, { publicKey: string; expiresAt: number; remainingUses: number }>();
   private channelHash: string | undefined;
 
   constructor(private readonly options: RelayGatewayAdapterOptions) {
@@ -107,6 +108,21 @@ export class RelayGatewayAdapter {
         const fingerprint = await approveClient(this.options.configStore, this.accountId, publicKey, clientId);
         this.currentConfig = await this.options.configStore.load(this.accountId);
         return fingerprint;
+      },
+      authorizePeerClient: async (publicKey, _clientId, fingerprint) => {
+        const approval = this.pendingPeerApprovals.get(fingerprint);
+        if (!approval) return false;
+        if (approval.publicKey !== publicKey || approval.expiresAt <= Date.now() || approval.remainingUses <= 0) {
+          this.pendingPeerApprovals.delete(fingerprint);
+          return false;
+        }
+        approval.remainingUses -= 1;
+        if (approval.remainingUses <= 0) {
+          this.pendingPeerApprovals.delete(fingerprint);
+        } else {
+          this.pendingPeerApprovals.set(fingerprint, approval);
+        }
+        return true;
       },
       touchApprovedClient: async (fingerprint, clientId) => {
         const current = this.currentConfig;
@@ -188,6 +204,7 @@ export class RelayGatewayAdapter {
     this.transport = undefined;
     this.outbound = undefined;
     this.peerDiscovery = undefined;
+    this.pendingPeerApprovals.clear();
     this.connectionState = 'disconnected';
   }
 
@@ -208,6 +225,22 @@ export class RelayGatewayAdapter {
   async createPeerInvite(ttlSeconds = 300): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }> {
     if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
     return this.peerDiscovery.createInvite(ttlSeconds);
+  }
+
+  async authorizePeerPublicKey(publicKey: string, ttlSeconds = 300, maxUses = 1): Promise<{ fingerprint: string; expiresAt: string }> {
+    const ttlMs = Math.max(1, Math.floor(ttlSeconds * 1000));
+    const uses = Math.max(1, Math.floor(maxUses));
+    const fingerprint = await fingerprintFromPublicKeyBase64(publicKey);
+    const expiresAtMs = Date.now() + ttlMs;
+    this.pendingPeerApprovals.set(fingerprint, {
+      publicKey,
+      expiresAt: expiresAtMs,
+      remainingUses: uses,
+    });
+    return {
+      fingerprint,
+      expiresAt: new Date(expiresAtMs).toISOString(),
+    };
   }
 
   drainPeerSignals(): ReceivedPeerSignal[] {
