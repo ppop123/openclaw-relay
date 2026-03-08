@@ -112,6 +112,16 @@ async function waitForRelayReady(process: ChildProcessWithoutNullStreams, url: s
   throw new Error('relay did not become ready in time');
 }
 
+async function waitForValue<T>(fn: () => Promise<T | undefined> | T | undefined, timeoutMs = 10_000, intervalMs = 100): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await fn();
+    if (value !== undefined) return value;
+    await delay(intervalMs);
+  }
+  throw new Error('timed out waiting for expected value');
+}
+
 async function waitForMessage(ws: WebSocket, timeoutMs = 10_000): Promise<any> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('timed out waiting for message')), timeoutMs);
@@ -259,6 +269,94 @@ describe('plugin integration with real relay', () => {
       ws?.close();
       if (adapter) {
         await adapter.stop();
+      }
+      relayProcess?.kill('SIGTERM');
+      await delay(200);
+      if (relayTempDir) {
+        await rm(relayTempDir, { recursive: true, force: true });
+      }
+    }
+  }, 45_000);
+
+  it('discovers a peer gateway, signals it, accepts the invite, and dials a real peer session', async () => {
+    let relayProcess: ChildProcessWithoutNullStreams | undefined;
+    let adapterA: RelayGatewayAdapter | undefined;
+    let adapterB: RelayGatewayAdapter | undefined;
+    let peerSession: { request: (method: string, params: Record<string, unknown>) => Promise<Record<string, unknown>>; close: () => Promise<void> } | undefined;
+    let relayTempDir: string | undefined;
+
+    try {
+      let relayPort = 0;
+      try {
+        relayPort = await getFreePort();
+      } catch (error) {
+        if (isLocalListenBlocked(error)) {
+          return;
+        }
+        throw error;
+      }
+
+      const relayBuild = await buildRelayBinary();
+      relayTempDir = relayBuild.tempDir;
+      relayProcess = spawn(relayBuild.binaryPath, ['-port', String(relayPort), '-tls', 'off'], {
+        cwd: relayCwd,
+        stdio: 'pipe',
+      });
+      await waitForRelayReady(relayProcess, `http://127.0.0.1:${relayPort}/status`, 15_000);
+
+      const serverUrl = `ws://127.0.0.1:${relayPort}/ws`;
+      const storeA = new MemoryRelayConfigStore();
+      const storeB = new MemoryRelayConfigStore();
+      const runtimeA: RelayRuntimeAdapter = {
+        systemStatus: async () => ({ version: 'gateway-a', uptime_seconds: 1, agents_active: 1, cron_tasks: 0, channels: { relay: 'running' } }),
+      };
+      const runtimeB: RelayRuntimeAdapter = {
+        systemStatus: async () => ({ version: 'gateway-b', uptime_seconds: 2, agents_active: 2, cron_tasks: 0, channels: { relay: 'running' } }),
+      };
+
+      await handleRelayEnable(storeA, serverUrl, 'default', { discoverable: true });
+      await handleRelayEnable(storeB, serverUrl, 'default', { discoverable: true });
+
+      adapterA = new RelayGatewayAdapter({ accountId: 'default', configStore: storeA, runtime: runtimeA });
+      adapterB = new RelayGatewayAdapter({ accountId: 'default', configStore: storeB, runtime: runtimeB });
+      await adapterA.start();
+      await adapterB.start();
+
+      const accountA = (await storeA.load('default'))!;
+      const accountB = (await storeB.load('default'))!;
+
+      const discovered = await waitForValue(async () => {
+        const peers = await adapterA!.discoverPeers();
+        const peer = peers.find((entry) => entry.public_key === accountB.gatewayKeyPair.publicKey);
+        return peer ? peers : undefined;
+      }, 10_000, 150);
+      expect(discovered.some((entry) => entry.public_key === accountB.gatewayKeyPair.publicKey)).toBe(true);
+
+      await adapterA.sendPeerSignal(accountB.gatewayKeyPair.publicKey, {
+        version: 1,
+        kind: 'invite_request',
+        body: { reason: 'integration-test' },
+      });
+
+      const inboundSignal = await waitForValue(async () => {
+        const signals = adapterB!.drainPeerSignals();
+        return signals.length > 0 ? signals[0] : undefined;
+      }, 10_000, 150);
+      expect(inboundSignal.source).toBe(accountA.gatewayKeyPair.publicKey);
+      expect(inboundSignal.envelope).toMatchObject({ version: 1, kind: 'invite_request', body: { reason: 'integration-test' } });
+
+      await adapterB.authorizePeerPublicKey(inboundSignal.source, 60, 1);
+      const invite = await adapterB.createPeerInvite(60);
+      peerSession = await adapterA.dialPeerInvite(invite.inviteToken, accountB.gatewayKeyPair.publicKey);
+
+      await expect(peerSession.request('system.status', {})).resolves.toMatchObject({ version: 'gateway-b', agents_active: 2 });
+    } finally {
+      await peerSession?.close().catch(() => undefined);
+      if (adapterA) {
+        await adapterA.stop();
+      }
+      if (adapterB) {
+        await adapterB.stop();
       }
       relayProcess?.kill('SIGTERM');
       await delay(200);
