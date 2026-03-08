@@ -17,7 +17,7 @@ The client is intentionally small and explicit so protocol behavior is easy to a
 | File | Responsibility |
 |------|----------------|
 | `client/index.html` | DOM structure, styles, module bootstrap |
-| `client/js/app.js` | Application state, UI wiring, profile management, identity status rendering, settings persistence, chat flow |
+| `client/js/app.js` | Application state, UI wiring, profile management, identity status and recovery rendering, safe clipboard actions, settings persistence, chat flow |
 | `client/js/transport.js` | WebSocket lifecycle, Layer 0 framing, Layer 1 handshake orchestration, Layer 2 request lifecycle, browser identity load/import/export/reset |
 | `client/js/crypto.js` | X25519 key generation/import/export, fingerprinting, HKDF session-key derivation, AES-GCM encrypt/decrypt, replay tracking |
 | `client/js/identity-store.js` | IndexedDB persistence for the browser identity keypair |
@@ -44,7 +44,8 @@ app (UI + state)
 - DOM event handling
 - settings load / save
 - saved relay profile management
-- identity summary rendering
+- identity summary and recovery-hint rendering
+- clipboard copy actions for identity fingerprint and public key
 - agent list state
 - current chat session id
 - streaming text accumulation for the active assistant response

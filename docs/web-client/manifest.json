@@ -35,6 +35,8 @@
         "identity status rendering",
         "identity import/export actions",
         "identity-file passphrase handling",
+        "identity recovery hint rendering",
+        "identity clipboard copy actions",
         "settings load/save",
         "saved relay profile management",
         "agent list state",

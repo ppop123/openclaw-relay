@@ -33,7 +33,8 @@ It also includes a client-identity card that shows:
 
 - whether a persistent browser identity is available
 - the current client fingerprint summary when known
-- export, import, and reset actions for browser identity management
+- copy, export, import, and reset actions for browser identity management
+- a recovery hint that explains whether the identity is durable, temporary, or needs operator intervention
 - an optional passphrase field used only while exporting/importing identity files
 
 The connect panel also displays a connection error box when handshake or WebSocket setup fails.
@@ -78,7 +79,7 @@ On `DOMContentLoaded`:
 3. the app wires transport callbacks
 4. the send button becomes input-driven and connection-aware
 5. the app hydrates any persisted browser identity
-6. the connect panel renders the current identity status, fingerprint summary, and identity actions
+6. the connect panel renders the current identity status, fingerprint summary, recovery hint, and identity actions
 
 ## Profile Management Flow
 
@@ -161,6 +162,15 @@ The chat panel diagnostics bar shows:
 - resets local `sessionId` to `null`
 - keeps the relay connection, selected agent, and browser identity intact
 - updates the diagnostics bar immediately
+
+## Identity Copy Flow
+
+`app.copyIdentityFingerprint()` and `app.copyIdentityPublicKey()`:
+
+- read the current identity summary from `RelayConnection`
+- copy the full fingerprint or public key to the browser clipboard when available
+- leave the buttons disabled until the corresponding value exists
+- show an error toast if the browser cannot access the clipboard
 
 ## Identity Export Flow
 

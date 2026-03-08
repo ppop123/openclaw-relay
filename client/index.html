@@ -247,6 +247,36 @@ main {
   word-break: break-word;
 }
 
+.identity-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.identity-copy-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.identity-passphrase {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.identity-note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.identity-recovery {
+  margin-top: 10px;
+}
+
 .secondary-btn {
   padding: 6px 10px;
   background: transparent;
@@ -625,6 +655,11 @@ main {
         <div class="identity-mode" id="identityMode">Loading…</div>
         <div class="identity-fingerprint" id="identityFingerprint">Checking browser identity storage…</div>
         <div class="identity-meta" id="identityMeta"></div>
+        <div class="identity-copy-actions">
+          <button type="button" class="secondary-btn" id="copyFingerprintBtn" onclick="app.copyIdentityFingerprint()" disabled>Copy Fingerprint</button>
+          <button type="button" class="secondary-btn" id="copyPublicKeyBtn" onclick="app.copyIdentityPublicKey()" disabled>Copy Public Key</button>
+        </div>
+        <div class="identity-note identity-recovery" id="identityRecoveryHint">Checking browser identity storage…</div>
         <div class="identity-passphrase">
           <label for="identityPassphrase">Identity File Passphrase (optional)</label>
           <input type="password" id="identityPassphrase" placeholder="Used only for export/import" autocomplete="off">

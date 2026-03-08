@@ -66,7 +66,7 @@ vi.mock('../js/crypto.js', () => ({
       return this._fingerprint;
     }
   },
-  b64Encode: (buf) => '',
+  b64Encode: (buf) => (buf && buf.length ? `B64:${Array.from(buf).join('-')}` : ''),
   b64Decode: (str) => new Uint8Array(0),
 }));
 
@@ -165,8 +165,26 @@ describe('RelayConnection constructor', () => {
       exists: true,
       persistence: 'persisted',
       fingerprint: 'sha256:savedfingerprint',
+      publicKey: 'PUB',
       createdAt: '2026-03-08T00:00:00.000Z',
     });
+  });
+
+  it('surfaces identity load failures in the summary for UI recovery hints', async () => {
+    mockLoadStoredIdentity.mockRejectedValueOnce(new Error('blocked'));
+    const conn = new RelayConnection();
+    conn.onToast = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const summary = await conn.hydratePersistedIdentity();
+
+    expect(summary).toMatchObject({
+      exists: false,
+      persistence: 'absent',
+      publicKey: '',
+      loadFailed: true,
+    });
+    warnSpy.mockRestore();
   });
 
   it('creates and saves a new identity when none exists', async () => {

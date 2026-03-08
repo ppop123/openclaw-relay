@@ -237,6 +237,21 @@
       "timeout rejects the affected pending request"
     ]
   },
+  "identity_ui": {
+    "card_actions": [
+      "copy_fingerprint",
+      "copy_public_key",
+      "export_identity",
+      "import_identity",
+      "reset_identity"
+    ],
+    "recovery_hints": {
+      "persisted": "recommend protected backup export",
+      "memory_only": "warn that reload will rotate identity unless exported",
+      "unsupported": "explain IndexedDB is unavailable and import/export becomes temporary",
+      "load_failed": "tell the operator to import a backup or reset before reconnecting"
+    }
+  },
   "ui_mode_model": {
     "initial_mode": "connect_panel",
     "modes": {

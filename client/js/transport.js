@@ -81,6 +81,8 @@ export class RelayConnection {
 
   getIdentitySummary() {
     const exists = Boolean(this.crypto.keyPair) || Boolean(this._storedIdentityRecord);
+    const publicKey = this._storedIdentityRecord?.publicKey
+      || (this.crypto.publicKeyBytes ? b64Encode(this.crypto.publicKeyBytes) : '');
     return {
       exists,
       canReset: exists,
@@ -90,7 +92,9 @@ export class RelayConnection {
       persistence: this.identityPersistence,
       persisted: this.identityPersistence === 'persisted',
       fingerprint: this.identityFingerprint,
+      publicKey,
       createdAt: this.identityCreatedAt || null,
+      loadFailed: this._identityLoadFailed,
     };
   }
 

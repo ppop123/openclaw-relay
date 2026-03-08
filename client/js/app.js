@@ -305,6 +305,36 @@ export const app = {
     input.click();
   },
 
+  async copyIdentityFingerprint() {
+    const summary = this.connection.getIdentitySummary();
+    if (!summary.fingerprint) {
+      showToast('No identity fingerprint is available yet.', 'warning');
+      return;
+    }
+
+    try {
+      await this._copyText(summary.fingerprint);
+      showToast('Identity fingerprint copied.', 'info');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async copyIdentityPublicKey() {
+    const summary = this.connection.getIdentitySummary();
+    if (!summary.publicKey) {
+      showToast('No identity public key is available yet.', 'warning');
+      return;
+    }
+
+    try {
+      await this._copyText(summary.publicKey);
+      showToast('Identity public key copied.', 'info');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
   async handleImportIdentity(event) {
     const file = event?.target?.files?.[0];
     if (!file) return;
@@ -631,14 +661,20 @@ export const app = {
     const modeEl = document.getElementById('identityMode');
     const fingerprintEl = document.getElementById('identityFingerprint');
     const metaEl = document.getElementById('identityMeta');
+    const recoveryEl = document.getElementById('identityRecoveryHint');
     const exportBtn = document.getElementById('exportIdentityBtn');
     const importBtn = document.getElementById('importIdentityBtn');
     const resetBtn = document.getElementById('resetIdentityBtn');
+    const copyFingerprintBtn = document.getElementById('copyFingerprintBtn');
+    const copyPublicKeyBtn = document.getElementById('copyPublicKeyBtn');
     const summary = this.connection.getIdentitySummary();
 
     resetBtn.disabled = !summary.canReset;
     exportBtn.disabled = !summary.canExport;
     importBtn.disabled = !summary.canImport;
+    copyFingerprintBtn.disabled = !summary.fingerprint;
+    copyPublicKeyBtn.disabled = !summary.publicKey;
+    recoveryEl.textContent = this._getIdentityRecoveryHint(summary);
     metaEl.textContent = summary.createdAt ? `Created: ${this._formatIdentityCreatedAt(summary.createdAt)}` : '';
 
     if (summary.persistence === 'persisted') {
@@ -720,6 +756,51 @@ export const app = {
 
   _formatIdentityCreatedAt(createdAt) {
     return createdAt || '';
+  },
+
+  _getIdentityRecoveryHint(summary) {
+    if (summary.loadFailed) {
+      return 'Stored identity could not be loaded in this tab. Import a backup or reset the browser identity before reconnecting.';
+    }
+    if (summary.persistence === 'persisted') {
+      return 'Backup recommended: export a protected identity file after pairing so you can recover this browser identity later.';
+    }
+    if (summary.persistence === 'memory') {
+      return 'This identity only exists for the current page session. Export it before reloading if you need to preserve gateway trust.';
+    }
+    if (summary.persistence === 'unsupported') {
+      return 'IndexedDB identity storage is unavailable. Import a protected identity file for temporary use or enable browser storage.';
+    }
+    return 'No browser identity exists yet. Connect once or import an identity file before sharing it with the gateway.';
+  },
+
+  async _copyText(text) {
+    if (!text) {
+      throw new Error('Nothing to copy');
+    }
+
+    if (globalThis.navigator?.clipboard?.writeText) {
+      await globalThis.navigator.clipboard.writeText(text);
+      return;
+    }
+
+    if (typeof document.execCommand === 'function' && document.body?.appendChild) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute?.('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus?.();
+      textarea.select?.();
+      const copied = document.execCommand('copy');
+      textarea.remove?.();
+      if (copied) {
+        return;
+      }
+    }
+
+    throw new Error('This browser cannot copy to the clipboard');
   },
 
   _getIdentityPassphrase() {

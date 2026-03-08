@@ -13,7 +13,7 @@ The browser client uses `vitest`.
 | `client/tests/identity-store.test.js` | IndexedDB identity persistence layout and CRUD behavior |
 | `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
-| `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, `channelToken` stripping |
+| `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, `channelToken` stripping |
 
 Run the full browser-client test suite with:
 
@@ -29,6 +29,7 @@ The current test suite is strongest at these guarantees:
 - saved relay profiles persist only non-secret connection settings
 - historical stored `channelToken` is cleaned on startup
 - browser identity export and import actions preserve the expected fingerprint
+- identity fingerprint/public-key copy actions surface the full values without exposing storage secrets
 - passphrase-protected identity exports decrypt only with the correct passphrase
 - persisted identity storage uses the expected IndexedDB layout
 - transport falls back to page-memory identity if persistence fails
@@ -68,9 +69,10 @@ When validating the web client manually, check the following:
 14. gateway public-key mismatch is rejected
 15. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
 16. importing that protected file with the same passphrase restores the expected fingerprint
-17. exporting without a passphrase shows a confirmation warning
-18. full page reload preserves the same client fingerprint when IndexedDB is available
-19. identity reset causes the next connect to present a different client fingerprint
+17. fingerprint and public-key copy actions place the full values on the clipboard
+18. exporting without a passphrase shows a confirmation warning
+19. full page reload preserves the same client fingerprint when IndexedDB is available
+20. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 

@@ -113,6 +113,7 @@ This means old browser state is cleaned automatically.
 ### Identity export and import
 
 - the connect panel can export the current browser identity to a portable JSON file
+- the connect panel can copy the current fingerprint or public key for pairing / approval workflows
 - when the optional passphrase field is filled, the export is encrypted with PBKDF2 + AES-256-GCM before download
 - when no passphrase is set, the export remains plaintext JSON and the user is warned before download
 - the exported file contains the X25519 public key, private key, fingerprint, and creation metadata
@@ -179,6 +180,7 @@ The current identity model is much stronger than the old page-memory-only behavi
 - moving the browser client between machines still creates a different cryptographic identity
 - clearing browser site data deletes the stored identity
 - if the browser blocks IndexedDB, identity persistence falls back to page memory only
+- if a stored identity cannot be loaded, the UI surfaces a recovery hint so the operator can import a backup or reset before reconnecting
 
 ## Recommended Future Direction
 

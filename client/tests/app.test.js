@@ -27,9 +27,11 @@ function createElement(overrides = {}) {
     style: {},
     classList: { add: vi.fn(), remove: vi.fn() },
     focus: vi.fn(),
+    select: vi.fn(),
     click: vi.fn(),
     appendChild: vi.fn(),
     addEventListener: vi.fn(),
+    setAttribute: vi.fn(),
     querySelector: vi.fn(() => createElement()),
     remove: vi.fn(),
     ...overrides,
@@ -53,13 +55,21 @@ vi.stubGlobal('localStorage', {
 });
 
 vi.stubGlobal('document', {
+  body: { appendChild: vi.fn() },
   getElementById: (id) => getElement(id),
   createElement: () => createElement(),
   addEventListener: vi.fn(),
+  execCommand: vi.fn(() => true),
 });
 
 vi.stubGlobal('window', {
   app: null,
+});
+
+vi.stubGlobal('navigator', {
+  clipboard: {
+    writeText: vi.fn(async () => undefined),
+  },
 });
 
 vi.stubGlobal('confirm', confirmMock);
@@ -91,6 +101,7 @@ beforeEach(() => {
   confirmMock.mockReturnValue(true);
   globalThis.URL.createObjectURL.mockClear();
   globalThis.URL.revokeObjectURL.mockClear();
+  globalThis.navigator.clipboard.writeText.mockClear();
 
   app.connection.exportIdentityBundle = defaultExportIdentityBundle;
   app.connection.importIdentityBundle = defaultImportIdentityBundle;
@@ -102,6 +113,7 @@ beforeEach(() => {
   app.connection.identityFingerprint = '';
   app.connection.identityCreatedAt = '';
   app.connection._storedIdentityRecord = null;
+  app.connection._identityLoadFailed = false;
   app.connection._closed = false;
   app.connection.state = 'disconnected';
 });
@@ -162,9 +174,12 @@ describe('identity UI state', () => {
     expect(getElement('identityMode').textContent).toBe('Persistence unavailable');
     expect(getElement('identityFingerprint').textContent).toMatch(/cannot persist/i);
     expect(getElement('identityMeta').textContent).toMatch(/current page session/i);
+    expect(getElement('identityRecoveryHint').textContent).toMatch(/indexeddb identity storage is unavailable/i);
     expect(getElement('resetIdentityBtn').disabled).toBe(true);
     expect(getElement('exportIdentityBtn').disabled).toBe(true);
     expect(getElement('importIdentityBtn').disabled).toBe(false);
+    expect(getElement('copyFingerprintBtn').disabled).toBe(true);
+    expect(getElement('copyPublicKeyBtn').disabled).toBe(true);
   });
 
   it('shows persisted identity fingerprint when transport exposes one', () => {
@@ -172,6 +187,7 @@ describe('identity UI state', () => {
     app.connection.identityFingerprint = 'sha256:1234567890abcdef1234567890abcdef';
     app.connection.identityCreatedAt = '2026-03-08T00:00:00.000Z';
     app.connection._storedIdentityRecord = {
+      publicKey: 'PUBKEY123',
       fingerprint: app.connection.identityFingerprint,
       createdAt: app.connection.identityCreatedAt,
     };
@@ -181,8 +197,20 @@ describe('identity UI state', () => {
     expect(getElement('identityMode').textContent).toBe('Persistent browser identity');
     expect(getElement('identityFingerprint').textContent).toMatch(/Fingerprint:/);
     expect(getElement('identityMeta').textContent).toMatch(/Created:/);
+    expect(getElement('identityRecoveryHint').textContent).toMatch(/backup recommended/i);
     expect(getElement('resetIdentityBtn').disabled).toBe(false);
     expect(getElement('exportIdentityBtn').disabled).toBe(false);
+    expect(getElement('copyFingerprintBtn').disabled).toBe(false);
+    expect(getElement('copyPublicKeyBtn').disabled).toBe(false);
+  });
+
+  it('shows a recovery hint when the stored identity failed to load', () => {
+    app.connection.identityPersistence = 'absent';
+    app.connection._identityLoadFailed = true;
+
+    app._updateIdentityStatus();
+
+    expect(getElement('identityRecoveryHint').textContent).toMatch(/could not be loaded/i);
   });
 });
 
@@ -302,6 +330,34 @@ describe('identity actions', () => {
       privateKeyPkcs8: 'PRIV',
     }));
     expect(getElement('identityPassphrase').value).toBe('');
+  });
+
+  it('copies the current identity fingerprint to the clipboard', async () => {
+    app.connection.identityPersistence = 'persisted';
+    app.connection.identityFingerprint = 'sha256:copyme0123456789';
+    app.connection._storedIdentityRecord = {
+      publicKey: 'PUBKEY123',
+      fingerprint: app.connection.identityFingerprint,
+      createdAt: '2026-03-08T00:00:00.000Z',
+    };
+
+    await app.copyIdentityFingerprint();
+
+    expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith('sha256:copyme0123456789');
+  });
+
+  it('copies the current identity public key to the clipboard', async () => {
+    app.connection.identityPersistence = 'persisted';
+    app.connection.identityFingerprint = 'sha256:copyme0123456789';
+    app.connection._storedIdentityRecord = {
+      publicKey: 'PUBKEY123',
+      fingerprint: app.connection.identityFingerprint,
+      createdAt: '2026-03-08T00:00:00.000Z',
+    };
+
+    await app.copyIdentityPublicKey();
+
+    expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith('PUBKEY123');
   });
 
   it('does not reset the identity when the confirmation is canceled', async () => {
