@@ -37,7 +37,7 @@ It currently provides:
 - gateway public-key pinning via user-supplied pinned key
 - stable browser cryptographic identity across reloads in the same browser profile
 - named saved relay profiles for non-secret connection settings
-- identity fingerprint plus export / import / reset actions in the connect UI
+- identity fingerprint plus protected export / import / reset actions in the connect UI
 - streaming `chat.send`
 - agent list loading via `agents.list`
 - in-chat diagnostics for session, client, profile, and gateway key state
@@ -74,7 +74,7 @@ Its largest current limitations are:
 | Never persisted to browser storage | `channelToken`, session keys, decrypted messages |
 | Identity keypair | Loaded from IndexedDB on startup when available; otherwise created on first connect and then persisted if possible |
 | Reload behavior | Reuses the same identity after full reload in the same browser profile unless the user resets it or persistence is unavailable |
-| Identity file workflow | Export and import portable JSON identity files from the connect panel |
+| Identity file workflow | Export/import portable JSON identity files, with optional passphrase protection for exports |
 | Main transport class | `client/js/transport.js` → `RelayConnection` |
 | Main crypto class | `client/js/crypto.js` → `RelayCrypto` |
 | Identity store module | `client/js/identity-store.js` |

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { protectIdentityBundle } from '../js/identity-bundle.js';
+
 /*
  * App module tests — settings migration, storage safety, identity UI state,
  * and identity management actions.
@@ -194,6 +196,7 @@ describe('identity actions', () => {
       privateKeyPkcs8: 'PRIV',
       createdAt: '2026-03-08T00:00:00.000Z',
     }));
+    confirmMock.mockReturnValue(true);
 
     await app.exportIdentity();
 
@@ -201,6 +204,29 @@ describe('identity actions', () => {
     expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
     expect(createdElements.some((element) => element.download.includes('openclaw-relay-'))).toBe(true);
     expect(createdElements.some((element) => element.click.mock.calls.length > 0)).toBe(true);
+  });
+
+  it('exports a protected identity bundle when a passphrase is provided', async () => {
+    app.connection.exportIdentityBundle = vi.fn(async () => ({
+      format: 'openclaw-relay-browser-identity',
+      version: 1,
+      fingerprint: 'sha256:abcdef',
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    }));
+    getElement('identityPassphrase').value = 'top-secret';
+    const downloadSpy = vi.spyOn(app, '_downloadJsonFile').mockImplementation(() => {});
+
+    await app.exportIdentity();
+
+    expect(downloadSpy).toHaveBeenCalled();
+    const exported = downloadSpy.mock.calls[0][1];
+    expect(exported.encrypted).toBe(true);
+    expect(exported.ciphertext).toBeTruthy();
+    expect(getElement('identityPassphrase').value).toBe('');
+
+    downloadSpy.mockRestore();
   });
 
   it('imports an identity file and refreshes the identity card', async () => {
@@ -235,6 +261,47 @@ describe('identity actions', () => {
     expect(app.connection.importIdentityBundle).toHaveBeenCalled();
     expect(getElement('identityMode').textContent).toBe('Persistent browser identity');
     expect(getElement('identityFingerprint').textContent).toMatch(/Fingerprint:/);
+  });
+
+  it('imports a protected identity file when the passphrase is provided', async () => {
+    const protectedBundle = await protectIdentityBundle({
+      format: 'openclaw-relay-browser-identity',
+      version: 1,
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      fingerprint: 'sha256:imported',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    }, 'top-secret');
+
+    app.connection.importIdentityBundle = vi.fn(async () => {
+      app.connection.identityPersistence = 'persisted';
+      app.connection.identityFingerprint = 'sha256:imported';
+      app.connection.identityCreatedAt = '2026-03-08T00:00:00.000Z';
+      app.connection._storedIdentityRecord = {
+        fingerprint: 'sha256:imported',
+        createdAt: '2026-03-08T00:00:00.000Z',
+      };
+      app.connection.crypto.clearIdentity();
+      return app.connection.getIdentitySummary();
+    });
+    getElement('identityPassphrase').value = 'top-secret';
+
+    await app.handleImportIdentity({
+      target: {
+        value: 'identity.protected.json',
+        files: [
+          {
+            text: async () => JSON.stringify(protectedBundle),
+          },
+        ],
+      },
+    });
+
+    expect(app.connection.importIdentityBundle).toHaveBeenCalledWith(expect.objectContaining({
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+    }));
+    expect(getElement('identityPassphrase').value).toBe('');
   });
 
   it('does not reset the identity when the confirmation is canceled', async () => {

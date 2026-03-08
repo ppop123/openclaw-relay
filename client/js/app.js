@@ -6,6 +6,7 @@
  */
 
 import { renderMarkdown } from './markdown.js';
+import { protectIdentityBundle, unprotectIdentityBundle } from './identity-bundle.js';
 import { RelayConnection } from './transport.js';
 
 // ── Storage keys ──
@@ -275,9 +276,24 @@ export const app = {
   async exportIdentity() {
     try {
       const bundle = await this.connection.exportIdentityBundle();
+      const passphrase = this._getIdentityPassphrase();
       const suffix = (bundle.fingerprint || 'identity').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'identity';
+
+      if (passphrase) {
+        const protectedBundle = await protectIdentityBundle(bundle, passphrase);
+        this._downloadJsonFile(`openclaw-relay-${suffix}.protected.json`, protectedBundle);
+        this._clearIdentityPassphrase();
+        showToast('Client identity exported with passphrase protection.', 'info');
+        return;
+      }
+
+      if (typeof confirm === 'function') {
+        const confirmed = confirm('Export without a passphrase? The file will contain an unencrypted private key.');
+        if (!confirmed) return;
+      }
+
       this._downloadJsonFile(`openclaw-relay-${suffix}.json`, bundle);
-      showToast('Client identity exported. Keep this file secret.', 'info');
+      showToast('Client identity exported without passphrase. Keep this file secret.', 'warning');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -301,12 +317,14 @@ export const app = {
       }
 
       const parsed = JSON.parse(await this._readTextFile(file));
-      const nextSummary = await this.connection.importIdentityBundle(parsed);
+      const decrypted = await unprotectIdentityBundle(parsed, this._getIdentityPassphrase());
+      const nextSummary = await this.connection.importIdentityBundle(decrypted);
       this._returnToConnectView();
       document.getElementById('connectError').style.display = 'none';
       this._updateIdentityStatus();
       this._updateDiagnostics();
 
+      this._clearIdentityPassphrase();
       if (nextSummary.persistence === 'persisted') {
         showToast('Identity imported and saved in this browser.', 'info');
       } else {
@@ -702,6 +720,14 @@ export const app = {
 
   _formatIdentityCreatedAt(createdAt) {
     return createdAt || '';
+  },
+
+  _getIdentityPassphrase() {
+    return document.getElementById('identityPassphrase').value;
+  },
+
+  _clearIdentityPassphrase() {
+    document.getElementById('identityPassphrase').value = '';
   },
 
   _normalizeRelayUrl(relayUrl) {

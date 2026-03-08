@@ -171,6 +171,10 @@
     "pending_requests": {
       "persisted": false,
       "lifecycle": "runtime only"
+    },
+    "identity_file_passphrase": {
+      "persisted": false,
+      "lifecycle": "held only in the connect-panel password input while exporting or importing identity files"
     }
   },
   "security_rules": [
@@ -179,6 +183,7 @@
     "identity private key may be persisted only inside the IndexedDB identity store for same-browser reuse",
     "session key must not be persisted",
     "gateway public key is safe to persist but security-relevant",
-    "saved relay profiles may persist relayUrl and gatewayPubKey only; channelToken remains forbidden"
+    "saved relay profiles may persist relayUrl and gatewayPubKey only; channelToken remains forbidden",
+    "identity-file passphrases must never be persisted to browser storage"
   ]
 }

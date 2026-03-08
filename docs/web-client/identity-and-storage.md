@@ -71,6 +71,7 @@ The browser client intentionally never persists:
 - replay-window state
 - per-connection nonces
 - identity private key in `localStorage`
+- identity-file passphrases in browser storage
 
 ## Historical Migration Behavior
 
@@ -112,8 +113,11 @@ This means old browser state is cleaned automatically.
 ### Identity export and import
 
 - the connect panel can export the current browser identity to a portable JSON file
+- when the optional passphrase field is filled, the export is encrypted with PBKDF2 + AES-256-GCM before download
+- when no passphrase is set, the export remains plaintext JSON and the user is warned before download
 - the exported file contains the X25519 public key, private key, fingerprint, and creation metadata
 - importing an identity file validates the keypair before replacing the current browser identity
+- importing a protected file requires the same passphrase in the connect-panel passphrase field
 - when IndexedDB is available, an imported identity is saved and becomes the normal long-lived browser identity
 - when IndexedDB is unavailable, an imported identity can still be used for the current page session only
 
@@ -180,7 +184,7 @@ The current identity model is much stronger than the old page-memory-only behavi
 
 A future product-grade browser client should additionally support:
 
-- passphrase-protected identity export files for advanced users
+- passphrase rotation guidance for teams that share protected identity exports
 - richer fingerprint presentation / QR display
 - profile sync across browsers or devices
 - browser-specific recovery flows when IndexedDB is disabled by policy

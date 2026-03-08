@@ -21,6 +21,7 @@ The client is intentionally small and explicit so protocol behavior is easy to a
 | `client/js/transport.js` | WebSocket lifecycle, Layer 0 framing, Layer 1 handshake orchestration, Layer 2 request lifecycle, browser identity load/import/export/reset |
 | `client/js/crypto.js` | X25519 key generation/import/export, fingerprinting, HKDF session-key derivation, AES-GCM encrypt/decrypt, replay tracking |
 | `client/js/identity-store.js` | IndexedDB persistence for the browser identity keypair |
+| `client/js/identity-bundle.js` | Optional passphrase protection for exported identity files |
 | `client/js/markdown.js` | Safe Markdown subset renderer for assistant output |
 | `client/js/utils.js` | Small helpers for base64, ids, random values, buffer concatenation |
 
@@ -30,9 +31,10 @@ At runtime the browser client is centered around four collaborating pieces:
 
 ```text
 app (UI + state)
-  └── RelayConnection (network + protocol)
-        ├── RelayCrypto (key agreement + encryption)
-        └── identity-store (IndexedDB persistence)
+  ├── RelayConnection (network + protocol)
+  │     ├── RelayCrypto (key agreement + encryption)
+  │     └── identity-store (IndexedDB persistence)
+  └── identity-bundle (portable-file protection)
 ```
 
 ### `app`

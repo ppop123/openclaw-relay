@@ -34,6 +34,7 @@
         "dom wiring",
         "identity status rendering",
         "identity import/export actions",
+        "identity-file passphrase handling",
         "settings load/save",
         "saved relay profile management",
         "agent list state",
@@ -83,6 +84,19 @@
         "anti-replay tracking"
       ],
       "re_export_note": "Transport intentionally imports base64 helpers from crypto.js so Layer 1 handshake helpers stay colocated with RelayCrypto."
+    },
+    {
+      "file": "client/js/identity-bundle.js",
+      "exports": [
+        "protectIdentityBundle",
+        "unprotectIdentityBundle",
+        "isProtectedIdentityBundle"
+      ],
+      "responsibilities": [
+        "portable identity-file encryption",
+        "portable identity-file decryption",
+        "passphrase-protected export envelope validation"
+      ]
     },
     {
       "file": "client/js/identity-store.js",
@@ -186,6 +200,7 @@
       "client/tests/app.test.js",
       "client/tests/crypto.test.js",
       "client/tests/identity-store.test.js",
+      "client/tests/identity-bundle.test.js",
       "client/tests/transport.test.js",
       "client/tests/markdown.test.js"
     ]

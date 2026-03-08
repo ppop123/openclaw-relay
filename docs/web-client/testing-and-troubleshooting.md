@@ -11,6 +11,7 @@ The browser client uses `vitest`.
 | `client/tests/markdown.test.js` | HTML escaping, safe links, XSS resistance, Markdown formatting |
 | `client/tests/crypto.test.js` | Real `RelayCrypto`, identity import/export, fingerprinting, key derivation, encrypt/decrypt, replay rules, direction checks |
 | `client/tests/identity-store.test.js` | IndexedDB identity persistence layout and CRUD behavior |
+| `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
 | `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, `channelToken` stripping |
 
@@ -28,6 +29,7 @@ The current test suite is strongest at these guarantees:
 - saved relay profiles persist only non-secret connection settings
 - historical stored `channelToken` is cleaned on startup
 - browser identity export and import actions preserve the expected fingerprint
+- passphrase-protected identity exports decrypt only with the correct passphrase
 - persisted identity storage uses the expected IndexedDB layout
 - transport falls back to page-memory identity if persistence fails
 - encrypted data is not allowed to fall back to plaintext parsing
@@ -64,10 +66,11 @@ When validating the web client manually, check the following:
 12. disconnect returns the UI to connect mode
 13. reconnect after transient relay loss restores chat functionality
 14. gateway public-key mismatch is rejected
-15. exporting the current identity downloads a JSON file successfully
-16. importing that identity restores the expected fingerprint
-17. full page reload preserves the same client fingerprint when IndexedDB is available
-18. identity reset causes the next connect to present a different client fingerprint
+15. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
+16. importing that protected file with the same passphrase restores the expected fingerprint
+17. exporting without a passphrase shows a confirmation warning
+18. full page reload preserves the same client fingerprint when IndexedDB is available
+19. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 
@@ -135,6 +138,7 @@ Possible causes:
 - missing `publicKey` / `privateKeyPkcs8` fields
 - unsupported file format or future version
 - hand-edited or corrupted export file
+- missing or incorrect passphrase for a protected export
 
 Effect:
 

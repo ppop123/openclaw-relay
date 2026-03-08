@@ -34,6 +34,7 @@ It also includes a client-identity card that shows:
 - whether a persistent browser identity is available
 - the current client fingerprint summary when known
 - export, import, and reset actions for browser identity management
+- an optional passphrase field used only while exporting/importing identity files
 
 The connect panel also displays a connection error box when handshake or WebSocket setup fails.
 
@@ -167,8 +168,9 @@ The chat panel diagnostics bar shows:
 
 - asks `connection.exportIdentityBundle()` for the current browser identity
 - serializes a portable JSON file containing the X25519 keypair and fingerprint metadata
+- encrypts that file first when the optional passphrase field is populated
 - triggers a browser download from the connect panel
-- reminds the user that the exported file is secret material
+- warns before producing an unencrypted export
 
 ## Identity Import Flow
 
@@ -177,6 +179,7 @@ The chat panel diagnostics bar shows:
 - opens a local JSON file chooser from the connect panel
 - asks for confirmation before replacing an existing browser identity
 - parses the imported identity bundle
+- decrypts it first when the selected file is passphrase-protected
 - asks `connection.importIdentityBundle()` to validate and install it
 - returns the UI to connect mode and refreshes the identity card
 - shows whether the imported identity was persisted or is active for this page only

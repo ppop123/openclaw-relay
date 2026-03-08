@@ -625,6 +625,11 @@ main {
         <div class="identity-mode" id="identityMode">Loading…</div>
         <div class="identity-fingerprint" id="identityFingerprint">Checking browser identity storage…</div>
         <div class="identity-meta" id="identityMeta"></div>
+        <div class="identity-passphrase">
+          <label for="identityPassphrase">Identity File Passphrase (optional)</label>
+          <input type="password" id="identityPassphrase" placeholder="Used only for export/import" autocomplete="off">
+          <div class="identity-note">Never stored. Set it to encrypt exports or unlock protected identity files.</div>
+        </div>
         <input type="file" id="identityImportInput" accept="application/json" style="display:none">
       </div>
 
