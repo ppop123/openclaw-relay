@@ -1,39 +1,196 @@
 # OpenClaw Relay
 
-An open-source, decentralized remote connection solution for OpenClaw.
+[中文](#中文) | [English](#english)
 
-Connect to your OpenClaw instance from anywhere — no public IP required, no third-party platform dependency, end-to-end encrypted.
+---
 
-> **AI-first project.** All code in this repository was written by [Claude Code](https://claude.ai/code) and reviewed by [Codex](https://openai.com/codex). The project is designed to be unambiguously consumable by AI agents — with machine-readable truth sources, structured protocol fixtures, and documentation that prioritizes precision over prose. See [`docs/ai-implementation-guide.md`](docs/ai-implementation-guide.md).
+## 中文
 
-## The Problem
+OpenClaw Relay 是一个面向 OpenClaw 的开源、去中心化远程连接方案。
 
-OpenClaw typically runs on a local machine behind NAT. Users currently rely on third-party chat platforms (Feishu, Telegram, Discord) to interact with their agents remotely. This creates platform dependency and limits what you can do to plain text messaging.
+你可以从任何地方连接自己的 OpenClaw 实例——不需要公网 IP，不依赖第三方聊天平台，默认端到端加密。
 
-## The Solution
+> **AI-first 项目。** 这个仓库中的代码由 [Claude Code](https://claude.ai/code) 生成，并由 [Codex](https://openai.com/codex) 复审。整个项目按“让 AI 也能稳定读取和实现”的目标来组织：包含 machine-readable truth sources、结构化协议 fixture，以及优先强调精确性的技术文档。参见 [`docs/ai-implementation-guide.md`](docs/ai-implementation-guide.md)。
 
-OpenClaw Relay provides a simple, secure tunnel between any client and your OpenClaw gateway:
+### 要解决的问题
+
+OpenClaw 通常运行在一台位于 NAT 后面的本地机器上。当前很多用户仍然依赖飞书、Telegram、Discord 之类的第三方平台远程和自己的代理交互。这会带来平台依赖，也会把远程交互能力限制在“文本消息”这一层。
+
+### 方案概览
+
+OpenClaw Relay 在客户端和你的 OpenClaw Gateway 之间建立一条简单、安全的连接通道：
 
 ```
-[Client]  ──WSS──>  [Relay]  <──WSS──  [OpenClaw Gateway]
-  (anywhere)        (public)           (your local machine)
+[客户端] ──WSS──> [Relay] <──WSS── [OpenClaw Gateway]
+ (任意位置)      (公网节点)         (你的本地机器)
 ```
 
-Both sides connect **outbound** — no port forwarding, no public IP, no DNS setup. All messages are **end-to-end encrypted** — the relay only sees opaque bytes.
+两端都是**主动向外连接**：
+- 不需要端口映射
+- 不需要公网 IP
+- 不需要自己配置 DNS
 
-## Key Principles
+所有业务消息都做**端到端加密**，Relay 只能看到不可读的密文。
 
-- **No vendor lock-in**: Relay is trivially self-hostable (single binary, no database)
-- **No official service**: Community members can run public relays; a curated list is maintained in this repo
-- **E2E encrypted**: Relay operators cannot read your messages
-- **Open protocol**: Anyone can build alternative clients or relay implementations
-- **Extensible**: The reference client is a starting point — build your own
+### 核心原则
 
-## Latest Release / 最新发布
+- **无厂商锁定**：Relay 可轻量自托管（单二进制、无数据库）
+- **没有官方中心服务**：社区可以运行公共 Relay，本仓库维护可公开发现的节点列表
+- **端到端加密**：Relay 运营者无法读取消息内容
+- **开放协议**：任何人都可以实现自己的客户端、SDK 或 Relay
+- **可扩展**：仓库内的参考客户端只是起点，不是唯一形态
 
-`OpenClaw Relay v0.2.1` is now available. / `OpenClaw Relay v0.2.1` 已发布。
+### 最新发布
 
-Official release scope / 正式支持范围：
+`OpenClaw Relay v0.3.0` 已发布。
+
+正式支持范围：
+
+- `relay/` — Go Relay 服务端
+- `sdk/python/` — Python 客户端 SDK（Layers 0–2）
+- `client/` — Web 参考客户端
+- `protocol/` — 协议文档与 canonical fixtures
+- `plugin/` — OpenClaw Gateway 插件
+
+当前不在正式发布范围内：
+
+- `sdk/js/` — 尚未实现
+
+发布说明：
+
+- 中文：[`docs/releases/v0.3.0-github-release.zh-CN.md`](docs/releases/v0.3.0-github-release.zh-CN.md)
+- English: [`docs/releases/v0.3.0-github-release.en.md`](docs/releases/v0.3.0-github-release.en.md)
+
+### 项目状态
+
+当前版本中，核心 Relay 栈（Go 服务端、Python SDK、Web 客户端）、OpenClaw Gateway 插件，以及协议规范都已经**实现并测试**。配套的架构设计和运维文档也已经补齐。
+
+v1 目标是**单 Relay 节点部署**。集群、联邦、多活和高可用明确不在 v1 范围内。
+
+### 组件一览
+
+| 组件 | 说明 | 状态 |
+|------|------|------|
+| [协议规范](protocol/) | 线协议与分层说明 | v1 |
+| `relay/` | Go 版参考 Relay 实现 | 已实现，已测试 |
+| `sdk/python/` | Python 客户端 SDK（协议层 0–2） | 已实现，已测试 |
+| `client/` | 浏览器 Web 客户端 | 已实现，已测试 |
+| `sdk/js/` | JavaScript 协议库 | 尚未实现 |
+| `plugin/` | OpenClaw Gateway 插件 | 已实现，已测试 |
+
+### 文档入口
+
+- [`docs/README.md`](docs/README.md) — 文档中心 / 技术导航
+- [`docs/architecture-overview.md`](docs/architecture-overview.md) — 当前架构总览
+- [`docs/web-client.md`](docs/web-client.md) — 浏览器客户端文档入口
+- [`docs/web-client/architecture.md`](docs/web-client/architecture.md) — 浏览器运行时结构与模块地图
+- [`docs/web-client/identity-and-storage.md`](docs/web-client/identity-and-storage.md) — 浏览器身份生命周期与存储规则
+- [`docs/web-client/transport.md`](docs/web-client/transport.md) — 浏览器握手、加密、请求响应与重连行为
+- [`docs/web-client/ui-and-state.md`](docs/web-client/ui-and-state.md) — 浏览器 UI 状态与用户流程
+- [`docs/web-client/testing-and-troubleshooting.md`](docs/web-client/testing-and-troubleshooting.md) — 浏览器测试、人工检查与排障
+- [`docs/deployment.md`](docs/deployment.md) — 部署与运维
+- [`docs/security.md`](docs/security.md) — 安全属性与限制
+- [`docs/support-matrix.md`](docs/support-matrix.md) — 支持矩阵与发布范围
+
+### 快速开始
+
+#### 部署一个 Relay 服务端
+
+```bash
+cd relay && go build -o openclaw-relay
+./openclaw-relay
+# 默认监听 :8443
+```
+
+生产环境中的 TLS、Origin 校验、部署方式，请参见 [部署文档](docs/deployment.md)。
+
+#### 运行测试
+
+```bash
+cd relay && go test -v -count=1
+cd sdk/python && pip install -e ".[dev]" && pytest -q
+cd client && npm ci && npm test
+cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
+cd plugin && npm ci && npm run typecheck
+bash scripts/smoke-openclaw-plugin.sh
+```
+
+> **Gateway 插件接入：** 把 `plugin/` 安装到你自己的 OpenClaw 运行时：`openclaw plugins install --link /path/to/openclaw-relay/plugin`，然后运行 `openclaw relay enable --server <relay>` 和 `openclaw relay pair --wait 30`。见 [`docs/quick-start.md`](docs/quick-start.md)。
+
+#### 贡献一个公共 Relay 节点
+
+使用 `--public` 运行 Relay，确保 `GET /status` 可访问，然后提交 PR 把你的节点加到 [`relays.json`](relays.json)。
+
+### 架构图
+
+```
+                   端到端加密（Relay 无法读内容）
+              ╔══════════════════════════════════════╗
+              ║  应用层协议（JSON-RPC / Streaming）  ║
+              ║  安全层（X25519 + AES-GCM）         ║
+              ╚══════════════════════════════════════╝
+                          │            │
+ [客户端] ──WSS──> [Relay Server] <──WSS── [OpenClaw Gateway]
+                          │
+                    Relay 只能看到：
+                    • channel token hash
+                    • encrypted payload
+                    • online/offline status
+```
+
+### 公共 Relay 节点
+
+当前社区维护的公共 Relay 列表见 [`relays.json`](relays.json)。
+
+如果你想新增节点，请先确保它通过健康检查（`GET /status`），再提交 PR。
+
+### 许可证
+
+MIT
+
+---
+
+## English
+
+OpenClaw Relay is an open-source, decentralized remote connection solution for OpenClaw.
+
+Connect to your OpenClaw instance from anywhere — no public IP required, no third-party chat platform dependency, end-to-end encrypted by default.
+
+> **AI-first project.** The code in this repository was generated by [Claude Code](https://claude.ai/code) and reviewed by [Codex](https://openai.com/codex). The repository is intentionally structured so AI agents can consume it reliably, with machine-readable truth sources, structured protocol fixtures, and docs that prioritize precision over prose. See [`docs/ai-implementation-guide.md`](docs/ai-implementation-guide.md).
+
+### The Problem
+
+OpenClaw usually runs on a local machine behind NAT. Many users currently rely on third-party platforms such as Feishu, Telegram, or Discord to reach their agents remotely. That creates platform dependency and limits remote interaction to basic text messaging.
+
+### The Solution
+
+OpenClaw Relay creates a simple, secure path between any client and your OpenClaw gateway:
+
+```
+[Client] ──WSS──> [Relay] <──WSS── [OpenClaw Gateway]
+(anywhere)       (public)          (your local machine)
+```
+
+Both sides connect **outbound**:
+- no port forwarding
+- no public IP requirement
+- no custom DNS setup
+
+All application traffic is **end-to-end encrypted**, so the relay only sees opaque bytes.
+
+### Key Principles
+
+- **No vendor lock-in**: the relay is trivial to self-host (single binary, no database)
+- **No official central service**: community members can run public relays, and this repo maintains a discoverable list
+- **End-to-end encrypted**: relay operators cannot read user messages
+- **Open protocol**: anyone can implement alternative clients, SDKs, or relays
+- **Extensible**: the reference client is a starting point, not the only intended form factor
+
+### Latest Release
+
+`OpenClaw Relay v0.3.0` is available now.
+
+Official release scope:
 
 - `relay/` — Go relay server
 - `sdk/python/` — Python client SDK (Layers 0–2)
@@ -41,49 +198,49 @@ Official release scope / 正式支持范围：
 - `protocol/` — Protocol docs and canonical fixtures
 - `plugin/` — OpenClaw gateway plugin
 
-Excluded from official release scope / 不在正式发布范围内：
+Excluded from the official release scope:
 
 - `sdk/js/` — Not yet implemented
 
-Release notes / 发布说明：
+Release notes:
 
-- 中文：[`docs/releases/v0.2.1-github-release.zh-CN.md`](docs/releases/v0.2.1-github-release.zh-CN.md)
-- English: [`docs/releases/v0.2.1-github-release.en.md`](docs/releases/v0.2.1-github-release.en.md)
+- 中文：[`docs/releases/v0.3.0-github-release.zh-CN.md`](docs/releases/v0.3.0-github-release.zh-CN.md)
+- English: [`docs/releases/v0.3.0-github-release.en.md`](docs/releases/v0.3.0-github-release.en.md)
 
-## Project Status
+### Project Status
 
-The core relay stack (Go server, Python SDK, web client), the OpenClaw gateway plugin, and the protocol specification are **implemented and tested**. Architecture design and operational guides are also included.
+The core relay stack (Go server, Python SDK, web client), the OpenClaw gateway plugin, and the protocol specification are all **implemented and tested**. Architecture and operational documentation are included as well.
 
-v1 targets a **single relay node** deployment. Clustering, federation, and high-availability are explicitly out of scope.
+v1 targets a **single relay node** deployment. Clustering, federation, multi-node HA, and similar features are explicitly out of scope.
 
-## Components
+### Components
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| [Protocol Spec](protocol/) | Wire protocol specification | v1 |
-| Relay Server (`relay/`) | Reference relay implementation (Go) | Implemented, tested |
-| Python SDK (`sdk/python/`) | Client SDK (protocol layers 0-2) | Implemented, tested |
-| Reference Client (`client/`) | Browser-based web client | Implemented, tested |
-| JavaScript SDK (`sdk/js/`) | Protocol library for JS | Not yet implemented |
-| OpenClaw Plugin (`plugin/`) | Gateway channel plugin | Implemented, tested |
+| [Protocol Spec](protocol/) | Wire protocol and layered behavior | v1 |
+| `relay/` | Reference relay implementation in Go | Implemented, tested |
+| `sdk/python/` | Python client SDK (protocol layers 0–2) | Implemented, tested |
+| `client/` | Browser-based web client | Implemented, tested |
+| `sdk/js/` | JavaScript protocol library | Not yet implemented |
+| `plugin/` | OpenClaw gateway plugin | Implemented, tested |
 
-## Documentation
+### Documentation
 
 - [`docs/README.md`](docs/README.md) — documentation center / technical navigation
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) — current architecture summary
 - [`docs/web-client.md`](docs/web-client.md) — browser client documentation hub
 - [`docs/web-client/architecture.md`](docs/web-client/architecture.md) — browser runtime structure and module map
 - [`docs/web-client/identity-and-storage.md`](docs/web-client/identity-and-storage.md) — browser identity lifecycle and storage rules
-- [`docs/web-client/transport.md`](docs/web-client/transport.md) — browser handshake, encryption, request/response, reconnect behavior
+- [`docs/web-client/transport.md`](docs/web-client/transport.md) — browser handshake, encryption, request/response, and reconnect behavior
 - [`docs/web-client/ui-and-state.md`](docs/web-client/ui-and-state.md) — browser UI state and user flows
-- [`docs/web-client/testing-and-troubleshooting.md`](docs/web-client/testing-and-troubleshooting.md) — browser tests, manual checks, troubleshooting
+- [`docs/web-client/testing-and-troubleshooting.md`](docs/web-client/testing-and-troubleshooting.md) — browser tests, manual checks, and troubleshooting
 - [`docs/deployment.md`](docs/deployment.md) — deployment and operations
 - [`docs/security.md`](docs/security.md) — security properties and limitations
 - [`docs/support-matrix.md`](docs/support-matrix.md) — supported components and release scope
 
-## Quick Start
+### Quick Start
 
-### Deploy a relay server
+#### Deploy a relay server
 
 ```bash
 cd relay && go build -o openclaw-relay
@@ -91,35 +248,35 @@ cd relay && go build -o openclaw-relay
 # Listens on :8443 by default
 ```
 
-See [Deployment Guide](docs/deployment.md) for TLS, origin validation, and production configuration.
+See the [Deployment Guide](docs/deployment.md) for TLS, origin validation, and production setup.
 
-### Run tests
+#### Run tests
 
 ```bash
-cd relay && go test -v -count=1         # Go relay
-cd sdk/python && pip install -e ".[dev]" && pytest -q  # Python SDK
-cd client && npm ci && npm test          # Web client
-cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests  # OpenClaw plugin
-cd plugin && npm ci && npm run typecheck  # OpenClaw plugin typecheck (plugin tests require `go` on PATH)
-bash scripts/smoke-openclaw-plugin.sh  # OpenClaw plugin lifecycle smoke: pair/revoke/rotate/disable (local/manual)
+cd relay && go test -v -count=1
+cd sdk/python && pip install -e ".[dev]" && pytest -q
+cd client && npm ci && npm test
+cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
+cd plugin && npm ci && npm run typecheck
+bash scripts/smoke-openclaw-plugin.sh
 ```
 
-> **Gateway plugin:** Install `plugin/` into your own OpenClaw runtime with `openclaw plugins install --link /path/to/openclaw-relay/plugin`, then run `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`. See [Quick Start Guide](docs/quick-start.md).
+> **Gateway plugin setup:** Install `plugin/` into your own OpenClaw runtime with `openclaw plugins install --link /path/to/openclaw-relay/plugin`, then run `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`. See [`docs/quick-start.md`](docs/quick-start.md).
 
-### Contribute a public relay
+#### Contribute a public relay
 
-Run a relay with `--public`, ensure `/status` is accessible, and submit a PR to add it to [`relays.json`](relays.json).
+Run a relay with `--public`, make sure `GET /status` is reachable, and submit a PR to add it to [`relays.json`](relays.json).
 
-## Architecture
+### Architecture
 
 ```
-                   E2E Encrypted (relay cannot read)
+                   E2E encrypted (relay cannot read)
               ╔══════════════════════════════════════╗
-              ║  App Protocol (JSON-RPC, streaming)  ║
+              ║  App Protocol (JSON-RPC / Streaming) ║
               ║  Security Layer (X25519 + AES-GCM)   ║
               ╚══════════════════════════════════════╝
                           │            │
-  [Client] ──WSS──> [Relay Server] <──WSS── [OpenClaw Gateway]
+ [Client] ──WSS──> [Relay Server] <──WSS── [OpenClaw Gateway]
                           │
                     Relay only sees:
                     • channel token hash
@@ -127,12 +284,12 @@ Run a relay with `--public`, ensure `/status` is accessible, and submit a PR to 
                     • online/offline status
 ```
 
-## Public Relay Nodes
+### Public Relay Nodes
 
 See [`relays.json`](relays.json) for the current list of community-operated public relays.
 
-To add your relay: ensure it passes the health check (`GET /status`), then submit a PR.
+To add your own relay, make sure it passes the health check (`GET /status`) and then open a PR.
 
-## License
+### License
 
 MIT
