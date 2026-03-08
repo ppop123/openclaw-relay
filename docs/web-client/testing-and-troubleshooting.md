@@ -15,6 +15,7 @@ The browser client uses `vitest`.
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
 | `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
 | `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering connect, agents.list, streamed chat, reload persistence, protected identity export/reset/import, preferred-agent restore, transcript export |
+| `scripts/web-client-live-e2e.mjs` | Real relay + gateway Chrome flow covering approved-identity import, connect, encrypted `system.status`, and reload/reconnect with the same persisted identity |
 
 Run the unit suite with:
 
@@ -22,16 +23,23 @@ Run the unit suite with:
 cd client && npm ci && npm test
 ```
 
-Run the local real-browser E2E smoke flow with:
+Run the deterministic local real-browser E2E smoke flow with:
 
 ```bash
 cd client && npm run test:e2e
 ```
 
-The browser E2E currently expects:
+Run the live real-browser E2E smoke flow with:
+
+```bash
+cd client && npm run test:e2e:live
+```
+
+The browser E2E scripts currently expect:
 
 - a local Chrome binary (or `OPENCLAW_E2E_CHROME`)
 - the workspace `plugin/node_modules` tree, which currently provides `playwright-core` and `ws`
+- for `test:e2e:live`, a local `openclaw` CLI plus Go toolchain so the script can start a real relay and gateway
 
 ## What the Tests Prove
 
@@ -48,6 +56,7 @@ The current test suite is strongest at these guarantees:
 - persisted identity storage uses the expected IndexedDB layout
 - transport falls back to page-memory identity if persistence fails
 - real Chrome keeps the same browser fingerprint across reload, restores it from a protected backup after reset, and restores the preferred agent after reconnect
+- the live relay/gateway browser smoke can import a pre-approved browser identity and complete encrypted `system.status` requests against the real backend chain
 - encrypted data is not allowed to fall back to plaintext parsing
 - wrong nonce direction is rejected
 - replay and duplicate counters are rejected
@@ -59,7 +68,7 @@ The current test suite is strongest at these guarantees:
 
 Current automated tests do **not** fully cover:
 
-- a hosted-CI real-browser handshake against a live relay and gateway; the current E2E is a local deterministic browser smoke harness
+- hosted-CI coverage; both current browser E2E flows are local-machine smoke tests even though one targets a real relay and gateway
 - user interaction timing in a real DOM renderer
 - browser-policy edge cases where IndexedDB is disabled or quota-limited in unusual ways
 - multi-tab coordination, because the client is designed as a single-page reference client

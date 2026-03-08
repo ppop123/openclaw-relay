@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "node ../scripts/web-client-browser-e2e.mjs"
+    "test:e2e": "node ../scripts/web-client-browser-e2e.mjs",
+    "test:e2e:live": "node ../scripts/web-client-live-e2e.mjs"
   },
   "devDependencies": {
     "vitest": "^3.0.0"

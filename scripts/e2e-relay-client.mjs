@@ -143,9 +143,24 @@ class SessionCipher {
   }
 }
 
+function normalizeIdentity(identity) {
+  const candidate = identity?.identity && typeof identity.identity === 'object'
+    ? identity.identity
+    : identity;
+  const privateKey = candidate.privateKey || candidate.privateKeyPkcs8;
+  if (!candidate?.publicKey || !privateKey) {
+    throw new Error('identity file must provide publicKey and private key material');
+  }
+  return {
+    publicKey: candidate.publicKey,
+    privateKey,
+    fingerprint: candidate.fingerprint || '',
+  };
+}
+
 async function loadOrCreateIdentity(path) {
   if (existsSync(path)) {
-    const identity = JSON.parse(await readFile(path, 'utf-8'));
+    const identity = normalizeIdentity(JSON.parse(await readFile(path, 'utf-8')));
     const publicKeyBytes = b64Decode(identity.publicKey);
     const privateKey = await crypto.subtle.importKey('pkcs8', arrayBufferFrom(b64Decode(identity.privateKey)), { name: 'X25519' }, true, ['deriveBits']);
     return { ...identity, publicKeyBytes, privateKey };
@@ -160,9 +175,11 @@ async function loadOrCreateIdentity(path) {
     fingerprint: await sha256Fingerprint(publicKeyBytes),
   };
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(identity, null, 2)}\n`);
+  await writeFile(path, `${JSON.stringify(identity, null, 2)}
+`);
   return { ...identity, publicKeyBytes, privateKey: keyPair.privateKey };
 }
+
 
 const config = JSON.parse(await readFile(configPath, 'utf-8'));
 const account = config.channels?.relay?.accounts?.default;

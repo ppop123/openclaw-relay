@@ -82,7 +82,7 @@ Its largest current limitations are:
 | Main crypto class | `client/js/crypto.js` → `RelayCrypto` |
 | Identity store module | `client/js/identity-store.js` |
 | App entry | `client/js/app.js` |
-| Test command | `cd client && npm ci && npm test` for unit tests, `cd client && npm run test:e2e` for local browser E2E |
+| Test command | `cd client && npm ci && npm test` for unit tests, `cd client && npm run test:e2e` for deterministic browser E2E, `cd client && npm run test:e2e:live` for real relay/gateway E2E |
 
 ## Reading Order
 

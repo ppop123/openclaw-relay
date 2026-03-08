@@ -201,6 +201,7 @@
   "tests": {
     "command": "cd client && npm ci && npm test",
     "browser_e2e_command": "cd client && npm run test:e2e",
+    "browser_live_e2e_command": "cd client && npm run test:e2e:live",
     "framework": "vitest",
     "browser_e2e_runtime": {
       "script": "scripts/web-client-browser-e2e.mjs",
@@ -217,6 +218,12 @@
         "plugin/node_modules/playwright-core",
         "plugin/node_modules/ws"
       ]
+    },
+    "browser_live_e2e_runtime": {
+      "script": "scripts/web-client-live-e2e.mjs",
+      "browser": "Google Chrome or OPENCLAW_E2E_CHROME",
+      "backend": "real local relay plus OpenClaw gateway",
+      "bootstrap": "seeds an approved browser identity into a temporary OpenClaw config before launching the browser"
     },
     "suites": [
       "client/tests/app.test.js",
