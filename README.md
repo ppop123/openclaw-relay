@@ -4,6 +4,8 @@ An open-source, decentralized remote connection solution for OpenClaw.
 
 Connect to your OpenClaw instance from anywhere — no public IP required, no third-party platform dependency, end-to-end encrypted.
 
+> **AI-first project.** All code in this repository was written by [Claude Code](https://claude.ai/code) and reviewed by [Codex](https://openai.com/codex). The project is designed to be unambiguously consumable by AI agents — with machine-readable truth sources, structured protocol fixtures, and documentation that prioritizes precision over prose. See [`docs/ai-implementation-guide.md`](docs/ai-implementation-guide.md).
+
 ## The Problem
 
 OpenClaw typically runs on a local machine behind NAT. Users currently rely on third-party chat platforms (Feishu, Telegram, Discord) to interact with their agents remotely. This creates platform dependency and limits what you can do to plain text messaging.
