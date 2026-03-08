@@ -24,6 +24,25 @@ function log(step) {
   console.log(`\n[web-client-e2e] ${step}`);
 }
 
+async function captureConfirm(page, action, expectedPattern) {
+  const countBefore = await page.evaluate(() => window.__testDialogs?.length || 0);
+  await action();
+  await page.waitForFunction((count) => (window.__testDialogs?.length || 0) > count, countBefore);
+  const message = await page.evaluate(() => window.__testDialogs.at(-1) || '');
+  if (expectedPattern) {
+    assert.match(message, expectedPattern, 'unexpected dialog text');
+  }
+  return message;
+}
+
+async function getIdentityFingerprint(page) {
+  return page.evaluate(() => window.app.connection.identityFingerprint || '');
+}
+
+async function waitForIdentityFingerprint(page, expected) {
+  await page.waitForFunction((value) => window.app.connection.identityFingerprint === value, expected);
+}
+
 async function fileExists(path) {
   try {
     await stat(path);
@@ -324,6 +343,13 @@ async function run() {
     });
 
     const page = await context.newPage();
+    await page.addInitScript(() => {
+      window.__testDialogs = [];
+      window.confirm = (message) => {
+        window.__testDialogs.push(String(message));
+        return true;
+      };
+    });
     const response = await page.goto(`${runtime.origin}/index.html`, { waitUntil: 'domcontentloaded' });
     assert.equal(response?.status(), 200, 'browser should load the client page');
     try {
@@ -375,12 +401,49 @@ async function run() {
     const fingerprintAfterReload = await page.locator('#identityFingerprint').evaluate((el) => el.title);
     assert.equal(fingerprintAfterReload, fingerprintBeforeReload, 'fingerprint stays stable across reload');
 
+    log('exporting a protected identity backup');
+    const identityPassphrase = 'browser-e2e-passphrase';
+    await page.fill('#identityPassphrase', identityPassphrase);
+    const [identityDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('#exportIdentityBtn'),
+    ]);
+    const identityDownloadPath = join(downloadDir, 'identity.protected.json');
+    await identityDownload.saveAs(identityDownloadPath);
+    const protectedIdentity = JSON.parse(await readFile(identityDownloadPath, 'utf8'));
+    assert.equal(protectedIdentity.encrypted, true, 'identity export should be protected');
+    assert.equal(typeof protectedIdentity.ciphertext, 'string', 'protected identity should include ciphertext');
+    assert.equal(await page.inputValue('#identityPassphrase'), '', 'identity export clears the passphrase field');
+
+    log('resetting the identity and verifying rotation');
+    await captureConfirm(page, () => page.click('#resetIdentityBtn'), /Reset/i);
+    await page.waitForFunction(() => document.getElementById('identityMode').textContent === 'Not created yet');
+    await page.fill('#channelToken', CHANNEL_TOKEN);
+    await page.click('#connectBtn');
+    await page.waitForFunction(() => document.getElementById('chatPanel').classList.contains('active'));
+    const rotatedFingerprint = await getIdentityFingerprint(page);
+    assert.notEqual(rotatedFingerprint, fingerprintBeforeReload, 'reset should rotate the browser identity');
+
+    log('disconnecting and importing the protected identity backup');
+    await page.click('#disconnectBtn');
+    await page.waitForFunction(() => document.getElementById('connectPanel').style.display !== 'none');
+    await page.fill('#identityPassphrase', identityPassphrase);
+    await captureConfirm(
+      page,
+      () => page.setInputFiles('#identityImportInput', identityDownloadPath),
+      /replace the current browser identity/i,
+    );
+    await waitForIdentityFingerprint(page, fingerprintBeforeReload);
+    assert.equal(await page.locator('#identityFingerprint').evaluate((el) => el.title), fingerprintBeforeReload, 'identity import restores the original fingerprint');
+    assert.equal(await page.inputValue('#identityPassphrase'), '', 'identity import clears the passphrase field');
+
     log('reconnecting and restoring the preferred agent');
     await page.fill('#channelToken', CHANNEL_TOKEN);
     await page.click('#connectBtn');
     await page.waitForFunction(() => document.getElementById('chatPanel').classList.contains('active'));
     await page.waitForFunction(() => document.getElementById('agentSelect').options.length >= 2);
     assert.equal(await page.inputValue('#agentSelect'), 'analyst', 'preferred agent is restored after reconnect');
+    assert.equal(await getIdentityFingerprint(page), fingerprintBeforeReload, 'reimported identity stays active after reconnect');
 
     log('browser E2E passed');
   } finally {

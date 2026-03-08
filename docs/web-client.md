@@ -46,7 +46,7 @@ It currently provides:
 - explicit export of the current in-memory chat transcript as JSON
 - secure Markdown rendering for assistant output
 - automated tests for UI state, identity persistence, crypto, transport, and Markdown safety
-- a local real-browser E2E smoke flow for connect, streaming chat, reload persistence, and transcript export
+- a local real-browser E2E smoke flow for connect, streaming chat, reload persistence, protected identity backup/restore, and transcript export
 
 Its largest current limitations are:
 

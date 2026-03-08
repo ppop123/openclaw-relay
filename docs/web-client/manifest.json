@@ -204,6 +204,14 @@
     "framework": "vitest",
     "browser_e2e_runtime": {
       "script": "scripts/web-client-browser-e2e.mjs",
+      "coverage": [
+        "connect and agents.list",
+        "streamed chat.send",
+        "reload identity persistence",
+        "protected identity export/reset/import",
+        "preferred-agent restore",
+        "transcript export"
+      ],
       "browser": "Google Chrome or OPENCLAW_E2E_CHROME",
       "workspace_dependencies": [
         "plugin/node_modules/playwright-core",

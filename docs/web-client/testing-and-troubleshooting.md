@@ -14,7 +14,7 @@ The browser client uses `vitest`.
 | `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
 | `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
-| `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering connect, agents.list, streamed chat, reload persistence, preferred-agent restore, transcript export |
+| `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering connect, agents.list, streamed chat, reload persistence, protected identity export/reset/import, preferred-agent restore, transcript export |
 
 Run the unit suite with:
 
@@ -47,7 +47,7 @@ The current test suite is strongest at these guarantees:
 - passphrase-protected identity exports decrypt only with the correct passphrase
 - persisted identity storage uses the expected IndexedDB layout
 - transport falls back to page-memory identity if persistence fails
-- real Chrome keeps the same browser fingerprint across reload and restores the preferred agent after reconnect
+- real Chrome keeps the same browser fingerprint across reload, restores it from a protected backup after reset, and restores the preferred agent after reconnect
 - encrypted data is not allowed to fall back to plaintext parsing
 - wrong nonce direction is rejected
 - replay and duplicate counters are rejected
