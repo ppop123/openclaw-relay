@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -33,6 +36,38 @@ async function getFreePort(): Promise<number> {
 }
 
 const relayCwd = fileURLToPath(new URL('../../relay/', import.meta.url));
+
+async function buildRelayBinary(): Promise<{ binaryPath: string; tempDir: string }> {
+  const tempDir = await mkdtemp(join(tmpdir(), 'openclaw-relay-plugin-test-'));
+  const binaryPath = join(tempDir, process.platform === 'win32' ? 'openclaw-relay.exe' : 'openclaw-relay');
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const build = spawn('go', ['build', '-o', binaryPath, '.'], {
+        cwd: relayCwd,
+        stdio: 'pipe',
+      });
+      let stderr = '';
+
+      build.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      build.once('error', reject);
+      build.once('exit', (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(stderr.trim() ? `failed to build relay test binary: ${stderr.trim()}` : `failed to build relay test binary with exit code ${code}`));
+      });
+    });
+  } catch (error) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw error;
+  }
+
+  return { binaryPath, tempDir };
+}
 
 async function waitForRelayReady(process: ChildProcessWithoutNullStreams, url: string, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -124,6 +159,7 @@ describe('plugin integration with real relay', () => {
     let relayProcess: ChildProcessWithoutNullStreams | undefined;
     let adapter: RelayGatewayAdapter | undefined;
     let ws: WebSocket | undefined;
+    let relayTempDir: string | undefined;
 
     try {
       let relayPort = 0;
@@ -136,11 +172,13 @@ describe('plugin integration with real relay', () => {
         throw error;
       }
 
-      relayProcess = spawn('go', ['run', '.', '-port', String(relayPort), '-tls', 'off'], {
+      const relayBuild = await buildRelayBinary();
+      relayTempDir = relayBuild.tempDir;
+      relayProcess = spawn(relayBuild.binaryPath, ['-port', String(relayPort), '-tls', 'off'], {
         cwd: relayCwd,
         stdio: 'pipe',
       });
-      await waitForRelayReady(relayProcess, `http://127.0.0.1:${relayPort}/status`);
+      await waitForRelayReady(relayProcess, `http://127.0.0.1:${relayPort}/status`, 15_000);
 
       const store = new MemoryRelayConfigStore();
       const runtime: RelayRuntimeAdapter = {
@@ -224,6 +262,9 @@ describe('plugin integration with real relay', () => {
       }
       relayProcess?.kill('SIGTERM');
       await delay(200);
+      if (relayTempDir) {
+        await rm(relayTempDir, { recursive: true, force: true });
+      }
     }
-  }, 30_000);
+  }, 45_000);
 });
