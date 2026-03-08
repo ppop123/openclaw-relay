@@ -40,7 +40,7 @@ type Frame struct {
 	Message string `json:"message,omitempty"`
 
 	// REGISTERED response
-	Clients int `json:"clients,omitempty"`
+	Clients int `json:"clients"`
 
 	// JOINED response
 	GatewayOnline *bool `json:"gateway_online,omitempty"`
