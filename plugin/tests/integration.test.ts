@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { MemoryRelayConfigStore } from '../src/config.js';
@@ -31,17 +32,48 @@ async function getFreePort(): Promise<number> {
   });
 }
 
-async function waitForStatus(url: string, timeoutMs = 10_000): Promise<void> {
+const relayCwd = fileURLToPath(new URL('../../relay/', import.meta.url));
+
+async function waitForRelayReady(process: ChildProcessWithoutNullStreams, url: string, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) return;
-    } catch {
-      // keep polling
+  let processError: Error | undefined;
+  let exited = false;
+  let stderr = '';
+
+  const onError = (error: Error) => {
+    processError = error;
+  };
+  const onExit = () => {
+    exited = true;
+  };
+
+  process.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+  process.once('error', onError);
+  process.once('exit', onExit);
+
+  try {
+    while (Date.now() < deadline) {
+      if (processError) {
+        throw processError;
+      }
+      if (exited) {
+        throw new Error(stderr.trim() ? `relay exited before becoming ready: ${stderr.trim()}` : 'relay exited before becoming ready');
+      }
+      try {
+        const response = await fetch(url);
+        if (response.ok) return;
+      } catch {
+        // keep polling
+      }
+      await delay(200);
     }
-    await delay(200);
+  } finally {
+    process.off('error', onError);
+    process.off('exit', onExit);
   }
+
   throw new Error('relay did not become ready in time');
 }
 
@@ -105,10 +137,10 @@ describe('plugin integration with real relay', () => {
       }
 
       relayProcess = spawn('go', ['run', '.', '-port', String(relayPort), '-tls', 'off'], {
-        cwd: 'relay',
+        cwd: relayCwd,
         stdio: 'pipe',
       });
-      await waitForStatus(`http://127.0.0.1:${relayPort}/status`);
+      await waitForRelayReady(relayProcess, `http://127.0.0.1:${relayPort}/status`);
 
       const store = new MemoryRelayConfigStore();
       const runtime: RelayRuntimeAdapter = {
