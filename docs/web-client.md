@@ -46,6 +46,7 @@ It currently provides:
 - explicit export of the current in-memory chat transcript as JSON
 - secure Markdown rendering for assistant output
 - automated tests for UI state, identity persistence, crypto, transport, and Markdown safety
+- a local real-browser E2E smoke flow for connect, streaming chat, reload persistence, and transcript export
 
 Its largest current limitations are:
 
@@ -81,7 +82,7 @@ Its largest current limitations are:
 | Main crypto class | `client/js/crypto.js` → `RelayCrypto` |
 | Identity store module | `client/js/identity-store.js` |
 | App entry | `client/js/app.js` |
-| Test command | `cd client && npm ci && npm test` |
+| Test command | `cd client && npm ci && npm test` for unit tests, `cd client && npm run test:e2e` for local browser E2E |
 
 ## Reading Order
 

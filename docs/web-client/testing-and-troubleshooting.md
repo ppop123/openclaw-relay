@@ -14,12 +14,24 @@ The browser client uses `vitest`.
 | `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
 | `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
+| `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering connect, agents.list, streamed chat, reload persistence, preferred-agent restore, transcript export |
 
-Run the full browser-client test suite with:
+Run the unit suite with:
 
 ```bash
 cd client && npm ci && npm test
 ```
+
+Run the local real-browser E2E smoke flow with:
+
+```bash
+cd client && npm run test:e2e
+```
+
+The browser E2E currently expects:
+
+- a local Chrome binary (or `OPENCLAW_E2E_CHROME`)
+- the workspace `plugin/node_modules` tree, which currently provides `playwright-core` and `ws`
 
 ## What the Tests Prove
 
@@ -35,6 +47,7 @@ The current test suite is strongest at these guarantees:
 - passphrase-protected identity exports decrypt only with the correct passphrase
 - persisted identity storage uses the expected IndexedDB layout
 - transport falls back to page-memory identity if persistence fails
+- real Chrome keeps the same browser fingerprint across reload and restores the preferred agent after reconnect
 - encrypted data is not allowed to fall back to plaintext parsing
 - wrong nonce direction is rejected
 - replay and duplicate counters are rejected
@@ -46,7 +59,7 @@ The current test suite is strongest at these guarantees:
 
 Current automated tests do **not** fully cover:
 
-- a real browser-driven end-to-end handshake against a live relay in hosted CI
+- a hosted-CI real-browser handshake against a live relay and gateway; the current E2E is a local deterministic browser smoke harness
 - user interaction timing in a real DOM renderer
 - browser-policy edge cases where IndexedDB is disabled or quota-limited in unusual ways
 - multi-tab coordination, because the client is designed as a single-page reference client

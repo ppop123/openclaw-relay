@@ -200,7 +200,16 @@
   ],
   "tests": {
     "command": "cd client && npm ci && npm test",
+    "browser_e2e_command": "cd client && npm run test:e2e",
     "framework": "vitest",
+    "browser_e2e_runtime": {
+      "script": "scripts/web-client-browser-e2e.mjs",
+      "browser": "Google Chrome or OPENCLAW_E2E_CHROME",
+      "workspace_dependencies": [
+        "plugin/node_modules/playwright-core",
+        "plugin/node_modules/ws"
+      ]
+    },
     "suites": [
       "client/tests/app.test.js",
       "client/tests/crypto.test.js",
