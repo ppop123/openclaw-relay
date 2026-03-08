@@ -60,6 +60,29 @@ describe('RelayCrypto.generateKeyPair', () => {
   });
 });
 
+describe('RelayCrypto identity persistence helpers', () => {
+  it('exports and re-imports the same public identity', async () => {
+    const original = new RelayCrypto();
+    await original.generateKeyPair();
+    const exported = await original.exportIdentity();
+
+    const restored = new RelayCrypto();
+    await restored.importIdentity(exported);
+
+    expect(b64Encode(restored.publicKeyBytes)).toBe(exported.publicKey);
+    expect(await restored.getPublicKeyFingerprint()).toBe(exported.fingerprint);
+  });
+
+  it('produces a sha256 fingerprint for the public key', async () => {
+    const rc = new RelayCrypto();
+    await rc.generateKeyPair();
+
+    const fingerprint = await rc.getPublicKeyFingerprint();
+
+    expect(fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+});
+
 describe('RelayCrypto.deriveSessionKey', () => {
   it('derives a session key and resets counters (two-sided)', async () => {
     const client = new RelayCrypto();

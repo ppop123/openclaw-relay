@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const { mockLoadStoredIdentity, mockSaveStoredIdentity, mockDeleteStoredIdentity } = vi.hoisted(() => ({
+  mockLoadStoredIdentity: vi.fn(async () => null),
+  mockSaveStoredIdentity: vi.fn(async (record) => ({ createdAt: '2026-03-08T00:00:00.000Z', ...record })),
+  mockDeleteStoredIdentity: vi.fn(async () => true),
+}));
+
 /**
  * Transport module tests.
  *
@@ -13,13 +19,62 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../js/crypto.js', () => ({
   RelayCrypto: class {
     constructor() {
+      this.keyPair = null;
       this.sessionKey = null;
       this.publicKeyBytes = new Uint8Array(0);
       this.clientNonce = new Uint8Array(0);
+      this._fingerprint = 'sha256:testfingerprint';
+    }
+
+    async generateKeyPair() {
+      this.keyPair = { publicKey: {}, privateKey: {} };
+      this.publicKeyBytes = new Uint8Array([1, 2, 3]);
+      this.clientNonce = new Uint8Array(32).fill(1);
+    }
+
+    regenerateNonce() {
+      this.clientNonce = new Uint8Array(32).fill(2);
+    }
+
+    clearSession() {
+      this.sessionKey = null;
+    }
+
+    clearIdentity() {
+      this.clearSession();
+      this.keyPair = null;
+      this.publicKeyBytes = null;
+      this.clientNonce = null;
+    }
+
+    async exportIdentity() {
+      return {
+        publicKey: 'PUB',
+        privateKeyPkcs8: 'PRIV',
+        fingerprint: this._fingerprint,
+      };
+    }
+
+    async importIdentity(record) {
+      this.keyPair = { publicKey: {}, privateKey: {} };
+      this.publicKeyBytes = new Uint8Array([4, 5, 6]);
+      this.clientNonce = new Uint8Array(32).fill(3);
+      this._fingerprint = record.fingerprint || this._fingerprint;
+    }
+
+    async getPublicKeyFingerprint() {
+      return this._fingerprint;
     }
   },
   b64Encode: (buf) => '',
   b64Decode: (str) => new Uint8Array(0),
+}));
+
+vi.mock('../js/identity-store.js', () => ({
+  loadStoredIdentity: mockLoadStoredIdentity,
+  saveStoredIdentity: mockSaveStoredIdentity,
+  deleteStoredIdentity: mockDeleteStoredIdentity,
+  supportsPersistentIdentity: () => true,
 }));
 
 vi.mock('../js/utils.js', () => ({
@@ -52,6 +107,15 @@ function makePending(overrides = {}) {
 // ─── Constructor ─────────────────────────────────────────────────
 
 describe('RelayConnection constructor', () => {
+  beforeEach(() => {
+    mockLoadStoredIdentity.mockReset();
+    mockLoadStoredIdentity.mockResolvedValue(null);
+    mockSaveStoredIdentity.mockReset();
+    mockSaveStoredIdentity.mockImplementation(async (record) => ({ createdAt: '2026-03-08T00:00:00.000Z', ...record }));
+    mockDeleteStoredIdentity.mockReset();
+    mockDeleteStoredIdentity.mockResolvedValue(true);
+  });
+
   it('initializes all fields correctly', () => {
     const conn = new RelayConnection();
 
@@ -63,6 +127,8 @@ describe('RelayConnection constructor', () => {
     expect(conn.gatewayPubKeyB64).toBe('');
     expect(conn.channelToken).toBe('');
     expect(conn.encrypted).toBe(false);
+    expect(conn.identityPersistence).toBe('absent');
+    expect(conn.identityFingerprint).toBe('');
 
     expect(conn.pendingRequests).toBeInstanceOf(Map);
     expect(conn.pendingRequests.size).toBe(0);
@@ -82,6 +148,79 @@ describe('RelayConnection constructor', () => {
     expect(conn._frameWaiters.size).toBe(0);
     expect(conn._dataWaiters).toBeInstanceOf(Map);
     expect(conn._dataWaiters.size).toBe(0);
+  });
+
+  it('hydrates a stored persistent identity when present', async () => {
+    mockLoadStoredIdentity.mockResolvedValue({
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      fingerprint: 'sha256:savedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+
+    const conn = new RelayConnection();
+    const summary = await conn.hydratePersistedIdentity();
+
+    expect(summary).toMatchObject({
+      exists: true,
+      persistence: 'persisted',
+      fingerprint: 'sha256:savedfingerprint',
+      createdAt: '2026-03-08T00:00:00.000Z',
+    });
+  });
+
+  it('creates and saves a new identity when none exists', async () => {
+    const conn = new RelayConnection();
+
+    await conn._ensureClientIdentity();
+
+    expect(mockSaveStoredIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      publicKey: 'PUB',
+      privateKeyPkcs8: 'PRIV',
+      fingerprint: 'sha256:testfingerprint',
+    }));
+    expect(conn.identityPersistence).toBe('persisted');
+    expect(conn.identityFingerprint).toBe('sha256:testfingerprint');
+  });
+
+  it('falls back to memory-only identity if persistence fails', async () => {
+    mockSaveStoredIdentity.mockRejectedValueOnce(new Error('disk full'));
+    const conn = new RelayConnection();
+    conn.onToast = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await conn._ensureClientIdentity();
+
+    expect(conn.identityPersistence).toBe('memory');
+    expect(conn.onToast).toHaveBeenCalledWith(
+      expect.stringMatching(/could not be persisted/i),
+      'warning',
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('does not overwrite persisted identity after a load failure', async () => {
+    mockLoadStoredIdentity.mockRejectedValueOnce(new Error('blocked'));
+    const conn = new RelayConnection();
+    conn.onToast = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await conn.hydratePersistedIdentity();
+    await conn._ensureClientIdentity();
+
+    expect(conn.identityPersistence).toBe('memory');
+    expect(mockSaveStoredIdentity).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('resets the persisted identity', async () => {
+    const conn = new RelayConnection();
+    await conn._ensureClientIdentity();
+
+    const summary = await conn.resetIdentity();
+
+    expect(mockDeleteStoredIdentity).toHaveBeenCalled();
+    expect(summary).toMatchObject({ exists: false, persistence: 'absent', fingerprint: '' });
   });
 });
 
@@ -170,11 +309,11 @@ describe('_handleL2Message', () => {
     conn._handleL2Message({
       id: 'n_1',
       type: 'notify',
-      event: 'agent_status',
+      event: 'agent.status',
       data: { agent: 'wukong', status: 'busy' },
     });
 
-    expect(conn.onNotify).toHaveBeenCalledWith('agent_status', {
+    expect(conn.onNotify).toHaveBeenCalledWith('agent.status', {
       agent: 'wukong',
       status: 'busy',
     });
@@ -233,42 +372,48 @@ describe('_handleFrame', () => {
   });
 
   it('relay error rejects all pending requests AND all frame/data waiters', async () => {
-    // Set up frame waiters
-    const frameWaiter = { resolve: vi.fn(), reject: vi.fn(), timeout: setTimeout(() => {}, 30000) };
-    conn._frameWaiters.set('joined', frameWaiter);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Set up data waiters
-    const dataWaiter = { resolve: vi.fn(), reject: vi.fn(), timeout: setTimeout(() => {}, 30000) };
-    conn._dataWaiters.set('hello_ack', dataWaiter);
+    try {
+      // Set up frame waiters
+      const frameWaiter = { resolve: vi.fn(), reject: vi.fn(), timeout: setTimeout(() => {}, 30000) };
+      conn._frameWaiters.set('joined', frameWaiter);
 
-    // Set up pending requests
-    const pending1 = makePending();
-    const pending2 = makePending();
-    conn.pendingRequests.set('req_a', pending1);
-    conn.pendingRequests.set('req_b', pending2);
-    conn.activeStreams.set('req_b', { onChunk: vi.fn() });
+      // Set up data waiters
+      const dataWaiter = { resolve: vi.fn(), reject: vi.fn(), timeout: setTimeout(() => {}, 30000) };
+      conn._dataWaiters.set('hello_ack', dataWaiter);
 
-    await conn._handleFrame({ type: 'error', code: 'rate_limited', message: 'Too many requests' });
+      // Set up pending requests
+      const pending1 = makePending();
+      const pending2 = makePending();
+      conn.pendingRequests.set('req_a', pending1);
+      conn.pendingRequests.set('req_b', pending2);
+      conn.activeStreams.set('req_b', { onChunk: vi.fn() });
 
-    // All frame waiters rejected
-    expect(frameWaiter.reject).toHaveBeenCalled();
-    expect(frameWaiter.reject.mock.calls[0][0].message).toMatch(/Relay error: rate_limited/);
-    expect(conn._frameWaiters.size).toBe(0);
+      await conn._handleFrame({ type: 'error', code: 'rate_limited', message: 'Too many requests' });
 
-    // All data waiters rejected
-    expect(dataWaiter.reject).toHaveBeenCalled();
-    expect(dataWaiter.reject.mock.calls[0][0].message).toMatch(/Relay error: rate_limited/);
-    expect(conn._dataWaiters.size).toBe(0);
+      // All frame waiters rejected
+      expect(frameWaiter.reject).toHaveBeenCalled();
+      expect(frameWaiter.reject.mock.calls[0][0].message).toMatch(/Relay error: rate_limited/);
+      expect(conn._frameWaiters.size).toBe(0);
 
-    // All pending requests rejected
-    expect(pending1.reject).toHaveBeenCalled();
-    expect(pending1.reject.mock.calls[0][0].message).toMatch(/Relay error: rate_limited/);
-    expect(pending2.reject).toHaveBeenCalled();
-    expect(conn.pendingRequests.size).toBe(0);
-    expect(conn.activeStreams.size).toBe(0);
+      // All data waiters rejected
+      expect(dataWaiter.reject).toHaveBeenCalled();
+      expect(dataWaiter.reject.mock.calls[0][0].message).toMatch(/Relay error: rate_limited/);
+      expect(conn._dataWaiters.size).toBe(0);
 
-    // Toast fired
-    expect(conn.onToast).toHaveBeenCalledWith('Too many requests', 'error');
+      // All pending requests rejected
+      expect(pending1.reject).toHaveBeenCalled();
+      expect(pending1.reject.mock.calls[0][0].message).toMatch(/Relay error: rate_limited/);
+      expect(pending2.reject).toHaveBeenCalled();
+      expect(conn.pendingRequests.size).toBe(0);
+      expect(conn.activeStreams.size).toBe(0);
+
+      // Toast fired
+      expect(conn.onToast).toHaveBeenCalledWith('Too many requests', 'error');
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('calls onToast for gateway offline presence event (no waiter)', async () => {
@@ -332,6 +477,21 @@ describe('_handleDataFrame', () => {
     await conn._handleDataFrame({ type: 'data', payload: '{invalid json' });
 
     // Should not throw — just logs and returns
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('drops plaintext data once encryption is established', async () => {
+    conn.encrypted = true;
+    conn.crypto.sessionKey = {};
+    conn.crypto.decrypt = vi.fn(async () => { throw new Error('bad ciphertext'); });
+    conn._handleL2Message = vi.fn();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await conn._handleDataFrame({ type: 'data', payload: JSON.stringify({ type: 'response', id: 'req_x' }) });
+
+    expect(conn.crypto.decrypt).toHaveBeenCalled();
+    expect(conn._handleL2Message).not.toHaveBeenCalled();
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });

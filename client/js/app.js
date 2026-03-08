@@ -36,7 +36,7 @@ export const app = {
   currentStreamEl: null,
   currentStreamText: '',
 
-  init() {
+  async init() {
     // Migration: clean up any historically saved channelToken (bearer secret)
     const saved = this._loadSettings();
     if (saved.channelToken) {
@@ -62,6 +62,9 @@ export const app = {
         !document.getElementById('messageInput').value.trim() ||
         this.connection.state !== 'connected';
     });
+
+    await this.connection.hydratePersistedIdentity();
+    this._updateIdentityStatus();
   },
 
   // ── Connection ──
@@ -93,6 +96,7 @@ export const app = {
 
     try {
       await this.connection.connect(url, channelToken, gatewayPubKey);
+      this._updateIdentityStatus();
 
       // Switch to chat view
       document.getElementById('connectPanel').style.display = 'none';
@@ -114,6 +118,7 @@ export const app = {
     } finally {
       btn.disabled = false;
       btn.textContent = 'Connect';
+      this._updateIdentityStatus();
     }
 
     return false;
@@ -122,6 +127,28 @@ export const app = {
   disconnect() {
     this.connection.disconnect();
 
+    this._returnToConnectView();
+    this._updateIdentityStatus();
+  },
+
+  async resetIdentity() {
+    const btn = document.getElementById('resetIdentityBtn');
+    btn.disabled = true;
+
+    try {
+      await this.connection.resetIdentity();
+      this._returnToConnectView();
+      document.getElementById('connectError').style.display = 'none';
+      this._updateIdentityStatus();
+      showToast('Client identity reset. A new identity will be created on next connect.', 'info');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      this._updateIdentityStatus();
+    }
+  },
+
+  _returnToConnectView() {
     // Switch back to connect view
     document.getElementById('chatPanel').classList.remove('active');
     document.getElementById('connectPanel').style.display = '';
@@ -334,12 +361,52 @@ export const app = {
 
     if (state === 'connected') {
       const url = new URL(this.connection.relayUrl);
-      details.textContent = url.host + (this.connection.encrypted ? ' (encrypted)' : '');
+      const suffix = this.connection.encrypted ? ' (encrypted)' : '';
+      const fingerprint = this.connection.identityFingerprint
+        ? ` · ${this._shortFingerprint(this.connection.identityFingerprint)}`
+        : '';
+      details.textContent = url.host + suffix + fingerprint;
       document.getElementById('sendBtn').disabled = !document.getElementById('messageInput').value.trim();
     } else {
       details.textContent = '';
       document.getElementById('sendBtn').disabled = true;
     }
+  },
+
+  _updateIdentityStatus() {
+    const modeEl = document.getElementById('identityMode');
+    const fingerprintEl = document.getElementById('identityFingerprint');
+    const resetBtn = document.getElementById('resetIdentityBtn');
+    const summary = this.connection.getIdentitySummary();
+
+    resetBtn.disabled = !summary.canReset;
+
+    if (summary.persistence === 'persisted') {
+      modeEl.textContent = 'Persistent browser identity';
+      fingerprintEl.textContent = `Fingerprint: ${this._shortFingerprint(summary.fingerprint)}`;
+      fingerprintEl.title = summary.fingerprint;
+      return;
+    }
+
+    if (summary.persistence === 'memory') {
+      modeEl.textContent = 'Temporary page identity';
+      fingerprintEl.textContent = summary.fingerprint
+        ? `Fingerprint: ${this._shortFingerprint(summary.fingerprint)} · not persisted`
+        : 'This page is using a temporary identity only.';
+      fingerprintEl.title = summary.fingerprint || '';
+      return;
+    }
+
+    if (summary.persistence === 'unsupported') {
+      modeEl.textContent = 'Persistence unavailable';
+      fingerprintEl.textContent = 'This browser cannot persist the client identity; a new key will be created after every reload.';
+      fingerprintEl.title = '';
+      return;
+    }
+
+    modeEl.textContent = 'Not created yet';
+    fingerprintEl.textContent = 'A stable client identity will be created on first connect and saved in this browser.';
+    fingerprintEl.title = '';
   },
 
   // ── Settings persistence ──
@@ -366,6 +433,12 @@ export const app = {
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+  },
+
+  _shortFingerprint(fingerprint) {
+    if (!fingerprint) return '';
+    if (fingerprint.length <= 28) return fingerprint;
+    return `${fingerprint.slice(0, 20)}…${fingerprint.slice(-8)}`;
   }
 };
 
@@ -373,4 +446,4 @@ export const app = {
 window.app = app;
 
 // Boot
-document.addEventListener('DOMContentLoaded', () => app.init());
+document.addEventListener('DOMContentLoaded', () => { void app.init(); });

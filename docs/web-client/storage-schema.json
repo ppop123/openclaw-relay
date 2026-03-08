@@ -1,0 +1,131 @@
+{
+  "$schema_comment": "Machine-readable browser storage contract for the web reference client.",
+  "component": "web-client",
+  "version": 2,
+  "backends": {
+    "localStorage": {
+      "keys": {
+        "settings": {
+          "key": "openclaw-relay-settings",
+          "type": "json-object",
+          "secret": false,
+          "fields": {
+            "relayUrl": {
+              "type": "string",
+              "required": false,
+              "secret": false,
+              "description": "Normalized relay websocket url, usually ending in /ws"
+            },
+            "gatewayPubKey": {
+              "type": "string",
+              "required": false,
+              "secret": false,
+              "description": "Pinned gateway public key in base64"
+            }
+          },
+          "forbidden_fields": [
+            "channelToken",
+            "identityKeyPair",
+            "sessionKey"
+          ],
+          "migration_rules": [
+            {
+              "name": "remove_historical_channel_token",
+              "action": "delete-field-if-present",
+              "field": "channelToken"
+            }
+          ]
+        },
+        "client_id": {
+          "key": "openclaw-relay-client-id",
+          "type": "string",
+          "secret": false,
+          "description": "Stable opaque relay-side client identifier persisted across reloads",
+          "example_prefix": "web_"
+        }
+      }
+    },
+    "indexedDB": {
+      "database": "openclaw-relay-browser",
+      "version": 1,
+      "stores": {
+        "identity": {
+          "key_path": "id",
+          "record_id": "default",
+          "secret": true,
+          "fields": {
+            "id": {
+              "type": "string",
+              "required": true,
+              "description": "Constant record id for the single browser identity"
+            },
+            "version": {
+              "type": "integer",
+              "required": true,
+              "description": "Identity store schema version"
+            },
+            "algorithm": {
+              "type": "string",
+              "required": true,
+              "description": "Expected to be X25519"
+            },
+            "publicKey": {
+              "type": "string",
+              "required": true,
+              "description": "Base64-encoded raw X25519 public key"
+            },
+            "privateKeyPkcs8": {
+              "type": "string",
+              "required": true,
+              "description": "Base64-encoded PKCS#8 X25519 private key"
+            },
+            "fingerprint": {
+              "type": "string",
+              "required": true,
+              "description": "SHA-256 fingerprint of the public key"
+            },
+            "createdAt": {
+              "type": "string",
+              "required": true,
+              "description": "ISO timestamp of first identity persistence"
+            },
+            "updatedAt": {
+              "type": "string",
+              "required": true,
+              "description": "ISO timestamp of last identity write"
+            }
+          }
+        }
+      }
+    }
+  },
+  "memory_only_state": {
+    "identity_keypair_runtime": {
+      "persisted": true,
+      "lifecycle": "metadata may be discovered during app init; the keypair itself is imported into runtime memory on connect and reused across reconnects"
+    },
+    "session_key": {
+      "persisted": false,
+      "lifecycle": "derived per connection, cleared on disconnect/close"
+    },
+    "channel_token": {
+      "persisted": false,
+      "lifecycle": "held in RelayConnection memory for the active connection lifecycle; cleared on disconnect/reload"
+    },
+    "channel_hash": {
+      "persisted": false,
+      "lifecycle": "derived from channelToken during connect"
+    },
+    "pending_requests": {
+      "persisted": false,
+      "lifecycle": "runtime only"
+    }
+  },
+  "security_rules": [
+    "channelToken is a bearer secret and must never be persisted",
+    "identity private key must never be written to localStorage",
+    "identity private key may be persisted only inside the IndexedDB identity store for same-browser reuse",
+    "session key must not be persisted",
+    "gateway public key is safe to persist but security-relevant"
+  ]
+}

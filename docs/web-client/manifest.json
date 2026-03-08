@@ -1,0 +1,199 @@
+{
+  "$schema_comment": "Machine-readable implementation manifest for the browser reference client.",
+  "component": "web-client",
+  "path": "client/",
+  "status": "officially_supported",
+  "role": "browser reference client",
+  "runtime_model": {
+    "platform": "browser",
+    "packaging": "static html + es modules",
+    "build_step": "none",
+    "entry_html": "client/index.html",
+    "entry_module": "client/js/app.js"
+  },
+  "supported_protocol_layers": [0, 1, 2],
+  "layer3_usage": {
+    "role": "client-side consumer",
+    "request_methods_used": [
+      "agents.list",
+      "chat.send"
+    ],
+    "notify_events_handled": [
+      "agent.status",
+      "system.alert"
+    ]
+  },
+  "modules": [
+    {
+      "file": "client/js/app.js",
+      "exports": [
+        "app",
+        "showToast"
+      ],
+      "responsibilities": [
+        "dom wiring",
+        "identity status rendering",
+        "settings load/save",
+        "agent list state",
+        "chat ui flow",
+        "status rendering"
+      ]
+    },
+    {
+      "file": "client/js/transport.js",
+      "exports": [
+        "RelayConnection"
+      ],
+      "responsibilities": [
+        "websocket lifecycle",
+        "layer0 frame handling",
+        "layer1 handshake orchestration",
+        "browser identity hydration/create/reset",
+        "layer2 request/response/stream management",
+        "reconnect with backoff+jitter"
+      ],
+      "imports": [
+        "RelayCrypto, b64Encode, and b64Decode from client/js/crypto.js",
+        "loadStoredIdentity, saveStoredIdentity, deleteStoredIdentity, and supportsPersistentIdentity from client/js/identity-store.js",
+        "randomHex and generateMsgId from client/js/utils.js"
+      ]
+    },
+    {
+      "file": "client/js/crypto.js",
+      "exports": [
+        "RelayCrypto",
+        "buildNonce",
+        "checkReplay"
+      ],
+      "re_exports": [
+        "b64Encode",
+        "b64Decode"
+      ],
+      "responsibilities": [
+        "x25519 key generation",
+        "identity import/export",
+        "public-key fingerprinting",
+        "hkdf-sha256 session-key derivation",
+        "aes-256-gcm encrypt/decrypt",
+        "direction nonce validation",
+        "anti-replay tracking"
+      ],
+      "re_export_note": "Transport intentionally imports base64 helpers from crypto.js so Layer 1 handshake helpers stay colocated with RelayCrypto."
+    },
+    {
+      "file": "client/js/identity-store.js",
+      "exports": [
+        "supportsPersistentIdentity",
+        "loadStoredIdentity",
+        "saveStoredIdentity",
+        "deleteStoredIdentity"
+      ],
+      "responsibilities": [
+        "indexeddb schema initialization",
+        "browser identity record persistence",
+        "browser identity record deletion",
+        "feature detection for persistent identity support"
+      ]
+    },
+    {
+      "file": "client/js/markdown.js",
+      "exports": [
+        "renderMarkdown"
+      ],
+      "responsibilities": [
+        "safe markdown subset rendering",
+        "link scheme filtering",
+        "html escaping"
+      ]
+    },
+    {
+      "file": "client/js/utils.js",
+      "exports": [
+        "b64Encode",
+        "b64Decode",
+        "concatBuffers",
+        "randomHex",
+        "generateMsgId"
+      ],
+      "responsibilities": [
+        "base64 helpers",
+        "buffer concatenation",
+        "random ids"
+      ]
+    }
+  ],
+  "storage": {
+    "localStorage": {
+      "keys": [
+        "openclaw-relay-settings",
+        "openclaw-relay-client-id"
+      ],
+      "persisted_fields": [
+        "relayUrl",
+        "gatewayPubKey",
+        "clientId"
+      ]
+    },
+    "indexedDB": {
+      "database": "openclaw-relay-browser",
+      "version": 1,
+      "stores": [
+        {
+          "name": "identity",
+          "record_id": "default",
+          "fields": [
+            "id",
+            "version",
+            "algorithm",
+            "publicKey",
+            "privateKeyPkcs8",
+            "fingerprint",
+            "createdAt",
+            "updatedAt"
+          ]
+        }
+      ]
+    },
+    "never_persisted": [
+      "channelToken",
+      "sessionKey",
+      "decryptedMessages"
+    ]
+  },
+  "security_invariants": [
+    "never persist channelToken",
+    "never accept plaintext data after session establishment",
+    "reject mismatched gateway public key",
+    "enforce nonce direction checks",
+    "drop decrypt failures without protocol-level fallback",
+    "never write the identity private key to localStorage",
+    "persist browser identity only in the dedicated IndexedDB identity store"
+  ],
+  "tests": {
+    "command": "cd client && npm ci && npm test",
+    "framework": "vitest",
+    "suites": [
+      "client/tests/app.test.js",
+      "client/tests/crypto.test.js",
+      "client/tests/identity-store.test.js",
+      "client/tests/transport.test.js",
+      "client/tests/markdown.test.js"
+    ]
+  },
+  "known_limitations": [
+    "no identity export/import ui",
+    "no browser-side history persistence",
+    "if indexeddb is unavailable or blocked, identity falls back to page-memory only",
+    "not a reusable javascript sdk"
+  ],
+  "machine_readable_sources": [
+    "docs/web-client/manifest.json",
+    "docs/web-client/storage-schema.json",
+    "docs/web-client/state-machine.json"
+  ],
+  "request_id_format": {
+    "generator": "generateMsgId()",
+    "pattern": "^msg_[0-9a-f]{8}$",
+    "source_file": "client/js/utils.js"
+  }
+}

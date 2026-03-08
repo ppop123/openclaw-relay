@@ -189,6 +189,65 @@ main {
 .connect-btn:hover { opacity: 0.9; }
 .connect-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.identity-card {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(15, 52, 96, 0.18);
+}
+
+.identity-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.identity-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.identity-mode {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.identity-fingerprint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-family: var(--mono);
+  word-break: break-word;
+}
+
+.secondary-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.secondary-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.secondary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .connect-error {
   margin-top: 12px;
   padding: 10px 12px;
@@ -516,6 +575,15 @@ main {
       <div class="form-group">
         <label for="gatewayPubKey">Gateway Public Key (base64)</label>
         <input type="text" id="gatewayPubKey" placeholder="base64-encoded 32-byte X25519 public key" autocomplete="off" required>
+      </div>
+
+      <div class="identity-card">
+        <div class="identity-card-header">
+          <span class="identity-title">Client Identity</span>
+          <button type="button" class="secondary-btn" id="resetIdentityBtn" onclick="app.resetIdentity()" disabled>Reset</button>
+        </div>
+        <div class="identity-mode" id="identityMode">Loading…</div>
+        <div class="identity-fingerprint" id="identityFingerprint">Checking browser identity storage…</div>
       </div>
 
       <button type="submit" class="connect-btn" id="connectBtn">Connect</button>

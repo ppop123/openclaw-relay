@@ -9,6 +9,7 @@
  */
 
 import { b64Encode, b64Decode, RelayCrypto } from './crypto.js';
+import { deleteStoredIdentity, loadStoredIdentity, saveStoredIdentity, supportsPersistentIdentity } from './identity-store.js';
 import { randomHex, generateMsgId } from './utils.js';
 
 export class RelayConnection {
@@ -22,6 +23,11 @@ export class RelayConnection {
     this.gatewayPubKeyB64 = '';
     this.channelToken = '';
     this.encrypted = false;
+    this.identityPersistence = supportsPersistentIdentity() ? 'absent' : 'unsupported';
+    this.identityFingerprint = '';
+    this.identityCreatedAt = '';
+    this._storedIdentityRecord = null;
+    this._identityLoadFailed = false;
 
     // Pending request handlers: id -> { resolve, reject, onChunk, timeout }
     this.pendingRequests = new Map();
@@ -70,6 +76,72 @@ export class RelayConnection {
     await this._doConnect();
   }
 
+  getIdentitySummary() {
+    return {
+      exists: Boolean(this.crypto.keyPair) || Boolean(this._storedIdentityRecord),
+      canReset: Boolean(this.crypto.keyPair) || Boolean(this._storedIdentityRecord),
+      loaded: Boolean(this.crypto.keyPair),
+      persistence: this.identityPersistence,
+      persisted: this.identityPersistence === 'persisted',
+      fingerprint: this.identityFingerprint,
+      createdAt: this.identityCreatedAt || null,
+    };
+  }
+
+  async hydratePersistedIdentity() {
+    if (this.crypto.keyPair) {
+      await this._refreshIdentityMetadata();
+      return this.getIdentitySummary();
+    }
+
+    if (!supportsPersistentIdentity()) {
+      this.identityPersistence = 'unsupported';
+      return this.getIdentitySummary();
+    }
+
+    let storedIdentity = null;
+    try {
+      storedIdentity = await loadStoredIdentity();
+      this._identityLoadFailed = false;
+    } catch (err) {
+      console.warn('Failed to load persisted browser identity:', err);
+      this.onToast?.('Failed to load persisted browser identity; a new one will be created on connect.', 'warning');
+      this._storedIdentityRecord = null;
+      this._identityLoadFailed = true;
+      this.identityPersistence = 'absent';
+      return this.getIdentitySummary();
+    }
+
+    if (!storedIdentity) {
+      this._storedIdentityRecord = null;
+      this.identityPersistence = 'absent';
+      return this.getIdentitySummary();
+    }
+
+    this._storedIdentityRecord = storedIdentity;
+    this.identityPersistence = 'persisted';
+    this.identityCreatedAt = storedIdentity.createdAt || '';
+    this.identityFingerprint = storedIdentity.fingerprint || '';
+    return this.getIdentitySummary();
+  }
+
+  async resetIdentity() {
+    this.disconnect();
+    this.crypto.clearIdentity();
+    this.identityPersistence = supportsPersistentIdentity() ? 'absent' : 'unsupported';
+    this.identityFingerprint = '';
+    this.identityCreatedAt = '';
+    this._storedIdentityRecord = null;
+    this._identityLoadFailed = false;
+    try {
+      await deleteStoredIdentity();
+    } catch (err) {
+      console.warn('Failed to delete stored identity:', err);
+      throw new Error('Failed to reset browser identity');
+    }
+    return this.getIdentitySummary();
+  }
+
   async _doConnect() {
     return new Promise((resolve, reject) => {
       try {
@@ -110,6 +182,7 @@ export class RelayConnection {
       this.ws.onclose = () => {
         clearTimeout(timeout);
         this.encrypted = false;
+        this.crypto.clearSession();
         // Reject all pending requests immediately
         for (const [id, pending] of this.pendingRequests) {
           clearTimeout(pending.timeout);
@@ -145,13 +218,9 @@ export class RelayConnection {
     }
 
     // Step 3: Ensure identity keypair exists; always generate fresh session nonce.
-    // The keypair is static (generated once, reused across reconnections).
+    // The keypair is long-lived for this browser identity and reused across reconnects.
     // Session uniqueness comes from the fresh nonce mixed into HKDF salt.
-    if (!this.crypto.keyPair) {
-      await this.crypto.generateKeyPair();
-    } else {
-      this.crypto.regenerateNonce();
-    }
+    await this._ensureClientIdentity();
 
     // Step 4: Send HELLO via DATA frame (unencrypted)
     const helloPayload = JSON.stringify({
@@ -171,7 +240,7 @@ export class RelayConnection {
     // Step 5: Wait for HELLO_ACK (arrives as DATA frame with unencrypted payload)
     const helloAck = await this._waitForDataPayload('hello_ack', 10000);
 
-    // Step 6: Verify gateway public key (TOFU)
+    // Step 6: Verify gateway public key against the user-supplied pinned key
     const receivedGwPubKey = helloAck.gateway_public_key;
     if (receivedGwPubKey !== this.gatewayPubKeyB64) {
       throw new Error(
@@ -423,6 +492,86 @@ export class RelayConnection {
 
   // ── Connection management ──
 
+  async _ensureClientIdentity() {
+    if (this.crypto.keyPair) {
+      this.crypto.regenerateNonce();
+      await this._refreshIdentityMetadata();
+      return this.getIdentitySummary();
+    }
+
+    if (this._storedIdentityRecord) {
+      try {
+        await this.crypto.importIdentity(this._storedIdentityRecord);
+        this.crypto.regenerateNonce();
+        await this._refreshIdentityMetadata();
+        return this.getIdentitySummary();
+      } catch (err) {
+        console.warn('Stored browser identity is invalid; clearing it:', err);
+        let deleted = false;
+        try {
+          await deleteStoredIdentity();
+          deleted = true;
+        } catch (deleteErr) {
+          console.warn('Failed to clear invalid stored identity:', deleteErr);
+        }
+        this.onToast?.('Stored browser identity was invalid and will be replaced for this session.', 'warning');
+        this.crypto.clearIdentity();
+        this._identityLoadFailed = true;
+        if (deleted) {
+          this._storedIdentityRecord = null;
+          this.identityPersistence = 'absent';
+          this.identityFingerprint = '';
+          this.identityCreatedAt = '';
+        }
+      }
+    }
+
+    await this.crypto.generateKeyPair();
+    this.identityPersistence = 'memory';
+    await this._refreshIdentityMetadata();
+
+    if (!supportsPersistentIdentity() || this._identityLoadFailed) {
+      return this.getIdentitySummary();
+    }
+
+    try {
+      const stored = await saveStoredIdentity({
+        ...(await this.crypto.exportIdentity()),
+        createdAt: this.identityCreatedAt || new Date().toISOString(),
+      });
+      this.identityPersistence = 'persisted';
+      this.identityCreatedAt = stored.createdAt || this.identityCreatedAt;
+      this.identityFingerprint = stored.fingerprint || this.identityFingerprint;
+    } catch (err) {
+      console.warn('Failed to persist browser identity:', err);
+      this.identityPersistence = 'memory';
+      this.onToast?.('Browser identity could not be persisted; this page will appear as a new client after reload.', 'warning');
+    }
+
+    return this.getIdentitySummary();
+  }
+
+  async _refreshIdentityMetadata() {
+    if (!this.crypto.keyPair) {
+      if (this._storedIdentityRecord) {
+        this.identityPersistence = 'persisted';
+        this.identityFingerprint = this._storedIdentityRecord.fingerprint || '';
+        this.identityCreatedAt = this._storedIdentityRecord.createdAt || '';
+        return this.getIdentitySummary();
+      }
+      this.identityFingerprint = '';
+      this.identityCreatedAt = '';
+      this.identityPersistence = supportsPersistentIdentity() ? 'absent' : 'unsupported';
+      return this.getIdentitySummary();
+    }
+
+    this.identityFingerprint = await this.crypto.getPublicKeyFingerprint();
+    if (!this.identityCreatedAt) {
+      this.identityCreatedAt = new Date().toISOString();
+    }
+    return this.getIdentitySummary();
+  }
+
   _setState(state) {
     this.state = state;
     if (this.onStateChange) this.onStateChange(state);
@@ -458,6 +607,7 @@ export class RelayConnection {
   disconnect() {
     this._closed = true;
     this.encrypted = false;
+    this.crypto.clearSession();
     if (this.ws) {
       this.ws.close();
       this.ws = null;

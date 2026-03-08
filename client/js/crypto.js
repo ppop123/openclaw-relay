@@ -29,6 +29,7 @@ export class RelayCrypto {
     const rawPub = await crypto.subtle.exportKey('raw', this.keyPair.publicKey);
     this.publicKeyBytes = new Uint8Array(rawPub);
     this.clientNonce = crypto.getRandomValues(new Uint8Array(32));
+    this.clearSession();
   }
 
   /**
@@ -37,6 +38,65 @@ export class RelayCrypto {
    */
   regenerateNonce() {
     this.clientNonce = crypto.getRandomValues(new Uint8Array(32));
+  }
+
+  clearSession() {
+    this.sessionKey = null;
+    this.sendCounter = 0;
+    this.recvCounterMax = -1;
+    this.recvWindow.clear();
+  }
+
+  clearIdentity() {
+    this.clearSession();
+    this.keyPair = null;
+    this.clientNonce = null;
+    this.publicKeyBytes = null;
+  }
+
+  async exportIdentity() {
+    if (!this.keyPair || !this.publicKeyBytes) {
+      throw new Error('Identity keypair is not initialized');
+    }
+
+    const privateKeyPkcs8 = await crypto.subtle.exportKey('pkcs8', this.keyPair.privateKey);
+    return {
+      publicKey: b64Encode(this.publicKeyBytes),
+      privateKeyPkcs8: b64Encode(new Uint8Array(privateKeyPkcs8)),
+      fingerprint: await this.getPublicKeyFingerprint(),
+    };
+  }
+
+  async importIdentity(identity) {
+    if (!identity || typeof identity !== 'object') {
+      throw new Error('Identity payload must be an object');
+    }
+    if (typeof identity.publicKey !== 'string' || !identity.publicKey) {
+      throw new Error('Identity payload missing publicKey');
+    }
+    if (typeof identity.privateKeyPkcs8 !== 'string' || !identity.privateKeyPkcs8) {
+      throw new Error('Identity payload missing privateKeyPkcs8');
+    }
+
+    const publicKeyBytes = b64Decode(identity.publicKey);
+    const privateKeyBytes = b64Decode(identity.privateKeyPkcs8);
+
+    const [publicKey, privateKey] = await Promise.all([
+      crypto.subtle.importKey('raw', publicKeyBytes, { name: 'X25519' }, true, []),
+      crypto.subtle.importKey('pkcs8', privateKeyBytes, { name: 'X25519' }, true, ['deriveBits']),
+    ]);
+
+    this.keyPair = { publicKey, privateKey };
+    this.publicKeyBytes = publicKeyBytes;
+    this.clientNonce = crypto.getRandomValues(new Uint8Array(32));
+    this.clearSession();
+  }
+
+  async getPublicKeyFingerprint() {
+    if (!this.publicKeyBytes) return '';
+    const digest = await crypto.subtle.digest('SHA-256', this.publicKeyBytes);
+    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `sha256:${hex}`;
   }
 
   async deriveSessionKey(gatewayPubKeyBytes, gatewayNonce) {

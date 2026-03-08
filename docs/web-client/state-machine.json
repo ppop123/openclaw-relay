@@ -1,0 +1,257 @@
+{
+  "$schema_comment": "Machine-readable state and lifecycle model for the browser reference client.",
+  "component": "web-client",
+  "connection_state_machine": {
+    "initial_state": "disconnected",
+    "states": {
+      "disconnected": {
+        "description": "No active websocket; send button disabled"
+      },
+      "connecting": {
+        "description": "WebSocket or handshake in progress"
+      },
+      "connected": {
+        "description": "Handshake complete; encrypted application traffic allowed"
+      }
+    },
+    "transitions": [
+      {
+        "from": "disconnected",
+        "to": "connecting",
+        "trigger": "app.handleConnect()",
+        "effects": [
+          "normalize relay url",
+          "save safe settings",
+          "open websocket"
+        ]
+      },
+      {
+        "from": "connecting",
+        "to": "connected",
+        "trigger": "successful handshake",
+        "conditions": [
+          "joined.gateway_online == true",
+          "hello_ack received",
+          "hello_ack.gateway_public_key matches pinned gatewayPubKey",
+          "session key derived successfully"
+        ],
+        "effects": [
+          "encrypted=true",
+          "agent list fetch may start"
+        ]
+      },
+      {
+        "from": "connecting",
+        "to": "disconnected",
+        "trigger": "connect failure",
+        "effects": [
+          "show connect error",
+          "close websocket if needed",
+          "do not schedule reconnect unless a prior connected session existed"
+        ]
+      },
+      {
+        "from": "connecting",
+        "to": "disconnected",
+        "trigger": "reconnect attempt failure",
+        "conditions": [
+          "state entered from auto reconnect",
+          "_closed == false"
+        ],
+        "effects": [
+          "increase backoff with positive jitter",
+          "keep reconnect loop active",
+          "schedule next reconnect attempt"
+        ]
+      },
+      {
+        "from": "connected",
+        "to": "disconnected",
+        "trigger": "websocket close while `_closed == false` and prior `state == connected`",
+        "conditions": [
+          "close was not initiated via app.disconnect()",
+          "connection had already reached connected state"
+        ],
+        "effects": [
+          "clear pending requests",
+          "clear active streams",
+          "schedule reconnect"
+        ]
+      },
+      {
+        "from": "connected",
+        "to": "disconnected",
+        "trigger": "app.disconnect()",
+        "effects": [
+          "disable reconnect",
+          "clear pending requests",
+          "clear active streams",
+          "return ui to connect panel"
+        ]
+      },
+      {
+        "from": "disconnected",
+        "to": "connecting",
+        "trigger": "auto reconnect retry",
+        "effects": [
+          "backoff+jitter delay",
+          "reuse clientId",
+          "reuse already-loaded long-lived identity keypair",
+          "regenerate session nonce"
+        ]
+      }
+    ]
+  },
+  "identity_lifecycle": {
+    "initial_state": "unknown",
+    "states": {
+      "unknown": {
+        "description": "identity metadata has not been checked yet"
+      },
+      "absent": {
+        "description": "no persisted browser identity is currently known"
+      },
+      "persisted_metadata": {
+        "description": "an identity record exists in IndexedDB, but the private key has not been imported into runtime memory yet"
+      },
+      "loaded": {
+        "description": "the browser identity keypair is loaded into runtime memory and ready for transport use"
+      },
+      "memory_only": {
+        "description": "an identity exists only for the current page session because persistence is unavailable or intentionally skipped"
+      },
+      "unsupported": {
+        "description": "persistent identity storage is unavailable in this browser"
+      }
+    },
+    "transitions": [
+      {
+        "from": "unknown",
+        "to": "persisted_metadata",
+        "trigger": "app.init() finds a stored identity record",
+        "effects": [
+          "show fingerprint in connect panel",
+          "defer private-key import until connect"
+        ]
+      },
+      {
+        "from": "unknown",
+        "to": "absent",
+        "trigger": "app.init() finds no stored identity"
+      },
+      {
+        "from": "unknown",
+        "to": "unsupported",
+        "trigger": "browser does not provide usable indexeddb persistence"
+      },
+      {
+        "from": "persisted_metadata",
+        "to": "loaded",
+        "trigger": "connect imports the stored identity successfully",
+        "effects": [
+          "regenerate session nonce",
+          "reuse stable client fingerprint"
+        ]
+      },
+      {
+        "from": "absent",
+        "to": "loaded",
+        "trigger": "connect creates a new identity and persistence succeeds",
+        "effects": [
+          "store identity in indexeddb",
+          "show fingerprint in ui"
+        ]
+      },
+      {
+        "from": "absent",
+        "to": "memory_only",
+        "trigger": "connect creates a new identity but persistence is unavailable or write fails",
+        "effects": [
+          "warn user",
+          "continue using the identity for the current page session only"
+        ]
+      },
+      {
+        "from": "persisted_metadata",
+        "to": "memory_only",
+        "trigger": "stored identity import fails or identity store cannot be trusted for this session",
+        "effects": [
+          "warn user",
+          "avoid overwriting the stored identity during the same session"
+        ]
+      },
+      {
+        "from": "loaded",
+        "to": "absent",
+        "trigger": "identity reset deletes the stored identity",
+        "effects": [
+          "disconnect current session",
+          "clear in-memory keypair"
+        ]
+      },
+      {
+        "from": "memory_only",
+        "to": "absent",
+        "trigger": "identity reset clears the temporary identity"
+      }
+    ]
+  },
+  "request_lifecycle": {
+    "non_streaming": [
+      "create request id",
+      "register pending promise with timeout",
+      "send encrypted request",
+      "resolve on response.result or reject on response.error"
+    ],
+    "streaming": [
+      "create request id",
+      "register pending promise with timeout",
+      "register active stream callback",
+      "send encrypted request",
+      "forward stream_chunk to callback",
+      "observe stream_end without resolving; final response still required",
+      "resolve only on trailing response"
+    ],
+    "interruptions": [
+      "relay error rejects all pending requests",
+      "disconnect rejects all pending requests",
+      "timeout rejects the affected pending request"
+    ]
+  },
+  "ui_mode_model": {
+    "initial_mode": "connect_panel",
+    "modes": {
+      "connect_panel": {
+        "visible_sections": [
+          "connect form",
+          "identity card"
+        ],
+        "hidden_sections": [
+          "chat panel"
+        ]
+      },
+      "chat_panel": {
+        "visible_sections": [
+          "agent bar",
+          "messages",
+          "input area"
+        ],
+        "hidden_sections": [
+          "connect form"
+        ]
+      }
+    },
+    "transitions": [
+      {
+        "from": "connect_panel",
+        "to": "chat_panel",
+        "trigger": "successful connect"
+      },
+      {
+        "from": "chat_panel",
+        "to": "connect_panel",
+        "trigger": "user disconnect or identity reset"
+      }
+    ]
+  }
+}

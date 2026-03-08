@@ -63,7 +63,7 @@
     "forward_secrecy": false,
     "replay_protection": true,
     "relay_blindness": true,
-    "key_model": "Static X25519 identity keypairs (generated once at pairing). Session key uniqueness from fresh random nonces per connection mixed into HKDF salt. The Python SDK supports persisting keypairs across restarts via the KeyPair export. The web reference client keeps its keypair in-memory only \u2014 it is stable across reconnections within one page session but lost on page reload (acceptable for a reference client; production clients should persist to IndexedDB).",
+    "key_model": "Static X25519 identity keypairs are reused for each long-lived identity. Gateway/plugin and SDK deployments can persist them across restarts. The web reference client persists its keypair in IndexedDB when available, so the same browser identity survives reconnects and normal page reloads in the same browser profile. If IndexedDB is unavailable or persistence fails, it falls back to a page-memory identity that is regenerated after reload.",
     "notes": "v1 does NOT provide forward secrecy. Compromising an identity private key allows computing the ECDH shared secret and (with captured session nonces) deriving all past and future session keys. ADR needed for v2 (consider Noise IK/XX)."
   },
   "known_limitations": [
@@ -71,8 +71,9 @@
     "No forward secrecy in v1",
     "Stream resumption not supported \u2014 interrupted streams require new request",
     "Requests are not idempotent by default \u2014 no automatic retries for state-changing methods",
-    "TOFU model for gateway identity \u2014 no certificate authority or out-of-band verification beyond pairing",
+    "No CA/PKI-backed gateway identity. The browser reference client uses a user-supplied pinned gateway public key and production deployments should verify that key out of band.",
     "JavaScript SDK is not yet implemented",
-    "OpenClaw gateway plugin requires a current OpenClaw runtime with channel and CLI plugin APIs enabled"
+    "OpenClaw gateway plugin requires a current OpenClaw runtime with channel and CLI plugin APIs enabled",
+    "Browser identity persistence depends on IndexedDB availability; blocked environments fall back to a page-memory identity after reload"
   ]
 }

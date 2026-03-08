@@ -1,17 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /*
- * App module tests — channelToken migration & settings persistence.
+ * App module tests — settings migration, storage safety, and identity UI state.
  *
- * app.js is a browser module (uses document, localStorage, WebSocket via
- * transport.js).  We stub all browser globals before dynamically importing
- * the module so that its top-level code (new RelayConnection(), window.app,
- * DOMContentLoaded listener) executes without errors.
+ * app.js is a browser module, so browser globals must be stubbed before import.
  */
 
-// ── Browser global stubs (must be set before app.js is imported) ──
-
 const store = new Map();
+const elements = new Map();
+
+function createElement(overrides = {}) {
+  return {
+    value: '',
+    disabled: false,
+    textContent: '',
+    innerHTML: '',
+    title: '',
+    scrollTop: 0,
+    scrollHeight: 0,
+    style: {},
+    classList: { add: vi.fn(), remove: vi.fn() },
+    focus: vi.fn(),
+    appendChild: vi.fn(),
+    addEventListener: vi.fn(),
+    querySelector: vi.fn(() => createElement()),
+    remove: vi.fn(),
+    ...overrides,
+  };
+}
+
+function getElement(id) {
+  if (!elements.has(id)) {
+    elements.set(id, createElement());
+  }
+  return elements.get(id);
+}
 
 vi.stubGlobal('localStorage', {
   getItem: (key) => store.get(key) ?? null,
@@ -21,25 +44,8 @@ vi.stubGlobal('localStorage', {
 });
 
 vi.stubGlobal('document', {
-  getElementById: () => ({
-    value: '',
-    disabled: false,
-    textContent: '',
-    innerHTML: '',
-    style: {},
-    classList: { add: vi.fn(), remove: vi.fn() },
-    focus: vi.fn(),
-    appendChild: vi.fn(),
-    addEventListener: vi.fn(),
-  }),
-  createElement: () => ({
-    className: '',
-    textContent: '',
-    innerHTML: '',
-    style: {},
-    appendChild: vi.fn(),
-    remove: vi.fn(),
-  }),
+  getElementById: (id) => getElement(id),
+  createElement: () => createElement(),
   addEventListener: vi.fn(),
 });
 
@@ -57,20 +63,23 @@ vi.stubGlobal('requestAnimationFrame', (cb) => cb());
 vi.stubGlobal('setTimeout', globalThis.setTimeout);
 vi.stubGlobal('clearTimeout', globalThis.clearTimeout);
 
-// ── Import app after globals are in place ──
-
 const { app } = await import('../js/app.js');
 
 const STORAGE_KEY = 'openclaw-relay-settings';
 
-// ── Tests ──
+beforeEach(() => {
+  store.clear();
+  elements.clear();
+  app.connection.crypto.clearIdentity();
+  app.connection.identityPersistence = 'unsupported';
+  app.connection.identityFingerprint = '';
+  app.connection.identityCreatedAt = '';
+  app.connection._closed = false;
+  app.connection.state = 'disconnected';
+});
 
 describe('channelToken migration', () => {
-  beforeEach(() => {
-    store.clear();
-  });
-
-  it('deletes channelToken from saved settings on init()', () => {
+  it('deletes channelToken from saved settings on init()', async () => {
     store.set(
       STORAGE_KEY,
       JSON.stringify({
@@ -80,7 +89,7 @@ describe('channelToken migration', () => {
       }),
     );
 
-    app.init();
+    await app.init();
 
     const result = JSON.parse(store.get(STORAGE_KEY));
     expect(result).not.toHaveProperty('channelToken');
@@ -88,26 +97,22 @@ describe('channelToken migration', () => {
     expect(result.gatewayPubKey).toBe('abc123');
   });
 
-  it('leaves settings unchanged when no channelToken exists', () => {
+  it('leaves settings unchanged when no channelToken exists', async () => {
     const original = { relayUrl: 'wss://relay.test', gatewayPubKey: 'abc123' };
     store.set(STORAGE_KEY, JSON.stringify(original));
 
-    app.init();
+    await app.init();
 
     const result = JSON.parse(store.get(STORAGE_KEY));
     expect(result).toEqual(original);
   });
 
-  it('does not throw when localStorage is empty', () => {
-    expect(() => app.init()).not.toThrow();
+  it('does not throw when localStorage is empty', async () => {
+    await expect(app.init()).resolves.toBeUndefined();
   });
 });
 
 describe('_saveSettings strips channelToken', () => {
-  beforeEach(() => {
-    store.clear();
-  });
-
   it('never persists channelToken', () => {
     app._saveSettings({
       relayUrl: 'wss://test',
@@ -119,5 +124,28 @@ describe('_saveSettings strips channelToken', () => {
     expect(result).not.toHaveProperty('channelToken');
     expect(result.relayUrl).toBe('wss://test');
     expect(result.gatewayPubKey).toBe('key');
+  });
+});
+
+describe('identity UI state', () => {
+  it('shows unsupported persistence state when indexedDB is unavailable', async () => {
+    await app.init();
+
+    expect(getElement('identityMode').textContent).toBe('Persistence unavailable');
+    expect(getElement('identityFingerprint').textContent).toMatch(/cannot persist/i);
+    expect(getElement('resetIdentityBtn').disabled).toBe(true);
+  });
+
+  it('shows persisted identity fingerprint when transport exposes one', () => {
+    app.connection.identityPersistence = 'persisted';
+    app.connection.identityFingerprint = 'sha256:1234567890abcdef1234567890abcdef';
+    app.connection.identityCreatedAt = '2026-03-08T00:00:00.000Z';
+    app.connection.crypto.keyPair = { publicKey: {}, privateKey: {} };
+
+    app._updateIdentityStatus();
+
+    expect(getElement('identityMode').textContent).toBe('Persistent browser identity');
+    expect(getElement('identityFingerprint').textContent).toMatch(/Fingerprint:/);
+    expect(getElement('resetIdentityBtn').disabled).toBe(false);
   });
 });

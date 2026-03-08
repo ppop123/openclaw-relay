@@ -353,7 +353,7 @@ A GitHub Action runs daily:
 | Relay reads messages | E2E encryption; relay only sees ciphertext |
 | Relay modifies messages | AES-GCM authentication; tampering detected |
 | Relay replays messages | Monotonic nonce counters; replay detected |
-| Man-in-the-middle during pairing | Pairing info transferred out-of-band (QR/manual); TOFU model |
+| Man-in-the-middle during pairing | Pairing info transferred out-of-band (QR/manual); browser verifies a user-supplied pinned gateway public key during handshake |
 | Unauthorized client connects | Channel token is secret; unknown client keys are accepted only during explicit pairing mode |
 | Unauthorized client sends messages | E2E encryption; can't decrypt without shared secret |
 | Nonce reuse after reconnect | Derive a fresh session key for every connection using both peers' session nonces |

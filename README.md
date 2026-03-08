@@ -67,6 +67,20 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 | JavaScript SDK (`sdk/js/`) | Protocol library for JS | Not yet implemented |
 | OpenClaw Plugin (`plugin/`) | Gateway channel plugin | Implemented, tested |
 
+## Documentation
+
+- [`docs/README.md`](docs/README.md) — documentation center / technical navigation
+- [`docs/architecture-overview.md`](docs/architecture-overview.md) — current architecture summary
+- [`docs/web-client.md`](docs/web-client.md) — browser client documentation hub
+- [`docs/web-client/architecture.md`](docs/web-client/architecture.md) — browser runtime structure and module map
+- [`docs/web-client/identity-and-storage.md`](docs/web-client/identity-and-storage.md) — browser identity lifecycle and storage rules
+- [`docs/web-client/transport.md`](docs/web-client/transport.md) — browser handshake, encryption, request/response, reconnect behavior
+- [`docs/web-client/ui-and-state.md`](docs/web-client/ui-and-state.md) — browser UI state and user flows
+- [`docs/web-client/testing-and-troubleshooting.md`](docs/web-client/testing-and-troubleshooting.md) — browser tests, manual checks, troubleshooting
+- [`docs/deployment.md`](docs/deployment.md) — deployment and operations
+- [`docs/security.md`](docs/security.md) — security properties and limitations
+- [`docs/support-matrix.md`](docs/support-matrix.md) — supported components and release scope
+
 ## Quick Start
 
 ### Deploy a relay server
