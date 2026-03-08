@@ -28,11 +28,14 @@ openclaw plugins install --link /path/to/openclaw-relay/plugin
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws
 openclaw relay enable --server wss://relay.example.com/ws --discoverable
+openclaw relay enable --server wss://relay.example.com/ws --discoverable \
+  --discover-label "Shanghai Lab" \
+  --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["peer-discovery"]}'
 openclaw relay pair --wait 30
 openclaw relay status
 ```
 
-Use `--discoverable` only when the operator explicitly wants this gateway to participate in the agent-only discovery layer. It does **not** enable any human-facing peer browsing UX.
+Use `--discoverable` only when the operator explicitly wants this gateway to participate in the agent-only discovery layer. It does **not** enable any human-facing peer browsing UX. Discovery metadata is optional, operator-controlled, and only advertised to other discoverable gateways on the same relay.
 
 ## Manage clients
 
@@ -50,9 +53,29 @@ The plugin now understands the relay's gateway-only Layer 0.5 control plane, but
 - Human-facing clients still talk only to their own OpenClaw instance.
 - Human-facing clients must not browse or contact other OpenClaw instances through this plugin.
 - Operator opt-in for discoverability is controlled by `channels.relay.accounts.<id>.peerDiscovery.enabled` in the OpenClaw config.
-- The plugin currently reuses the gateway X25519 identity as the discovery public key and advertises generated metadata based on gateway capabilities.
+- The plugin currently reuses the gateway X25519 identity as the discovery public key and lets the operator attach opaque discovery metadata such as labels, region hints, or capability tags.
 - Internal gateway-side methods exist for `discover`, `signal`, `invite_create`, invite-scoped peer acceptance, and outbound invite dialing, and the host now exposes them only through the local `createRelayAgentBridge(api)` bridge and `RelayPeerAgentService` for OpenClaw internals and agents.
 - No new relay request/response methods were added for discovery. Remote human clients still cannot call `discover`, `signal`, or `invite_create` through Layer 3.
+
+## Discovery metadata workflow
+
+Use discovery metadata to make gateway-to-gateway discovery usable for agents without widening the human-facing product surface:
+
+```bash
+openclaw relay enable --server wss://relay.example.com/ws --account default \
+  --discover-label "Shanghai Lab"
+
+openclaw relay enable --server wss://relay.example.com/ws --account default \
+  --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["python","code"]}'
+
+openclaw relay enable --server wss://relay.example.com/ws --account default \
+  --clear-discovery-metadata
+```
+
+- `--discover-label` updates just the human-readable label and preserves any existing discovery metadata.
+- `--discover-metadata-json` replaces discovery metadata with the provided JSON object; if `--discover-label` is also present, the label is merged on top.
+- `--clear-discovery-metadata` removes the metadata object but preserves the current discoverability setting.
+- These flags never expose discovery controls to remote human clients; they only change operator-owned gateway config.
 
 ## Runtime requirements
 

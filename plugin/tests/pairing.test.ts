@@ -31,6 +31,46 @@ describe('pairing and config commands', () => {
     expect(JSON.stringify(inspect)).not.toContain(account.gatewayKeyPair.privateKey);
   });
 
+  it('stores, inspects, and clears operator discovery metadata', async () => {
+    const store = new MemoryRelayConfigStore();
+
+    const account = await handleRelayEnable(store, 'wss://relay.example.com', 'default', {
+      discoverable: true,
+      discoveryMetadata: { label: 'Ops Gateway', region: 'apac', capabilities: ['peer-discovery'] },
+    });
+
+    expect(account.peerDiscovery).toEqual({
+      enabled: true,
+      metadata: { label: 'Ops Gateway', region: 'apac', capabilities: ['peer-discovery'] },
+    });
+
+    const inspect = await store.inspectAccount('default');
+    expect(inspect?.peerDiscoveryEnabled).toBe(true);
+    expect(inspect?.peerDiscoveryMetadata).toEqual({
+      label: 'Ops Gateway',
+      region: 'apac',
+      capabilities: ['peer-discovery'],
+    });
+
+    await handleRelayEnable(store, 'wss://relay.example.com', 'default', {
+      discoveryMetadata: { label: 'Ops Gateway CN', region: 'cn-sha' },
+    });
+
+    const updated = await store.load('default');
+    expect(updated?.peerDiscovery).toEqual({
+      enabled: true,
+      metadata: { label: 'Ops Gateway CN', region: 'cn-sha' },
+    });
+
+    await handleRelayEnable(store, 'wss://relay.example.com', 'default', { discoveryMetadata: null });
+
+    const cleared = await store.load('default');
+    expect(cleared?.peerDiscovery).toEqual({ enabled: true });
+    const inspectCleared = await store.inspectAccount('default');
+    expect(inspectCleared?.peerDiscoveryEnabled).toBe(true);
+    expect(inspectCleared?.peerDiscoveryMetadata).toBeUndefined();
+  });
+
   it('approves, lists, revokes, rotates token, and disables', async () => {
     const store = new MemoryRelayConfigStore();
     const pairing = new PairingManager();

@@ -487,7 +487,7 @@ Potential future extensions can be added later without changing the MVP model:
 
 1. Add operator-level `discoverable` config.
 2. Add a stable discovery public key source.
-3. Add metadata generation policy.
+3. Add operator-controlled discovery metadata policy and CLI/config UX.
 4. Add a host-only internal bridge for local OpenClaw agents; do not expose discovery through human-facing relay RPC methods.
 5. Add `DISCOVER` call path.
 6. Add `SIGNAL` send/receive logic.

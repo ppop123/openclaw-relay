@@ -57,6 +57,7 @@ export async function inspectAccount(config: RelayAccountConfig): Promise<RelayA
     gatewayPublicKey: config.gatewayKeyPair.publicKey,
     approvedClients: Object.entries(config.approvedClients).map(([fingerprint, record]) => toInspectApprovedClient(fingerprint, record)),
     peerDiscoveryEnabled: peerDiscovery.enabled,
+    ...(peerDiscovery.metadata ? { peerDiscoveryMetadata: cloneConfig(peerDiscovery.metadata) } : {}),
   };
 }
 

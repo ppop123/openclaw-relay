@@ -130,6 +130,19 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function parseJsonObjectOption(value: string, label: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    throw new Error(`${label} must be valid JSON`);
+  }
+  if (!isObject(parsed)) {
+    throw new Error(`${label} must be a JSON object`);
+  }
+  return structuredClone(parsed) as Record<string, unknown>;
+}
+
 function cloneConfig<T>(value: T): T {
   return structuredClone(value);
 }
@@ -900,14 +913,42 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
         .requiredOption('--server <url>', 'Relay WebSocket URL')
         .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
         .option('--discoverable', 'Explicitly opt this gateway into agent-only peer discovery')
-        .action(async (options: { server: string; account?: string; discoverable?: boolean }) => {
+        .option('--discover-label <value>', 'Set a human-readable discovery label to advertise to other gateways')
+        .option('--discover-metadata-json <json>', 'Set discovery metadata as a JSON object (operator-controlled, gateway-only)')
+        .option('--clear-discovery-metadata', 'Remove configured discovery metadata for this account')
+        .action(async (options: {
+          server: string;
+          account?: string;
+          discoverable?: boolean;
+          discoverLabel?: string;
+          discoverMetadataJson?: string;
+          clearDiscoveryMetadata?: boolean;
+        }) => {
           const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
           const store = new OpenClawRelayConfigStore(api.runtime);
+          const existing = await store.load(accountId);
+
+          let discoveryMetadata: Record<string, unknown> | null | undefined;
+          if (options.clearDiscoveryMetadata === true) {
+            discoveryMetadata = null;
+          } else if (options.discoverMetadataJson || options.discoverLabel) {
+            const base = options.discoverMetadataJson
+              ? parseJsonObjectOption(options.discoverMetadataJson, '--discover-metadata-json')
+              : structuredClone(existing?.peerDiscovery?.metadata ?? {}) as Record<string, unknown>;
+            if (options.discoverLabel) {
+              base.label = options.discoverLabel;
+            }
+            discoveryMetadata = base;
+          }
+
           await handleRelayEnable(
             store,
             options.server,
             accountId,
-            options.discoverable === true ? { discoverable: true } : {},
+            {
+              ...(options.discoverable === true ? { discoverable: true } : {}),
+              ...(discoveryMetadata !== undefined ? { discoveryMetadata } : {}),
+            },
           );
           api.runtime.system.requestHeartbeatNow?.();
           const inspection = await store.inspectAccount(accountId);
@@ -1069,6 +1110,10 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
                   additionalProperties: false,
                   properties: {
                     enabled: { type: 'boolean' },
+                    metadata: {
+                      type: 'object',
+                      additionalProperties: true,
+                    },
                   },
                 },
               },
@@ -1083,6 +1128,7 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
         'accounts.default.gatewayKeyPair.privateKey': { label: 'Gateway Private Key', sensitive: true, advanced: true },
         'accounts.default.gatewayKeyPair.publicKey': { label: 'Gateway Public Key', advanced: true },
         'accounts.default.peerDiscovery.enabled': { label: 'Enable Agent Discovery', help: 'Allow this OpenClaw gateway to advertise itself to other gateways on the same relay. Human-facing clients still cannot browse peers.' },
+        'accounts.default.peerDiscovery.metadata': { label: 'Discovery Metadata', help: 'Operator-controlled metadata advertised only to other discoverable gateways. The relay treats it as opaque data.' },
       },
     },
     config: {

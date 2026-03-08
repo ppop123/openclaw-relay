@@ -45,6 +45,7 @@ export interface RelayAccountInspection {
   gatewayPublicKey: string;
   approvedClients: InspectApprovedClient[];
   peerDiscoveryEnabled: boolean;
+  peerDiscoveryMetadata?: Record<string, unknown>;
 }
 
 export interface RelayConfigStore {

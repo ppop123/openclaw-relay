@@ -4,25 +4,34 @@ import { createOpenClawRelayPlugin, createRelayAgentBridge, createRelayChannelDe
 import { RelayGatewayAdapter } from '../src/gateway-adapter.js';
 import type { OpenClawConfig, OpenClawPluginApi } from '../src/host-types.js';
 
-function buildApi(config: OpenClawConfig = {}): OpenClawPluginApi & {
+function buildApi(initialConfig: OpenClawConfig = {}): OpenClawPluginApi & {
   registeredChannel?: unknown;
   registeredCli?: unknown;
+  writeConfigFileMock: ReturnType<typeof vi.fn>;
+  readConfig(): OpenClawConfig;
 } {
+  let currentConfig = structuredClone(initialConfig);
+  const writeConfigFileMock = vi.fn(async (next: OpenClawConfig) => {
+    currentConfig = structuredClone(next);
+  });
+
   return {
     id: 'relay',
     name: 'OpenClaw Relay',
-    config,
+    config: currentConfig,
     runtime: {
       version: 'test',
       config: {
-        loadConfig: () => config,
-        writeConfigFile: vi.fn(async () => undefined),
+        loadConfig: () => currentConfig,
+        writeConfigFile: writeConfigFileMock,
       },
       system: {},
       state: {
         resolveStateDir: () => '/tmp/openclaw-test',
       },
     },
+    writeConfigFileMock,
+    readConfig: () => currentConfig,
     logger: {
       info: vi.fn(),
       warn: vi.fn(),
@@ -349,6 +358,96 @@ describe('openclaw host bridge', () => {
       inspectSpy.mockRestore();
       logSpy.mockRestore();
     }
+  });
+
+  it('updates discovery metadata through the relay enable CLI', async () => {
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey: 'pub',
+              },
+              approvedClients: {},
+              peerDiscovery: {
+                enabled: false,
+                metadata: { region: 'cn' },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
+      logs.push(String(value ?? ''));
+    });
+
+    try {
+      const api = buildApi(config);
+      const preview = createRelayChannelDefinition();
+      const { registerCli } = createOpenClawRelayPlugin(api, preview);
+      const program = buildProgram();
+      registerCli();
+      const registrar = api.registeredCli as (ctx: { program: FakeCommand; logger: any }) => void;
+      registrar({ program, logger: { info() {}, warn() {}, error() {}, debug() {} } });
+      const enableAction = program.children.get('relay')?.children.get('enable')?.actionHandler;
+      expect(enableAction).toBeTypeOf('function');
+
+      await enableAction?.({
+        server: 'ws://relay.example/ws',
+        account: 'default',
+        discoverLabel: 'Shanghai Lab',
+        discoverMetadataJson: '{"region":"cn-sha","tier":"prod"}',
+      });
+
+      expect(api.writeConfigFileMock).toHaveBeenCalled();
+      const updatedAccount = (((api.readConfig().channels as Record<string, any>).relay as Record<string, any>).accounts as Record<string, any>).default;
+      expect(updatedAccount.peerDiscovery).toEqual({
+        enabled: false,
+        metadata: {
+          region: 'cn-sha',
+          tier: 'prod',
+          label: 'Shanghai Lab',
+        },
+      });
+      expect(logs.some((line) => line.includes('peerDiscoveryMetadata'))).toBe(true);
+
+      await enableAction?.({
+        server: 'ws://relay.example/ws',
+        account: 'default',
+        clearDiscoveryMetadata: true,
+      });
+
+      const clearedAccount = (((api.readConfig().channels as Record<string, any>).relay as Record<string, any>).accounts as Record<string, any>).default;
+      expect(clearedAccount.peerDiscovery).toEqual({ enabled: false });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it('rejects invalid discovery metadata JSON from the relay enable CLI', async () => {
+    const api = buildApi();
+    const preview = createRelayChannelDefinition();
+    const { registerCli } = createOpenClawRelayPlugin(api, preview);
+    const program = buildProgram();
+    registerCli();
+    const registrar = api.registeredCli as (ctx: { program: FakeCommand; logger: any }) => void;
+    registrar({ program, logger: { info() {}, warn() {}, error() {}, debug() {} } });
+    const enableAction = program.children.get('relay')?.children.get('enable')?.actionHandler;
+    expect(enableAction).toBeTypeOf('function');
+
+    await expect(enableAction?.({
+      server: 'ws://relay.example/ws',
+      account: 'default',
+      discoverMetadataJson: '[1,2,3]',
+    })).rejects.toThrow('--discover-metadata-json must be a JSON object');
   });
 
 });
