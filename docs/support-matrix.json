@@ -1,0 +1,70 @@
+{
+  "$schema_comment": "Canonical source of truth for component support status. Markdown docs mirror this file.",
+  "protocol_version": 1,
+  "components": [
+    {
+      "name": "Go relay server",
+      "path": "relay/",
+      "status": "supported",
+      "release_scope": "official",
+      "description": "Production relay implementation in Go",
+      "test_command": "cd relay && go test -v -count=1",
+      "test_framework": "go test"
+    },
+    {
+      "name": "Python SDK",
+      "path": "sdk/python/",
+      "status": "supported",
+      "release_scope": "official",
+      "description": "Client and gateway SDK for Python",
+      "test_command": "cd sdk/python && pip install -e '.[dev]' && pytest -q",
+      "test_framework": "pytest"
+    },
+    {
+      "name": "Web reference client",
+      "path": "client/",
+      "status": "supported",
+      "release_scope": "official",
+      "description": "Browser-based reference client (vanilla JS)",
+      "test_command": "cd client && npm ci && npm test",
+      "test_framework": "vitest"
+    },
+    {
+      "name": "Protocol specification",
+      "path": "protocol/",
+      "status": "supported",
+      "release_scope": "official",
+      "description": "Wire protocol specification (v1)"
+    },
+    {
+      "name": "Cloudflare Worker",
+      "path": "deploy/cloudflare-worker/",
+      "status": "experimental",
+      "release_scope": "excluded",
+      "description": "Edge relay on Cloudflare Workers + Durable Objects",
+      "limitations": [
+        "Incompatible URL-based routing (not frame-based protocol)",
+        "Standard SDK clients and reference client CANNOT connect",
+        "No automated runtime tests",
+        "CORS is wide open (Access-Control-Allow-Origin: *)",
+        "Not security-reviewed"
+      ],
+      "test_command": "cd deploy/cloudflare-worker && npm ci && npx tsc --noEmit",
+      "test_framework": "tsc (type check only, no runtime tests)"
+    },
+    {
+      "name": "JavaScript SDK",
+      "path": "sdk/js/",
+      "status": "not_implemented",
+      "release_scope": "excluded",
+      "description": "Protocol library for JS (planned)"
+    },
+    {
+      "name": "OpenClaw gateway plugin",
+      "path": "plugin/",
+      "status": "not_implemented",
+      "release_scope": "excluded",
+      "description": "Gateway channel plugin (planned)"
+    }
+  ]
+}

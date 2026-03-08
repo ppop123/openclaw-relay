@@ -1,0 +1,12 @@
+{
+  "_comment": "Layer 2: Client sends a chat request. This is the decrypted content of a DATA frame payload after Layer 1 encryption is established.",
+  "id": "msg_a1b2c3d4",
+  "type": "request",
+  "method": "chat.send",
+  "params": {
+    "agent": "tangseng",
+    "message": "What is the latest news on AI chips?",
+    "session_id": null,
+    "stream": true
+  }
+}

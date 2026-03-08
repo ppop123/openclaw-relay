@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw Relay</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --primary: #0f3460;
+  --accent: #e94560;
+  --text: #eee;
+  --muted: #888;
+  --border: #2a2a4a;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --error: #ef4444;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ────────────────────────────────────── */
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+
+.status-dot.connected { background: var(--success); }
+.status-dot.connecting { background: var(--warning); animation: pulse 1s infinite; }
+.status-dot.error { background: var(--error); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.status-details {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.disconnect-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 12px;
+  transition: all 0.2s;
+}
+
+.disconnect-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Main content ──────────────────────────────── */
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Connection form ───────────────────────────── */
+
+.connect-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.connect-form {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 32px;
+  border: 1px solid var(--border);
+}
+
+.connect-form h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.connect-form .subtitle {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--mono);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  border-color: var(--accent);
+}
+
+.form-group input::placeholder {
+  color: #555;
+}
+
+.connect-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s;
+}
+
+.connect-btn:hover { opacity: 0.9; }
+.connect-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.connect-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius);
+  color: var(--error);
+  font-size: 13px;
+  display: none;
+}
+
+/* ── Chat panel ────────────────────────────────── */
+
+.chat-panel {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-panel.active {
+  display: flex;
+}
+
+.agent-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.agent-bar label {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.agent-bar select {
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.agent-bar select:focus {
+  border-color: var(--accent);
+}
+
+.agent-status {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+/* ── Messages ──────────────────────────────────── */
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.messages::-webkit-scrollbar { width: 6px; }
+.messages::-webkit-scrollbar-track { background: transparent; }
+.messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.message {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: var(--primary);
+  border-bottom-right-radius: 4px;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.message .agent-name {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.message.system {
+  align-self: center;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 12px;
+  max-width: 100%;
+  text-align: center;
+}
+
+/* ── Markdown in messages ──────────────────────── */
+
+.message strong { font-weight: 700; }
+.message em { font-style: italic; }
+
+.message code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.message pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.message pre code {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.message a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.message a:hover { text-decoration: underline; }
+
+.message ul, .message ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+
+.message li { margin: 2px 0; }
+
+.message p { margin: 6px 0; }
+.message p:first-child { margin-top: 0; }
+.message p:last-child { margin-bottom: 0; }
+
+.message .cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Input area ────────────────────────────────── */
+
+.input-area {
+  padding: 16px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.input-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.input-row textarea {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+  resize: none;
+  min-height: 42px;
+  max-height: 160px;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+}
+
+.input-row textarea:focus {
+  border-color: var(--accent);
+}
+
+.input-row textarea::placeholder {
+  color: #555;
+}
+
+.send-btn {
+  padding: 10px 20px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+  height: 42px;
+}
+
+.send-btn:hover { opacity: 0.9; }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Toast notifications ───────────────────────── */
+
+.toast-container {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  max-width: 360px;
+  animation: slideIn 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.toast.error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.toast.warning {
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fde68a;
+}
+
+.toast.info {
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: #86efac;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Responsive ────────────────────────────────── */
+
+@media (max-width: 600px) {
+  header { padding: 10px 14px; }
+  header h1 { font-size: 16px; }
+  .connect-form { padding: 24px 20px; }
+  .messages { padding: 14px; }
+  .message { max-width: 90%; }
+  .input-area { padding: 12px 14px; }
+  .agent-bar { padding: 8px 14px; }
+  .status-details { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OpenClaw Relay</h1>
+  <div class="status-indicator">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">Disconnected</span>
+    <span class="status-details" id="statusDetails"></span>
+    <button class="disconnect-btn" id="disconnectBtn" style="display:none" onclick="app.disconnect()">Disconnect</button>
+  </div>
+</header>
+
+<main>
+  <!-- Connection form -->
+  <div class="connect-panel" id="connectPanel">
+    <form class="connect-form" id="connectForm" onsubmit="return app.handleConnect(event)">
+      <h2>Connect to Relay</h2>
+      <p class="subtitle">Enter your pairing credentials to start chatting.</p>
+
+      <div class="form-group">
+        <label for="relayUrl">Relay URL</label>
+        <input type="text" id="relayUrl" placeholder="wss://relay.example.com/ws" autocomplete="off" required>
+      </div>
+
+      <div class="form-group">
+        <label for="channelToken">Channel Token</label>
+        <input type="text" id="channelToken" placeholder="kx8f-a3mv-9pqz" autocomplete="off" required>
+      </div>
+
+      <div class="form-group">
+        <label for="gatewayPubKey">Gateway Public Key (base64)</label>
+        <input type="text" id="gatewayPubKey" placeholder="base64-encoded 32-byte X25519 public key" autocomplete="off" required>
+      </div>
+
+      <button type="submit" class="connect-btn" id="connectBtn">Connect</button>
+      <div class="connect-error" id="connectError"></div>
+    </form>
+  </div>
+
+  <!-- Chat interface -->
+  <div class="chat-panel" id="chatPanel">
+    <div class="agent-bar">
+      <label for="agentSelect">Agent:</label>
+      <select id="agentSelect">
+        <option value="">Loading agents...</option>
+      </select>
+      <span class="agent-status" id="agentStatus"></span>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="input-area">
+      <div class="input-row">
+        <textarea id="messageInput" placeholder="Type a message..." rows="1"
+          onkeydown="app.handleInputKey(event)"
+          oninput="app.autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="app.sendMessage()" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script type="module" src="js/app.js"></script>
+
+<!-- Development note: All JavaScript has been modularized into client/js/.
+     See js/utils.js, js/markdown.js, js/crypto.js, js/transport.js, js/app.js.
+     Run tests with: cd client && npm test -->
+
+</body>
+</html>

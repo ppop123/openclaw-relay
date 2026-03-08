@@ -1,0 +1,90 @@
+{
+  "$schema_comment": "Canonical list of all protocol error codes. Layer 0 codes are relay-generated. Layer 2 codes are gateway-generated.",
+  "protocol_version": 1,
+  "error_codes": [
+    {
+      "code": "invalid_frame",
+      "layer": 0,
+      "meaning": "Frame could not be parsed as JSON or is structurally malformed",
+      "retryable": false
+    },
+    {
+      "code": "channel_occupied",
+      "layer": 0,
+      "meaning": "Another gateway is already registered on this channel",
+      "retryable": false
+    },
+    {
+      "code": "channel_limit_reached",
+      "layer": 0,
+      "meaning": "Maximum number of channels on this relay has been reached",
+      "retryable": false
+    },
+    {
+      "code": "channel_full",
+      "layer": 0,
+      "meaning": "Maximum clients per channel has been reached",
+      "retryable": false
+    },
+    {
+      "code": "payload_too_large",
+      "layer": 0,
+      "meaning": "Frame payload exceeds the relay's --max-payload limit",
+      "retryable": false
+    },
+    {
+      "code": "rate_limited",
+      "layer": 0,
+      "meaning": "Channel exceeded the relay's --rate-limit messages per second",
+      "retryable": true
+    },
+    {
+      "code": "client_id_required",
+      "layer": 0,
+      "meaning": "Client sent a JOIN frame without a client_id field",
+      "retryable": false
+    },
+    {
+      "code": "method_not_found",
+      "layer": 2,
+      "meaning": "The requested method name is not recognized by the gateway",
+      "retryable": false
+    },
+    {
+      "code": "invalid_params",
+      "layer": 2,
+      "meaning": "The request parameters are invalid or missing required fields",
+      "retryable": false
+    },
+    {
+      "code": "internal_error",
+      "layer": 2,
+      "meaning": "The gateway encountered an unexpected internal error",
+      "retryable": true
+    },
+    {
+      "code": "cancelled",
+      "layer": 2,
+      "meaning": "The request was cancelled by the client via a CANCEL frame",
+      "retryable": false
+    },
+    {
+      "code": "timeout",
+      "layer": 2,
+      "meaning": "The gateway timed out processing the request",
+      "retryable": true
+    },
+    {
+      "code": "not_authenticated",
+      "layer": 2,
+      "meaning": "Client has not completed the Layer 1 handshake",
+      "retryable": false
+    },
+    {
+      "code": "permission_denied",
+      "layer": 2,
+      "meaning": "Client is not authorized for the requested method",
+      "retryable": false
+    }
+  ]
+}

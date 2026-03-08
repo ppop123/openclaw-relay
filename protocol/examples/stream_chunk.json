@@ -1,0 +1,10 @@
+{
+  "_comment": "Layer 2: Gateway sends a chunk of streaming response data. seq is monotonically increasing within the stream starting at 1.",
+  "id": "msg_a1b2c3d4",
+  "type": "stream_chunk",
+  "seq": 1,
+  "data": {
+    "delta": "Based on recent reports, ",
+    "session_id": "sess_abc123"
+  }
+}

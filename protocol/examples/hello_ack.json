@@ -1,0 +1,8 @@
+{
+  "_comment": "Layer 1: Gateway responds to HELLO. Sent unencrypted as a DATA frame payload. Client MUST verify gateway_public_key matches stored key from pairing (TOFU).",
+  "type": "hello_ack",
+  "gateway_public_key": "Z2F0ZXdheSAzMi1ieXRlIFgyNTUxOSBwdWJsaWMga2V5",
+  "session_nonce": "Z2F0ZXdheSByYW5kb20gMzIgYnl0ZSBub25jZSBoZXJl",
+  "protocol_version": 1,
+  "capabilities": ["chat", "stream", "notify", "agents", "cron"]
+}

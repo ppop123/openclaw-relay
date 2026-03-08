@@ -1,0 +1,8 @@
+{
+  "_comment": "Layer 1: Client sends HELLO after JOIN/JOINED. Sent unencrypted as a DATA frame payload. session_nonce is 32 random bytes base64-encoded.",
+  "type": "hello",
+  "client_public_key": "dGhpcyBpcyBhIDMyLWJ5dGUgWDI1NTE5IHB1YmxpYw==",
+  "session_nonce": "cmFuZG9tIDMyIGJ5dGUgbm9uY2UgZm9yIHNlc3Npb24=",
+  "protocol_version": 1,
+  "capabilities": ["chat", "stream"]
+}

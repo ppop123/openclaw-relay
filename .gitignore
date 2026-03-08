@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+node_modules/
+relay/relay
+autocert-cache/
+.wrangler/

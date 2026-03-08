@@ -1,0 +1,6 @@
+{
+  "_comment": "Layer 0: Gateway registers on a channel. channel is SHA-256 hex hash of the channel token.",
+  "type": "register",
+  "channel": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "version": 1
+}

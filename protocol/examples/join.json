@@ -1,0 +1,7 @@
+{
+  "_comment": "Layer 0: Client joins a channel. channel is SHA-256 hex hash of the channel token.",
+  "type": "join",
+  "channel": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "version": 1,
+  "client_id": "web_1a2b3c4d"
+}

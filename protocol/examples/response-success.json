@@ -1,0 +1,13 @@
+{
+  "_comment": "Layer 2: Gateway sends a successful response. Correlates to a request by id.",
+  "id": "msg_a1b2c3d4",
+  "type": "response",
+  "result": {
+    "session_id": "sess_abc123",
+    "agent": "tangseng",
+    "tokens": {
+      "input": 150,
+      "output": 420
+    }
+  }
+}

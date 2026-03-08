@@ -1,0 +1,58 @@
+{
+  "$schema_comment": "Release candidate manifest. Machine-readable declaration of what this release includes, claims, and requires.",
+  "release_candidate": true,
+  "version": "0.1.0",
+  "protocol_version": 1,
+  "official_components": [
+    "relay/",
+    "sdk/python/",
+    "client/",
+    "protocol/"
+  ],
+  "experimental_components": [
+    "deploy/cloudflare-worker/"
+  ],
+  "not_implemented": [
+    "sdk/js/",
+    "plugin/"
+  ],
+  "required_test_commands": [
+    {
+      "name": "Go relay tests",
+      "command": "cd relay && go test -v -count=1",
+      "blocks_release": true
+    },
+    {
+      "name": "Python SDK tests",
+      "command": "cd sdk/python && pip install -e '.[dev]' && pytest -q",
+      "blocks_release": true
+    },
+    {
+      "name": "Web client tests",
+      "command": "cd client && npm ci && npm test",
+      "blocks_release": true
+    },
+    {
+      "name": "Worker type check",
+      "command": "cd deploy/cloudflare-worker && npm ci && npx tsc --noEmit",
+      "blocks_release": false
+    }
+  ],
+  "security_claims": {
+    "confidentiality": true,
+    "integrity": true,
+    "authenticity": true,
+    "forward_secrecy": false,
+    "replay_protection": true,
+    "relay_blindness": true,
+    "notes": "v1 does NOT provide forward secrecy. Long-lived identity keys are used during pairing. Compromising identity keys allows decryption of future sessions. ADR needed for v2 (consider Noise IK/XX)."
+  },
+  "known_limitations": [
+    "Single relay node only — no clustering, federation, or HA",
+    "No forward secrecy in v1",
+    "Stream resumption not supported — interrupted streams require new request",
+    "Requests are not idempotent by default — no automatic retries for state-changing methods",
+    "TOFU model for gateway identity — no certificate authority or out-of-band verification beyond pairing",
+    "Gateway plugin and JS SDK are not yet implemented — zero-config CLI flow is not functional"
+  ]
+}
