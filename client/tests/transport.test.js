@@ -65,6 +65,10 @@ vi.mock('../js/crypto.js', () => ({
     async getPublicKeyFingerprint() {
       return this._fingerprint;
     }
+
+    async deriveSessionKey() {
+      this.sessionKey = {};
+    }
   },
   b64Encode: (buf) => (buf && buf.length ? `B64:${Array.from(buf).join('-')}` : ''),
   b64Decode: (str) => new Uint8Array(0),
@@ -143,11 +147,20 @@ describe('RelayConnection constructor', () => {
     expect(conn._maxBackoff).toBe(60000);
     expect(conn._reconnecting).toBe(false);
     expect(conn._closed).toBe(false);
+    expect(conn._connectPromise).toBeNull();
 
     expect(conn._frameWaiters).toBeInstanceOf(Map);
     expect(conn._frameWaiters.size).toBe(0);
     expect(conn._dataWaiters).toBeInstanceOf(Map);
     expect(conn._dataWaiters.size).toBe(0);
+  });
+
+  it('rejects a second connect attempt while one is already in progress', async () => {
+    const conn = new RelayConnection();
+    conn.state = 'connecting';
+
+    await expect(conn.connect('ws://relay.test/ws', 'secret', 'PUBKEY'))
+      .rejects.toThrow(/already in progress/i);
   });
 
   it('hydrates a stored persistent identity when present', async () => {
@@ -229,6 +242,17 @@ describe('RelayConnection constructor', () => {
     expect(conn.identityPersistence).toBe('memory');
     expect(mockSaveStoredIdentity).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it('regenerates the session nonce when reusing an in-memory identity', async () => {
+    const conn = new RelayConnection();
+    conn.crypto.keyPair = { publicKey: {}, privateKey: {} };
+    conn.crypto.publicKeyBytes = new Uint8Array([9, 9, 9]);
+    const regenerateSpy = vi.spyOn(conn.crypto, 'regenerateNonce');
+
+    await conn._ensureClientIdentity();
+
+    expect(regenerateSpy).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to a replacement memory-only identity when the stored keypair is invalid', async () => {
@@ -623,31 +647,84 @@ describe('_handleDataFrame', () => {
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('rejects handshake when the pinned gateway key does not match hello_ack', async () => {
+    conn.gatewayPubKeyB64 = 'EXPECTED_KEY';
+    conn._waitForFrame = vi.fn(async () => ({ gateway_online: true }));
+    conn._ensureClientIdentity = vi.fn(async () => {
+      conn.crypto.keyPair = { publicKey: {}, privateKey: {} };
+      conn.crypto.publicKeyBytes = new Uint8Array([1, 2, 3]);
+      conn.crypto.clientNonce = new Uint8Array(32).fill(7);
+    });
+    conn._waitForDataPayload = vi.fn(async () => ({
+      gateway_public_key: 'WRONG_KEY',
+      session_nonce: 'ignored',
+    }));
+    conn._sendRaw = vi.fn();
+    const deriveSpy = vi.spyOn(conn.crypto, 'deriveSessionKey');
+
+    await expect(conn._handshake()).rejects.toThrow(/Gateway public key does not match/);
+    expect(deriveSpy).not.toHaveBeenCalled();
+    expect(conn.state).toBe('disconnected');
+  });
+
+  it('closes the socket and surfaces an error when relay frames are malformed JSON', async () => {
+    conn.state = 'connecting';
+    conn.ws = { close: vi.fn() };
+    const frameWaiter = makePending();
+    conn._frameWaiters.set('joined', frameWaiter);
+
+    await conn._handleSocketMessage({ data: '{not-json' });
+
+    expect(conn.onToast).toHaveBeenCalledWith('Received malformed frame from relay', 'error');
+    expect(frameWaiter.reject).toHaveBeenCalled();
+    expect(conn.ws.close).toHaveBeenCalled();
+  });
+
+  it('rejects handshake waiters if the socket closes mid-handshake', () => {
+    conn.state = 'connecting';
+    const frameWaiter = makePending();
+    const dataWaiter = makePending();
+    conn._frameWaiters.set('joined', frameWaiter);
+    conn._dataWaiters.set('hello_ack', dataWaiter);
+
+    conn._handleSocketClose(new Error('Connection lost'));
+
+    expect(frameWaiter.reject).toHaveBeenCalled();
+    expect(dataWaiter.reject).toHaveBeenCalled();
+    expect(conn.state).toBe('disconnected');
+  });
 });
 
 // ─── disconnect ──────────────────────────────────────────────────
 
 describe('disconnect', () => {
-  it('rejects all pending requests, clears state, sets state to disconnected', () => {
+  it('rejects all pending requests, clears handshake waiters, clears runtime secrets, and sets state to disconnected', () => {
     const conn = createConnection();
 
     // Set up some state
     conn.state = 'connected';
     conn.encrypted = true;
+    conn.channelToken = 'secret-token';
+    conn.channelHash = 'hashed-token';
     conn.ws = { close: vi.fn(), readyState: 1 };
 
     const pending1 = makePending();
     const pending2 = makePending();
     const pending3 = makePending();
+    const frameWaiter = makePending();
+    const dataWaiter = makePending();
     conn.pendingRequests.set('r1', pending1);
     conn.pendingRequests.set('r2', pending2);
     conn.pendingRequests.set('r3', pending3);
     conn.activeStreams.set('r2', { onChunk: vi.fn(), buffer: '' });
+    conn._frameWaiters.set('joined', frameWaiter);
+    conn._dataWaiters.set('hello_ack', dataWaiter);
 
     conn.disconnect();
 
     // All pending requests rejected with 'Disconnected'
-    for (const pending of [pending1, pending2, pending3]) {
+    for (const pending of [pending1, pending2, pending3, frameWaiter, dataWaiter]) {
       expect(pending.reject).toHaveBeenCalled();
       expect(pending.reject.mock.calls[0][0]).toBeInstanceOf(Error);
       expect(pending.reject.mock.calls[0][0].message).toBe('Disconnected');
@@ -656,6 +733,10 @@ describe('disconnect', () => {
     // State cleared
     expect(conn.pendingRequests.size).toBe(0);
     expect(conn.activeStreams.size).toBe(0);
+    expect(conn._frameWaiters.size).toBe(0);
+    expect(conn._dataWaiters.size).toBe(0);
+    expect(conn.channelToken).toBe('');
+    expect(conn.channelHash).toBe('');
     expect(conn.encrypted).toBe(false);
     expect(conn._closed).toBe(true);
     expect(conn.ws).toBeNull();

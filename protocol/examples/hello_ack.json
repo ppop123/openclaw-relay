@@ -1,5 +1,5 @@
 {
-  "_comment": "Layer 1: Gateway responds to HELLO. Sent unencrypted as a DATA frame payload. Client MUST verify gateway_public_key matches stored key from pairing (TOFU).",
+  "_comment": "Layer 1: Gateway responds to HELLO. Sent unencrypted as a DATA frame payload. Client MUST verify gateway_public_key matches the pinned key from pairing data or another trusted out-of-band source.",
   "type": "hello_ack",
   "gateway_public_key": "76u5dd/BHEe7bLeAmUvAaH8J1MhXOf11VBwu2OTCJ04=",
   "session_nonce": "WG+41ZDDvL5OG0O0KuYFbp+s9+qEb6EpWR15+oTEWu8=",

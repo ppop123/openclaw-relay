@@ -159,8 +159,8 @@
   },
   "memory_only_state": {
     "identity_keypair_runtime": {
-      "persisted": true,
-      "lifecycle": "metadata may be discovered during app init; the keypair itself is imported into runtime memory on connect and reused across reconnects"
+      "persisted": false,
+      "lifecycle": "runtime-only keypair state; persisted identity metadata may be discovered during app init, but the keypair itself is imported into memory on connect and reused across reconnects"
     },
     "session_key": {
       "persisted": false,

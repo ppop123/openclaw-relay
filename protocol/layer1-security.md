@@ -94,7 +94,7 @@ The gateway responds with its own HELLO:
 
 #### Gateway Identity Pinning
 
-The client MUST verify that `gateway_public_key` matches the gateway identity captured during pairing. On subsequent connections, the client MUST compare the received `gateway_public_key` against the stored fingerprint from pairing. If the key has changed unexpectedly, the client MUST refuse the connection and alert the user. This is a Trust-On-First-Use (TOFU) model. If verification fails, the connection MUST be aborted.
+The client MUST verify that `gateway_public_key` matches the expected pinned gateway identity, whether that key came from pairing data or another trusted out-of-band source. On subsequent connections, the client MUST compare the received `gateway_public_key` against that pinned value. If the key has changed unexpectedly, the client MUST refuse the connection and alert the user. This uses explicit gateway key pinning, not automatic Trust-On-First-Use acceptance. If verification fails, the connection MUST be aborted.
 
 After HELLO exchange, both sides derive the session key:
 
@@ -190,7 +190,7 @@ The gateway removes the client's public key from its approved list. Future HELLO
 |----------|-----------|
 | Confidentiality | Yes -- AES-256-GCM encryption |
 | Integrity | Yes -- GCM authentication tag |
-| Authenticity | Yes -- clients pin the gateway identity at pairing time (TOFU); only holders of the shared secret can encrypt/decrypt |
+| Authenticity | Yes -- clients pin the gateway identity from pairing data; only holders of the shared secret can encrypt/decrypt |
 | Forward secrecy | No -- not in v1. An Architecture Decision Record (ADR) should be created before v2 to evaluate adopting a Noise IK or XX handshake pattern for forward secrecy. |
 | Replay protection | Yes -- monotonic nonce counters |
 | Relay blindness | Yes -- relay only sees encrypted bytes and channel hash |

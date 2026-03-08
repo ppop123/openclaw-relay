@@ -99,6 +99,9 @@ export async function unprotectIdentityBundle(bundle, passphrase) {
   if (!Number.isInteger(iterations) || iterations <= 0) {
     throw new Error('Identity file is missing PBKDF2 parameters');
   }
+  if (iterations < PROTECTED_IDENTITY_KDF_ITERATIONS) {
+    throw new Error(`Identity file PBKDF2 iterations are too weak; expected at least ${PROTECTED_IDENTITY_KDF_ITERATIONS}`);
+  }
   if (typeof saltB64 !== 'string' || !saltB64) {
     throw new Error('Identity file is missing PBKDF2 salt');
   }

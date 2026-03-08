@@ -47,6 +47,7 @@ export class RelayConnection {
     this._maxBackoff = 60000;
     this._reconnecting = false;
     this._closed = false;
+    this._connectPromise = null;
 
     // Frame waiters (populated during handshake)
     this._frameWaiters = new Map();
@@ -54,29 +55,46 @@ export class RelayConnection {
   }
 
   async connect(relayUrl, channelToken, gatewayPubKeyB64) {
-    this.relayUrl = relayUrl;
-    this.channelToken = channelToken;
-    this.gatewayPubKeyB64 = gatewayPubKeyB64;
-    this._closed = false;
-
-    // Hash the channel token with SHA-256
-    const tokenBytes = new TextEncoder().encode(channelToken);
-    const hashBuf = await crypto.subtle.digest('SHA-256', tokenBytes);
-    this.channelHash = Array.from(new Uint8Array(hashBuf))
-      .map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // Use persistent client ID (survives page reloads and reconnections)
-    if (!this.clientId) {
-      this.clientId = localStorage.getItem('openclaw-relay-client-id');
-      if (!this.clientId) {
-        this.clientId = 'web_' + randomHex(8);
-        localStorage.setItem('openclaw-relay-client-id', this.clientId);
-      }
+    if (this._connectPromise || this.state === 'connecting') {
+      throw new Error('Connection already in progress');
+    }
+    if (this.state === 'connected' && this.ws) {
+      throw new Error('Already connected');
     }
 
-    this._setState('connecting');
+    const attempt = (async () => {
+      this.relayUrl = relayUrl;
+      this.channelToken = channelToken;
+      this.gatewayPubKeyB64 = gatewayPubKeyB64;
+      this._closed = false;
 
-    await this._doConnect();
+      // Hash the channel token with SHA-256
+      const tokenBytes = new TextEncoder().encode(channelToken);
+      const hashBuf = await crypto.subtle.digest('SHA-256', tokenBytes);
+      this.channelHash = Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Use persistent client ID (survives page reloads and reconnections)
+      if (!this.clientId) {
+        this.clientId = localStorage.getItem('openclaw-relay-client-id');
+        if (!this.clientId) {
+          this.clientId = 'web_' + randomHex(8);
+          localStorage.setItem('openclaw-relay-client-id', this.clientId);
+        }
+      }
+
+      this._setState('connecting');
+      await this._doConnect();
+    })();
+
+    this._connectPromise = attempt;
+    try {
+      await attempt;
+    } finally {
+      if (this._connectPromise === attempt) {
+        this._connectPromise = null;
+      }
+    }
   }
 
   getIdentitySummary() {
@@ -268,8 +286,10 @@ export class RelayConnection {
 
   async _doConnect() {
     return new Promise((resolve, reject) => {
+      let socket;
       try {
-        this.ws = new WebSocket(this.relayUrl);
+        socket = new WebSocket(this.relayUrl);
+        this.ws = socket;
       } catch (e) {
         this._setState('disconnected');
         reject(new Error('Invalid relay URL'));
@@ -277,25 +297,32 @@ export class RelayConnection {
       }
 
       const timeout = setTimeout(() => {
-        this.ws.close();
+        if (this.ws !== socket) return;
+        try {
+          socket.close();
+        } catch {}
         this._setState('disconnected');
         reject(new Error('Connection timeout'));
       }, 15000);
 
-      this.ws.onopen = async () => {
+      socket.onopen = async () => {
+        if (this.ws !== socket) return;
         clearTimeout(timeout);
         try {
           await this._handshake();
           this._backoff = 1000;
           resolve();
         } catch (e) {
-          this.ws.close();
+          try {
+            socket.close();
+          } catch {}
           this._setState('disconnected');
           reject(e);
         }
       };
 
-      this.ws.onerror = () => {
+      socket.onerror = () => {
+        if (this.ws !== socket) return;
         clearTimeout(timeout);
         if (this.state === 'connecting' && !this._reconnecting) {
           this._setState('disconnected');
@@ -303,25 +330,15 @@ export class RelayConnection {
         }
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         clearTimeout(timeout);
-        this.encrypted = false;
-        this.crypto.clearSession();
-        // Reject all pending requests immediately
-        for (const [id, pending] of this.pendingRequests) {
-          clearTimeout(pending.timeout);
-          pending.reject(new Error('Connection lost'));
-        }
-        this.pendingRequests.clear();
-        this.activeStreams.clear();
-        if (!this._closed && this.state === 'connected') {
-          this._setState('disconnected');
-          this._scheduleReconnect();
-        }
+        this._handleSocketClose(new Error('Connection lost'));
       };
 
-      this.ws.onmessage = (event) => {
-        this._handleFrame(JSON.parse(event.data));
+      socket.onmessage = (event) => {
+        if (this.ws !== socket) return;
+        void this._handleSocketMessage(event);
       };
     });
   }
@@ -505,23 +522,8 @@ export class RelayConnection {
       console.error('Relay error:', frame.message);
       this.onToast?.(frame.message || 'Relay error', 'error');
       const err = new Error(`Relay error: ${frame.code || 'unknown'}`);
-      // Interrupt any handshake waiters
-      for (const [, waiter] of this._frameWaiters) {
-        clearTimeout(waiter.timeout);
-        waiter.reject(err);
-      }
-      this._frameWaiters.clear();
-      for (const [, waiter] of this._dataWaiters) {
-        clearTimeout(waiter.timeout);
-        waiter.reject(err);
-      }
-      this._dataWaiters.clear();
-      // Reject all pending requests
-      for (const [id, pending] of this.pendingRequests) {
-        clearTimeout(pending.timeout);
-        pending.reject(err);
-      }
-      this.pendingRequests.clear();
+      this._rejectHandshakeWaiters(err);
+      this._rejectPendingRequests(err);
       this.activeStreams.clear();
       return;
     }
@@ -612,6 +614,85 @@ export class RelayConnection {
       }
       return;
     }
+  }
+
+  async _handleSocketMessage(event) {
+    let frame;
+    try {
+      frame = JSON.parse(event.data);
+    } catch (error) {
+      console.error('Malformed relay frame:', error);
+      this.onToast?.('Received malformed frame from relay', 'error');
+      this._handleProtocolFailure(new Error('Received malformed frame from relay'));
+      return;
+    }
+
+    try {
+      await this._handleFrame(frame);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error('Failed to process relay frame');
+      console.error('Failed to process relay frame:', err);
+      this.onToast?.(err.message, 'error');
+      this._handleProtocolFailure(err);
+    }
+  }
+
+  _handleProtocolFailure(error) {
+    this.encrypted = false;
+    this.crypto.clearSession();
+    this._rejectHandshakeWaiters(error);
+    this._rejectPendingRequests(error);
+    this.activeStreams.clear();
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {}
+    } else if (this.state !== 'disconnected') {
+      this._setState('disconnected');
+    }
+  }
+
+  _handleSocketClose(error) {
+    this.encrypted = false;
+    this.crypto.clearSession();
+    this._rejectHandshakeWaiters(error);
+    this._rejectPendingRequests(error);
+    this.activeStreams.clear();
+    if (!this._closed && this.state === 'connected') {
+      this._setState('disconnected');
+      this._scheduleReconnect();
+      return;
+    }
+    if (this.state !== 'disconnected') {
+      this._setState('disconnected');
+    }
+  }
+
+  _rejectHandshakeWaiters(error) {
+    for (const [, waiter] of this._frameWaiters) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+    }
+    this._frameWaiters.clear();
+
+    for (const [, waiter] of this._dataWaiters) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+    }
+    this._dataWaiters.clear();
+  }
+
+  _rejectPendingRequests(error) {
+    for (const [, pending] of this.pendingRequests) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    this.pendingRequests.clear();
+  }
+
+  _clearChannelRuntimeSecrets() {
+    this.channelToken = '';
+    this.channelHash = '';
   }
 
   // ── Connection management ──
@@ -730,19 +811,21 @@ export class RelayConnection {
 
   disconnect() {
     this._closed = true;
+    this._connectPromise = null;
     this.encrypted = false;
     this.crypto.clearSession();
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-    // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error('Disconnected'));
-    }
-    this.pendingRequests.clear();
+    const error = new Error('Disconnected');
+    this._rejectHandshakeWaiters(error);
+    this._rejectPendingRequests(error);
     this.activeStreams.clear();
+    this._clearChannelRuntimeSecrets();
+    if (this.ws) {
+      const socket = this.ws;
+      this.ws = null;
+      try {
+        socket.close();
+      } catch {}
+    }
     this._setState('disconnected');
   }
 }

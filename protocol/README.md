@@ -39,7 +39,7 @@ Each layer is specified in its own document:
 The following constraints apply to version 1 of the protocol:
 
 - **Single relay node**: No clustering, federation, or relay-to-relay communication.
-- **No forward secrecy**: Identity keys are static; session keys are ephemeral per connection but derived from long-term keys.
+- **No forward secrecy**: Identity keys are static; session keys are unique per connection but derived from long-term keys.
 - **No application-layer broadcast**: Each client has an independent encrypted session. The gateway encrypts and sends messages per-client.
 - **Restart-tolerant, not HA**: Relay state is in-memory. A relay restart drops all channels; clients and gateways reconnect and re-establish sessions.
 

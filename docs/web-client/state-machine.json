@@ -103,68 +103,71 @@
     ]
   },
   "identity_lifecycle": {
-    "initial_state": "unknown",
+    "initial_state_by_storage_support": {
+      "supported": "absent",
+      "unsupported": "unsupported"
+    },
     "states": {
-      "unknown": {
-        "description": "identity metadata has not been checked yet"
-      },
       "absent": {
-        "description": "no persisted browser identity is currently known"
+        "description": "no browser identity is currently available in memory or persisted storage"
       },
-      "persisted_metadata": {
-        "description": "an identity record exists in IndexedDB, but the private key has not been imported into runtime memory yet"
+      "persisted": {
+        "description": "an IndexedDB identity record exists; the summary may expose metadata before connect and `loaded` becomes true once the keypair is imported into runtime memory"
       },
-      "loaded": {
-        "description": "the browser identity keypair is loaded into runtime memory and ready for transport use"
-      },
-      "memory_only": {
-        "description": "an identity exists only for the current page session because persistence is unavailable or intentionally skipped"
+      "memory": {
+        "description": "an identity exists only for the current page session because persistence is unavailable, failed, or was intentionally skipped"
       },
       "unsupported": {
         "description": "persistent identity storage is unavailable in this browser"
       }
     },
+    "loaded_flag": {
+      "type": "boolean",
+      "meaning": "`getIdentitySummary().loaded` is true only when the X25519 keypair is imported into runtime memory for the current tab"
+    },
     "transitions": [
       {
-        "from": "unknown",
-        "to": "persisted_metadata",
+        "from": "absent",
+        "to": "persisted",
         "trigger": "app.init() finds a stored identity record",
         "effects": [
           "show fingerprint in connect panel",
-          "defer private-key import until connect"
+          "keep loaded=false until connect imports the keypair"
         ]
       },
       {
-        "from": "unknown",
+        "from": "absent",
         "to": "absent",
         "trigger": "app.init() finds no stored identity"
       },
       {
-        "from": "unknown",
+        "from": "absent",
         "to": "unsupported",
         "trigger": "browser does not provide usable indexeddb persistence"
       },
       {
-        "from": "persisted_metadata",
-        "to": "loaded",
+        "from": "persisted",
+        "to": "persisted",
         "trigger": "connect imports the stored identity successfully",
         "effects": [
+          "set loaded=true",
           "regenerate session nonce",
           "reuse stable client fingerprint"
         ]
       },
       {
         "from": "absent",
-        "to": "loaded",
+        "to": "persisted",
         "trigger": "connect creates a new identity and persistence succeeds",
         "effects": [
           "store identity in indexeddb",
+          "set loaded=true",
           "show fingerprint in ui"
         ]
       },
       {
         "from": "absent",
-        "to": "memory_only",
+        "to": "memory",
         "trigger": "connect creates a new identity but persistence is unavailable or write fails",
         "effects": [
           "warn user",
@@ -172,8 +175,8 @@
         ]
       },
       {
-        "from": "persisted_metadata",
-        "to": "memory_only",
+        "from": "persisted",
+        "to": "memory",
         "trigger": "stored identity import fails or identity store cannot be trusted for this session",
         "effects": [
           "warn user",
@@ -181,7 +184,7 @@
         ]
       },
       {
-        "from": "loaded",
+        "from": "persisted",
         "to": "absent",
         "trigger": "identity reset deletes the stored identity",
         "effects": [
@@ -190,23 +193,33 @@
         ]
       },
       {
-        "from": "memory_only",
+        "from": "memory",
         "to": "absent",
         "trigger": "identity reset clears the temporary identity"
       },
       {
-        "from": ["absent", "memory_only", "unsupported", "persisted_metadata", "loaded"],
-        "to": "persisted_metadata",
+        "from": [
+          "absent",
+          "memory",
+          "unsupported",
+          "persisted"
+        ],
+        "to": "persisted",
         "trigger": "identity file import succeeds and persistence is available",
         "effects": [
           "replace any existing stored identity record",
           "show imported fingerprint in connect panel",
-          "defer private-key import until next connect"
+          "leave loaded=false until the next connect"
         ]
       },
       {
-        "from": ["absent", "memory_only", "unsupported", "persisted_metadata", "loaded"],
-        "to": "memory_only",
+        "from": [
+          "absent",
+          "memory",
+          "unsupported",
+          "persisted"
+        ],
+        "to": "memory",
         "trigger": "identity file import succeeds but persistence is unavailable",
         "effects": [
           "load imported keypair into runtime memory",
@@ -263,9 +276,9 @@
     ],
     "recovery_hints": {
       "persisted": "recommend protected backup export",
-      "memory_only": "warn that reload will rotate identity unless exported",
       "unsupported": "explain IndexedDB is unavailable and import/export becomes temporary",
-      "load_failed": "tell the operator to import a backup or reset before reconnecting"
+      "load_failed": "tell the operator to import a backup or reset before reconnecting",
+      "memory": "warn that reload will rotate identity unless exported"
     }
   },
   "ui_mode_model": {

@@ -120,6 +120,7 @@ beforeEach(() => {
   app.connection._identityLoadFailed = false;
   app.connection._closed = false;
   app.connection.state = 'disconnected';
+  app.streamEpoch = 0;
 });
 
 describe('channelToken migration', () => {
@@ -547,10 +548,39 @@ describe('diagnostics and session controls', () => {
     app.startNewChat();
 
     expect(app.sessionId).toBeNull();
+    expect(app.streamEpoch).toBe(1);
     expect(addSystemSpy).toHaveBeenCalledWith('Started a new chat thread.');
     expect(diagnosticsSpy).toHaveBeenCalled();
 
     addSystemSpy.mockRestore();
     diagnosticsSpy.mockRestore();
+  });
+
+  it('ignores stale stream chunks after starting a new chat', async () => {
+    app.connection.state = 'connected';
+    app.agents = [{ name: 'analyst', status: 'ready' }];
+    getElement('agentSelect').value = 'analyst';
+    getElement('messageInput').value = 'Hello';
+
+    let onChunk;
+    let resolveRequest;
+    app.connection.sendStreamRequest = vi.fn((method, params, chunkHandler) => {
+      onChunk = chunkHandler;
+      return new Promise((resolve) => {
+        resolveRequest = resolve;
+      });
+    });
+
+    const pending = app.sendMessage();
+    await Promise.resolve();
+    app.startNewChat();
+    onChunk({ delta: 'old reply', session_id: 'sess_old' });
+    resolveRequest({ session_id: 'sess_old' });
+    await pending;
+
+    expect(app.sessionId).toBeNull();
+    expect(app.currentStreamText).toBe('');
+    expect(app.chatTranscript).toHaveLength(1);
+    expect(app.chatTranscript[0].text).toBe('Started a new chat thread.');
   });
 });

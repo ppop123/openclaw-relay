@@ -52,4 +52,12 @@ describe('identity-bundle protection helpers', () => {
     await expect(unprotectIdentityBundle(protectedBundle, ''))
       .rejects.toThrow(/passphrase is required/i);
   });
+
+  it('rejects protected bundles that weaken the PBKDF2 iteration count', async () => {
+    const protectedBundle = await protectIdentityBundle(plainBundle, 'top-secret');
+    protectedBundle.kdf.iterations = 1;
+
+    await expect(unprotectIdentityBundle(protectedBundle, 'top-secret'))
+      .rejects.toThrow(/iterations are too weak/i);
+  });
 });

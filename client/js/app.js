@@ -39,6 +39,7 @@ export const app = {
   sessionId: null,
   currentStreamEl: null,
   currentStreamText: '',
+  streamEpoch: 0,
 
   async init() {
     // Migration: clean up any historically saved channelToken (bearer secret)
@@ -104,12 +105,24 @@ export const app = {
   async handleConnect(e) {
     e.preventDefault();
 
+    const btn = document.getElementById('connectBtn');
+    if (btn.disabled) return false;
+
+    const errorEl = document.getElementById('connectError');
+    btn.disabled = true;
+    btn.textContent = 'Connecting...';
+    errorEl.style.display = 'none';
+
     const relayUrl = document.getElementById('relayUrl').value.trim();
     const channelToken = document.getElementById('channelToken').value.trim();
     const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim();
 
     // Validate
-    if (!relayUrl || !channelToken || !gatewayPubKey) return false;
+    if (!relayUrl || !channelToken || !gatewayPubKey) {
+      btn.disabled = false;
+      btn.textContent = 'Connect';
+      return false;
+    }
 
     const url = this._normalizeRelayUrl(relayUrl);
 
@@ -120,12 +133,6 @@ export const app = {
       gatewayPubKey,
       selectedProfileId: this._getSelectedProfileId(),
     });
-
-    const btn = document.getElementById('connectBtn');
-    const errorEl = document.getElementById('connectError');
-    btn.disabled = true;
-    btn.textContent = 'Connecting...';
-    errorEl.style.display = 'none';
 
     try {
       await this.connection.connect(url, channelToken, gatewayPubKey);
@@ -160,6 +167,9 @@ export const app = {
   },
 
   disconnect() {
+    this.streamEpoch += 1;
+    this.currentStreamEl = null;
+    this.currentStreamText = '';
     this.connection.disconnect();
 
     this._returnToConnectView();
@@ -191,6 +201,7 @@ export const app = {
       return;
     }
 
+    this.streamEpoch += 1;
     document.getElementById('messages').innerHTML = '';
     this.chatTranscript = [];
     this.sessionId = null;
@@ -530,6 +541,7 @@ export const app = {
     const cursor = document.createElement('span');
     cursor.className = 'cursor';
     contentEl.appendChild(cursor);
+    const streamEpoch = this.streamEpoch;
 
     try {
       const result = await this.connection.sendStreamRequest(
@@ -541,6 +553,8 @@ export const app = {
           stream: true
         },
         (chunk) => {
+          if (this.streamEpoch !== streamEpoch) return;
+
           // Handle stream chunk
           if (chunk && chunk.delta) {
             this.currentStreamText += chunk.delta;
@@ -559,6 +573,8 @@ export const app = {
         }
       );
 
+      if (this.streamEpoch !== streamEpoch) return;
+
       // Stream complete: remove cursor and do final render
       if (result && result.session_id) {
         this.sessionId = result.session_id;
@@ -570,6 +586,8 @@ export const app = {
       this._scrollToBottom();
 
     } catch (err) {
+      if (this.streamEpoch !== streamEpoch) return;
+
       assistantEntry.text = this.currentStreamText || `(Error: ${err.message})`;
       assistantEntry.error = err.message;
       contentEl.innerHTML = renderMarkdown(this.currentStreamText || '(Error: ' + err.message + ')');
@@ -580,8 +598,10 @@ export const app = {
         showToast('Failed to send: ' + err.message, 'error');
       }
     } finally {
-      this.currentStreamEl = null;
-      this.currentStreamText = '';
+      if (this.streamEpoch === streamEpoch) {
+        this.currentStreamEl = null;
+        this.currentStreamText = '';
+      }
     }
   },
 
