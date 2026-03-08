@@ -80,10 +80,6 @@ The web client stores only the minimum data needed for reconnection:
 
 Older versions of the client may have persisted `channelToken` to local storage. On load, the current client automatically detects and **deletes** any saved `channelToken`. No user action is required.
 
-## Worker Implementation
-
-The Cloudflare Worker deployment (`deploy/cloudflare-worker/`) is **experimental** and is **NOT** part of the official security-reviewed codebase. It uses a different routing mechanism (URL-based rather than frame-based), has no automated security tests, and runs with wide-open CORS. Do not use it for security-sensitive deployments.
-
 ## Origin Validation
 
 The relay validates the `Origin` header on incoming WebSocket upgrade requests:

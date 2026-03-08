@@ -16,7 +16,7 @@
       "path": "sdk/python/",
       "status": "supported",
       "release_scope": "official",
-      "description": "Client SDK (protocol layers 0-2, client-side only — no gateway-side API)",
+      "description": "Client SDK (protocol layers 0-2, client-side only \u2014 no gateway-side API)",
       "test_command": "cd sdk/python && pip install -e '.[dev]' && pytest -q",
       "test_framework": "pytest"
     },
@@ -37,22 +37,6 @@
       "description": "Wire protocol specification (v1)"
     },
     {
-      "name": "Cloudflare Worker",
-      "path": "deploy/cloudflare-worker/",
-      "status": "experimental",
-      "release_scope": "excluded",
-      "description": "Edge relay on Cloudflare Workers + Durable Objects",
-      "limitations": [
-        "Incompatible URL-based routing (not frame-based protocol)",
-        "Standard SDK clients and reference client CANNOT connect",
-        "No automated runtime tests",
-        "CORS is wide open (Access-Control-Allow-Origin: *)",
-        "Not security-reviewed"
-      ],
-      "test_command": "cd deploy/cloudflare-worker && npm ci && npx tsc --noEmit",
-      "test_framework": "tsc (type check only, no runtime tests)"
-    },
-    {
       "name": "JavaScript SDK",
       "path": "sdk/js/",
       "status": "not_implemented",
@@ -65,7 +49,7 @@
       "status": "supported",
       "release_scope": "official",
       "description": "TypeScript OpenClaw gateway plugin (gateway-side relay adapter)",
-      "test_command": "cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests && cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit",
+      "test_command": "cd plugin && npm ci && npm test && npm run typecheck",
       "test_framework": "vitest + tsc"
     }
   ]

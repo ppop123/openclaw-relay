@@ -43,7 +43,6 @@ Official release scope / 正式支持范围：
 
 Excluded from official release scope / 不在正式发布范围内：
 
-- `deploy/cloudflare-worker/` — Experimental
 - `sdk/js/` — Not yet implemented
 
 Release notes / 发布说明：
@@ -65,11 +64,8 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 | Relay Server (`relay/`) | Reference relay implementation (Go) | Implemented, tested |
 | Python SDK (`sdk/python/`) | Client SDK (protocol layers 0-2) | Implemented, tested |
 | Reference Client (`client/`) | Browser-based web client | Implemented, tested |
-| Cloudflare Worker (`deploy/cloudflare-worker/`) | Edge relay on Workers + Durable Objects | **Experimental** |
 | JavaScript SDK (`sdk/js/`) | Protocol library for JS | Not yet implemented |
 | OpenClaw Plugin (`plugin/`) | Gateway channel plugin | Implemented, tested |
-
-> **Cloudflare Worker (Experimental):** The Worker deployment under `deploy/cloudflare-worker/` is an experimental alternative relay that runs on Cloudflare's edge network using Durable Objects. It uses **URL-based routing** (`?role=gateway&id=...`) instead of the standard in-band `register`/`join` protocol — standard SDK clients and the reference client **cannot connect to it directly**. It requires a purpose-built adapter. Do not use it in production.
 
 ## Quick Start
 
@@ -90,7 +86,7 @@ cd relay && go test -v -count=1         # Go relay
 cd sdk/python && pip install -e ".[dev]" && pytest -q  # Python SDK
 cd client && npm ci && npm test          # Web client
 cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests  # OpenClaw plugin
-cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit  # Plugin typecheck
+cd plugin && npm ci && npm run typecheck  # OpenClaw plugin typecheck (plugin tests require `go` on PATH)
 bash scripts/smoke-openclaw-plugin.sh  # OpenClaw plugin lifecycle smoke: pair/revoke/rotate/disable (local/manual)
 ```
 

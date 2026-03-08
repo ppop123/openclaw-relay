@@ -28,14 +28,8 @@ These are implemented, tested in CI, and covered by stability guarantees:
 | Go relay server | `relay/` | `cd relay && go test -v -count=1` |
 | Python SDK (client-side only) | `sdk/python/` | `cd sdk/python && pip install -e '.[dev]' && pytest -q` |
 | Web reference client | `client/` | `cd client && npm ci && npm test` |
-| OpenClaw gateway plugin | `plugin/` | `cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests && cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit` |
+| OpenClaw gateway plugin | `plugin/` | `cd plugin && npm ci && npm test && npm run typecheck` (requires `go` on PATH for integration test) |
 | Protocol spec | `protocol/` | (no executable tests) |
-
-## Experimental (NOT Officially Supported)
-
-| Component | Path | Why Excluded |
-|-----------|------|-------------|
-| Cloudflare Worker | `deploy/cloudflare-worker/` | Incompatible routing model (URL-based, not frame-based). Standard clients cannot connect. No runtime tests. Wide-open CORS. Not security-reviewed. |
 
 ## Not Yet Implemented
 
@@ -86,11 +80,11 @@ All commands in `docs/release-manifest.json` → `required_test_commands` where 
 cd relay && go test -v -count=1
 cd sdk/python && pip install -e '.[dev]' && pytest -q
 cd client && npm ci && npm test
-cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
-cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit
+cd plugin && npm install && npm test
+cd plugin && npm ci && npm run typecheck
 ```
 
-The Worker type check (`tsc --noEmit`) is informational and does not block release. Plugin tests and plugin type checking are part of the official release gate.
+Plugin tests and plugin type checking are part of the official release gate.
 For local release-manager verification, run `bash scripts/smoke-openclaw-plugin.sh` to exercise plugin install → pairing → real gateway request → revoke → re-pair → rotate-token → disable over a local relay. This smoke flow is intentionally local/manual because hosted CI does not ship with an OpenClaw runtime.
 
 ## Implementation-Specific Notes
@@ -111,9 +105,8 @@ There is no gateway SDK. Implementing a gateway requires directly handling the L
 
 ## Common Mistakes to Avoid
 
-1. Do not claim the Worker is compatible with standard clients — it uses a different routing model.
-2. Do not claim forward secrecy — v1 does not have it.
-3. Do not persist `channelToken` on the client — it is a bearer secret.
-4. Do not use `--allow-origin` with full URLs — it takes host patterns only.
-5. Do not fall back to plaintext after session key is established — this breaks E2E integrity.
-6. Do not treat `docs/technical-design.md` code examples for the JS SDK as real — `sdk/js/` is still not implemented. The gateway plugin under `plugin/` is officially supported for current OpenClaw runtime builds, but the Worker remains experimental.
+1. Do not claim forward secrecy — v1 does not have it.
+2. Do not persist `channelToken` on the client — it is a bearer secret.
+3. Do not use `--allow-origin` with full URLs — it takes host patterns only.
+4. Do not fall back to plaintext after session key is established — this breaks E2E integrity.
+5. Do not treat `docs/technical-design.md` code examples for the JS SDK as real — `sdk/js/` is still not implemented.

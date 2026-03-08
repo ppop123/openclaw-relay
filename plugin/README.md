@@ -44,13 +44,15 @@ openclaw relay disable
 
 - Node.js `>=22`
 - WebCrypto with X25519 support
+- Go toolchain on `PATH` for the plugin integration test suite
 - A current OpenClaw runtime build that exposes channel + CLI plugin APIs
 
 ## Development checks
 
 ```bash
-cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
-cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit
+cd plugin && npm ci
+npm test
+npm run typecheck
 ```
 
 See `docs/plans/2026-03-08-gateway-plugin-design.md` for the design source and `docs/quick-start.md` for the short install flow.

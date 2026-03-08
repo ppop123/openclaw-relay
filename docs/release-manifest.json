@@ -10,9 +10,7 @@
     "protocol/",
     "plugin/"
   ],
-  "experimental_components": [
-    "deploy/cloudflare-worker/"
-  ],
+  "experimental_components": [],
   "not_implemented": [
     "sdk/js/"
   ],
@@ -43,18 +41,13 @@
       "blocks_release": true
     },
     {
-      "name": "Worker type check",
-      "command": "cd deploy/cloudflare-worker && npm ci && npx tsc --noEmit",
-      "blocks_release": false
-    },
-    {
       "name": "Plugin tests",
-      "command": "cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests",
+      "command": "cd plugin && npm ci && npm test",
       "blocks_release": true
     },
     {
       "name": "Plugin type check",
-      "command": "cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit",
+      "command": "cd plugin && npm ci && npm run typecheck",
       "blocks_release": true
     },
     {
@@ -70,15 +63,15 @@
     "forward_secrecy": false,
     "replay_protection": true,
     "relay_blindness": true,
-    "key_model": "Static X25519 identity keypairs (generated once at pairing). Session key uniqueness from fresh random nonces per connection mixed into HKDF salt. The Python SDK supports persisting keypairs across restarts via the KeyPair export. The web reference client keeps its keypair in-memory only — it is stable across reconnections within one page session but lost on page reload (acceptable for a reference client; production clients should persist to IndexedDB).",
+    "key_model": "Static X25519 identity keypairs (generated once at pairing). Session key uniqueness from fresh random nonces per connection mixed into HKDF salt. The Python SDK supports persisting keypairs across restarts via the KeyPair export. The web reference client keeps its keypair in-memory only \u2014 it is stable across reconnections within one page session but lost on page reload (acceptable for a reference client; production clients should persist to IndexedDB).",
     "notes": "v1 does NOT provide forward secrecy. Compromising an identity private key allows computing the ECDH shared secret and (with captured session nonces) deriving all past and future session keys. ADR needed for v2 (consider Noise IK/XX)."
   },
   "known_limitations": [
-    "Single relay node only — no clustering, federation, or HA",
+    "Single relay node only \u2014 no clustering, federation, or HA",
     "No forward secrecy in v1",
-    "Stream resumption not supported — interrupted streams require new request",
-    "Requests are not idempotent by default — no automatic retries for state-changing methods",
-    "TOFU model for gateway identity — no certificate authority or out-of-band verification beyond pairing",
+    "Stream resumption not supported \u2014 interrupted streams require new request",
+    "Requests are not idempotent by default \u2014 no automatic retries for state-changing methods",
+    "TOFU model for gateway identity \u2014 no certificate authority or out-of-band verification beyond pairing",
     "JavaScript SDK is not yet implemented",
     "OpenClaw gateway plugin requires a current OpenClaw runtime with channel and CLI plugin APIs enabled"
   ]

@@ -32,7 +32,7 @@ cd client && npm ci && npm test
 
 # OpenClaw gateway plugin
 cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
-cd deploy/cloudflare-worker && npm ci && cd ../.. && deploy/cloudflare-worker/node_modules/.bin/tsc -p plugin/tsconfig.json --noEmit
+cd plugin && npm ci && npm run typecheck
 ```
 
 ## Self-Hosted Relay with TLS (implemented)

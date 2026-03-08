@@ -452,26 +452,3 @@ Deliverables:
 4. **Relay federation?** Should relays be able to connect to each other for redundancy? Probably not in v1 — adds complexity. Users can just switch relays if one goes down.
 
 5. **Should the protocol version be negotiated?** Currently both sides declare `version: 1`. If v2 introduces breaking changes, a negotiation mechanism will be needed. Recommendation: defer until v2 is planned.
-
-## 9. Cloudflare Worker Deployment (Experimental)
-
-The `deploy/cloudflare-worker/` directory contains an experimental relay implementation that runs on Cloudflare Workers with Durable Objects.
-
-**Important limitations:**
-
-- **Incompatible routing model.** The Worker uses URL query parameters (`?role=gateway&id=<client_id>`) to assign roles at connection time, whereas the standard Go relay uses in-band `register` and `join` frames sent after the WebSocket is established. Standard SDK clients and the reference web client **cannot connect to the Worker** without a purpose-built adapter.
-
-- **Not production-ready.** The Worker is a proof-of-concept for edge deployment. It has not undergone the same security review as the Go relay, and operational tooling (structured logging, `/status` endpoint, abuse controls) is minimal.
-
-- **Use cases.** The Worker is useful for evaluating whether a Cloudflare-native relay is viable. Contributors interested in edge relay architectures can use it as a starting point.
-
-If you are deploying OpenClaw Relay for real use, use the Go relay server described in Section 3.1.
-
-## Recommended Next Documents
-
-Before implementation begins, the following documents should be created:
-
-- `docs/adr-001-single-node-relay.md` — Why v1 is single-node and when to revisit
-- `docs/adr-002-pairing-and-client-approval.md` — Detailed pairing flow and trust model
-- `docs/adr-003-relay-registry-resilience.md` — Registry caching, mirrors, and signed manifests
-- `docs/operator-runbook.md` — Operational guide for public relay operators

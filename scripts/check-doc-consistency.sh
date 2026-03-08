@@ -4,7 +4,6 @@
 # Detects:
 #   - Forbidden phrases that contradict project status
 #   - Port default mismatches between code and docs
-#   - Worker missing "experimental" marker
 #   - False security claims (forward secrecy)
 #
 # Exit code 0 = all checks pass, 1 = at least one failure.
@@ -53,25 +52,13 @@ else
     fi
 fi
 
-# 3. Worker must be marked experimental
-echo "Checking Worker experimental status..."
-for file in "$REPO_ROOT/docs/support-matrix.json" "$REPO_ROOT/docs/release-manifest.json"; do
-    if [ -f "$file" ]; then
-        if ! grep -q "experimental" "$file"; then
-            fail "$file does not mention 'experimental' for Worker"
-        fi
-    else
-        fail "Missing file: $file"
-    fi
-done
-
-# 4. Forward secrecy claim check (must say false/No/not)
+# 3. Forward secrecy claim check (must say false/No/not)
 echo "Checking forward secrecy claims..."
 if grep -q '"forward_secrecy": true' "$REPO_ROOT/docs/release-manifest.json" 2>/dev/null; then
     fail "release-manifest.json claims forward_secrecy: true"
 fi
 
-# 5. --allow-origin must not show full URLs in docs
+# 4. --allow-origin must not show full URLs in docs
 echo "Checking --allow-origin documentation..."
 bad_origin=$(grep -rn --include="*.md" "\-\-allow-origin https\?://" "$REPO_ROOT/docs/" "$REPO_ROOT/README.md" 2>/dev/null || true)
 if [ -n "$bad_origin" ]; then

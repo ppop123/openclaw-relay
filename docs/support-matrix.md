@@ -16,14 +16,6 @@
 
 These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.2.1`.
 
-### Experimental (Not Officially Supported)
-
-| Component | Path | Limitations |
-|-----------|------|-------------|
-| Cloudflare Worker | `deploy/cloudflare-worker/` | Uses incompatible URL-based routing (not frame-based). No automated runtime tests. CORS is wide open. **Standard clients CANNOT connect to it.** |
-
-The Worker is a proof-of-concept for edge deployment. It is not security-reviewed and should not be used for production workloads.
-
 ### Not Yet Implemented
 
 | Component | Path | Status |
@@ -45,7 +37,7 @@ The current and only protocol version is **v1**.
 | Go relay server | `go test` suite | `go test` |
 | Python SDK | `pytest` suite | `pytest` |
 | Web reference client | `vitest` suite | `vitest` |
-| OpenClaw gateway plugin | `vitest` suite + typecheck + local smoke script | `vitest` + `tsc` + `bash` |
+| OpenClaw gateway plugin | `vitest` suite + typecheck + local smoke script | `vitest` + `tsc` + `bash` (plugin tests require `go` on `PATH`) |
 
 ## CI Pipeline
 
@@ -60,6 +52,5 @@ The CI pipeline runs the following checks:
 | Plugin type check | `tsc -p plugin/tsconfig.json --noEmit` | OpenClaw gateway plugin | Yes |
 | Plugin smoke | `bash scripts/smoke-openclaw-plugin.sh` | OpenClaw gateway plugin on a real local OpenClaw runtime | No (manual/local) |
 | Docs / contracts | `validate-protocol-examples.py` + `check-doc-consistency.sh` | Protocol + docs | Yes |
-| Worker type check | `tsc --noEmit` | Cloudflare Worker only | No |
 
-All officially supported components must pass their test suites before release. The Worker type check is informational and does not block release decisions.
+All officially supported components must pass their test suites before release.
