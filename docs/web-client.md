@@ -40,6 +40,7 @@ It currently provides:
 - identity fingerprint plus copy, protected export / import, and reset actions in the connect UI
 - streaming `chat.send`
 - agent list loading via `agents.list`
+- preferred agent restore across reconnects and reloads when that agent is still available
 - in-chat diagnostics for session, client, profile, and gateway key state
 - local `New Chat` control that resets `sessionId` without disconnecting
 - secure Markdown rendering for assistant output
@@ -69,7 +70,7 @@ Its largest current limitations are:
 |-------|------------------|
 | Runtime model | Plain browser modules loaded from `client/index.html` |
 | Build step | None |
-| LocalStorage | `openclaw-relay-settings` (`relayUrl`, `gatewayPubKey`, `selectedProfileId`), `openclaw-relay-profiles` (saved relay profiles), and `openclaw-relay-client-id` (`clientId`) |
+| LocalStorage | `openclaw-relay-settings` (`relayUrl`, `gatewayPubKey`, `selectedProfileId`, `selectedAgent`), `openclaw-relay-profiles` (saved relay profiles), and `openclaw-relay-client-id` (`clientId`) |
 | IndexedDB | `openclaw-relay-browser` → `identity` store for the browser X25519 keypair |
 | Never persisted to browser storage | `channelToken`, session keys, decrypted messages |
 | Identity keypair | Loaded from IndexedDB on startup when available; otherwise created on first connect and then persisted if possible |

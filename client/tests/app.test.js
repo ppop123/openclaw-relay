@@ -92,6 +92,7 @@ const PROFILES_KEY = 'openclaw-relay-profiles';
 const defaultExportIdentityBundle = app.connection.exportIdentityBundle.bind(app.connection);
 const defaultImportIdentityBundle = app.connection.importIdentityBundle.bind(app.connection);
 const defaultResetIdentity = app.connection.resetIdentity.bind(app.connection);
+const defaultSendRequest = app.connection.sendRequest.bind(app.connection);
 
 beforeEach(() => {
   store.clear();
@@ -106,8 +107,10 @@ beforeEach(() => {
   app.connection.exportIdentityBundle = defaultExportIdentityBundle;
   app.connection.importIdentityBundle = defaultImportIdentityBundle;
   app.connection.resetIdentity = defaultResetIdentity;
+  app.connection.sendRequest = defaultSendRequest;
 
   app.profiles = [];
+  app.selectedAgentPreference = '';
   app.connection.crypto.clearIdentity();
   app.connection.identityPersistence = 'unsupported';
   app.connection.identityFingerprint = '';
@@ -441,6 +444,48 @@ describe('saved profiles', () => {
   });
 });
 
+
+
+describe('agent preference', () => {
+  it('restores the saved agent when the agent list loads', async () => {
+    store.set(STORAGE_KEY, JSON.stringify({ selectedAgent: 'analyst' }));
+    app.connection.sendRequest = vi.fn(async () => ({
+      agents: [
+        { name: 'scout', status: 'ready' },
+        { name: 'analyst', status: 'busy' },
+      ],
+    }));
+
+    await app.init();
+    await app._fetchAgents();
+
+    expect(getElement('agentSelect').value).toBe('analyst');
+    expect(JSON.parse(store.get(STORAGE_KEY))).toMatchObject({ selectedAgent: 'analyst' });
+  });
+
+  it('persists agent changes without overwriting other safe settings', () => {
+    store.set(STORAGE_KEY, JSON.stringify({
+      relayUrl: 'wss://relay.example.com/ws',
+      gatewayPubKey: 'BASE64KEY',
+      selectedProfileId: 'profile_saved',
+    }));
+    app.agents = [
+      { name: 'scout', status: 'ready' },
+      { name: 'analyst', status: 'busy', description: 'Deep research' },
+    ];
+    getElement('agentSelect').value = 'analyst';
+
+    app.handleAgentSelectChange();
+
+    expect(JSON.parse(store.get(STORAGE_KEY))).toMatchObject({
+      relayUrl: 'wss://relay.example.com/ws',
+      gatewayPubKey: 'BASE64KEY',
+      selectedProfileId: 'profile_saved',
+      selectedAgent: 'analyst',
+    });
+    expect(getElement('agentStatus').textContent).toMatch(/busy/);
+  });
+});
 
 describe('diagnostics and session controls', () => {
   it('renders session, client, profile, and gateway diagnostics', () => {

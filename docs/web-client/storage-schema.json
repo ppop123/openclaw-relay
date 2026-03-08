@@ -27,6 +27,12 @@
               "required": false,
               "secret": false,
               "description": "Currently selected saved profile id, if any"
+            },
+            "selectedAgent": {
+              "type": "string",
+              "required": false,
+              "secret": false,
+              "description": "Last preferred agent name, restored when that agent still exists in agents.list"
             }
           },
           "forbidden_fields": [

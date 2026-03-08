@@ -215,6 +215,11 @@
       }
     ]
   },
+  "agent_selection_model": {
+    "storage_field": "selectedAgent",
+    "restore_rule": "reuse the saved agent if it still exists in the latest agents.list response; otherwise fall back to the first available agent",
+    "update_trigger": "user changes #agentSelect"
+  },
   "request_lifecycle": {
     "non_streaming": [
       "create request id",

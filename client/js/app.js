@@ -34,6 +34,7 @@ export const app = {
   connection: new RelayConnection(),
   agents: [],
   profiles: [],
+  selectedAgentPreference: '',
   sessionId: null,
   currentStreamEl: null,
   currentStreamText: '',
@@ -49,6 +50,7 @@ export const app = {
     }
 
     this.profiles = this._loadProfiles();
+    this.selectedAgentPreference = saved.selectedAgent || '';
     this._renderProfiles(saved.selectedProfileId || '');
 
     const selectedProfile = saved.selectedProfileId ? this._findProfile(saved.selectedProfileId) : null;
@@ -86,6 +88,9 @@ export const app = {
     });
     document.getElementById('profileSelect').addEventListener('change', () => {
       this.handleProfileSelectChange();
+    });
+    document.getElementById('agentSelect').addEventListener('change', () => {
+      this.handleAgentSelectChange();
     });
 
     await this.connection.hydratePersistedIdentity();
@@ -204,6 +209,13 @@ export const app = {
       selectedProfileId: profile.id,
     });
     this._updateDiagnostics();
+  },
+
+  handleAgentSelectChange() {
+    const selectedAgent = document.getElementById('agentSelect').value || '';
+    this.selectedAgentPreference = selectedAgent;
+    this._saveSettings({ selectedAgent });
+    this._updateAgentStatus();
   },
 
   saveProfile() {
@@ -419,6 +431,7 @@ export const app = {
 
   async _fetchAgents() {
     const select = document.getElementById('agentSelect');
+    const previousSelection = select.value || this.selectedAgentPreference;
     try {
       const result = await this.connection.sendRequest('agents.list', {});
       this.agents = result.agents || [];
@@ -438,8 +451,11 @@ export const app = {
         select.appendChild(opt);
       }
 
+      const selectedAgent = this._resolveAvailableAgent(previousSelection);
+      select.value = selectedAgent;
+      this.selectedAgentPreference = selectedAgent;
+      this._saveSettings({ selectedAgent });
       this._updateAgentStatus();
-      select.addEventListener('change', () => this._updateAgentStatus());
     } catch (err) {
       select.innerHTML = '<option value="">Failed to load agents</option>';
       showToast('Failed to fetch agents: ' + err.message, 'error');
@@ -718,7 +734,8 @@ export const app = {
     try {
       // Never persist channelToken — it's a bearer secret
       const { channelToken, ...safe } = settings;
-      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(safe));
+      const current = this._loadSettings();
+      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify({ ...current, ...safe }));
     } catch {}
   },
 
@@ -862,6 +879,13 @@ export const app = {
 
   _findProfile(profileId) {
     return this.profiles.find((profile) => profile.id === profileId) || null;
+  },
+
+  _resolveAvailableAgent(preferredAgent) {
+    if (preferredAgent && this.agents.some((agent) => agent.name === preferredAgent)) {
+      return preferredAgent;
+    }
+    return this.agents[0]?.name || '';
   },
 
   _applyProfileToForm(profile) {

@@ -13,7 +13,7 @@ The browser client uses `vitest`.
 | `client/tests/identity-store.test.js` | IndexedDB identity persistence layout and CRUD behavior |
 | `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
-| `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, `channelToken` stripping |
+| `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
 
 Run the full browser-client test suite with:
 
@@ -27,6 +27,7 @@ The current test suite is strongest at these guarantees:
 
 - `channelToken` is not persisted
 - saved relay profiles persist only non-secret connection settings
+- selected-agent preference persists only as safe UI state and restores when the agent is still available
 - historical stored `channelToken` is cleaned on startup
 - browser identity export and import actions preserve the expected fingerprint
 - identity fingerprint/public-key copy actions surface the full values without exposing storage secrets
@@ -61,18 +62,19 @@ When validating the web client manually, check the following:
 6. identity card shows whether a browser identity is already available
 7. connect succeeds against a live gateway
 8. the diagnostics bar shows session/client/profile/gateway context after connect
-9. `agents.list` populates the selector
-10. `chat.send` streams chunks and final text renders correctly
-11. `New Chat` clears the local transcript and resets `sessionId` without disconnecting
-12. disconnect returns the UI to connect mode
-13. reconnect after transient relay loss restores chat functionality
-14. gateway public-key mismatch is rejected
-15. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
-16. importing that protected file with the same passphrase restores the expected fingerprint
-17. fingerprint and public-key copy actions place the full values on the clipboard
-18. exporting without a passphrase shows a confirmation warning
-19. full page reload preserves the same client fingerprint when IndexedDB is available
-20. identity reset causes the next connect to present a different client fingerprint
+9. `agents.list` populates the selector and restores the saved agent when available
+10. changing the selected agent updates safe settings without affecting secrets
+11. `chat.send` streams chunks and final text renders correctly
+12. `New Chat` clears the local transcript and resets `sessionId` without disconnecting
+13. disconnect returns the UI to connect mode
+14. reconnect after transient relay loss restores chat functionality
+15. gateway public-key mismatch is rejected
+16. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
+17. importing that protected file with the same passphrase restores the expected fingerprint
+18. fingerprint and public-key copy actions place the full values on the clipboard
+19. exporting without a passphrase shows a confirmation warning
+20. full page reload preserves the same client fingerprint when IndexedDB is available
+21. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 

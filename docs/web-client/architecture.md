@@ -47,6 +47,7 @@ app (UI + state)
 - identity summary and recovery-hint rendering
 - clipboard copy actions for identity fingerprint and public key
 - agent list state
+- selected-agent preference persistence
 - current chat session id
 - streaming text accumulation for the active assistant response
 - status and toast display

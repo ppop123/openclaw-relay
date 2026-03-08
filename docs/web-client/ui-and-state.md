@@ -64,6 +64,7 @@ Transient status and error notifications are rendered into `#toastContainer`.
 | `connection` | The single `RelayConnection` instance |
 | `agents` | Last loaded list from `agents.list` |
 | `profiles` | Saved relay profiles loaded from `localStorage` |
+| `selectedAgentPreference` | Last preferred agent name loaded from safe settings |
 | `sessionId` | Current Layer 3 chat session id, if any |
 | `currentStreamEl` | Active DOM node for the assistant stream in progress |
 | `currentStreamText` | Accumulated assistant text during streaming |
@@ -220,6 +221,11 @@ The selected agent status text is derived from:
 
 - `agent.status`
 - optional `agent.description`
+
+The selected agent itself is restored from safe settings when possible:
+
+- if the saved `selectedAgent` exists in the latest `agents.list` response, that agent is selected again
+- otherwise the UI falls back to the first available agent and updates safe settings
 
 ## Chat Flow
 
