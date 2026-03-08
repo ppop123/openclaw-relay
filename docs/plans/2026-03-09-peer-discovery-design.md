@@ -492,7 +492,7 @@ Potential future extensions can be added later without changing the MVP model:
 5. Add `DISCOVER` call path.
 6. Add `SIGNAL` send/receive logic.
 7. Add invite creation and acceptance policy, including invite-scoped in-memory peer admission on the target gateway.
-8. Add peer-initiated channel bootstrap logic.
+8. Add peer-initiated channel bootstrap logic, including a host-only outbound invite dialer that performs `JOIN(invite_hash)` and `HELLO` / `HELLO_ACK`.
 
 ### Human-Facing Clients
 

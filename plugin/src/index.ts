@@ -14,6 +14,7 @@ export * from './gateway-adapter.js';
 export * from './host-types.js';
 export * from './openclaw-host.js';
 export * from './outbound.js';
+export * from './outbound-peer-session.js';
 export * from './pairing.js';
 export * from './peer-discovery.js';
 export * from './relay-connection.js';

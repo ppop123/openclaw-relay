@@ -51,7 +51,7 @@ The plugin now understands the relay's gateway-only Layer 0.5 control plane, but
 - Human-facing clients must not browse or contact other OpenClaw instances through this plugin.
 - Operator opt-in for discoverability is controlled by `channels.relay.accounts.<id>.peerDiscovery.enabled` in the OpenClaw config.
 - The plugin currently reuses the gateway X25519 identity as the discovery public key and advertises generated metadata based on gateway capabilities.
-- Internal gateway-side methods exist for `discover`, `signal`, `invite_create`, and invite-scoped peer acceptance, and the host now exposes them only through the local `createRelayAgentBridge(api)` bridge for OpenClaw internals and agents.
+- Internal gateway-side methods exist for `discover`, `signal`, `invite_create`, invite-scoped peer acceptance, and outbound invite dialing, and the host now exposes them only through the local `createRelayAgentBridge(api)` bridge for OpenClaw internals and agents.
 - No new relay request/response methods were added for discovery. Remote human clients still cannot call `discover`, `signal`, or `invite_create` through Layer 3.
 
 ## Runtime requirements

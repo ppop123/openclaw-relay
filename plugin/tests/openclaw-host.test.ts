@@ -161,6 +161,8 @@ describe('openclaw host bridge', () => {
       inviteHash: 'invite-hash',
       expiresAt: '2026-03-09T00:05:00.000Z',
     });
+    const fakePeerSession = { request: vi.fn(), requestStream: vi.fn(), close: vi.fn(), isConnected: true };
+    const dialPeerSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'dialPeerInvite').mockResolvedValue(fakePeerSession as any);
     const drainSignalsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignals').mockReturnValue(signals as any);
     const drainSignalErrorsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignalErrors').mockReturnValue(signalErrors as any);
 
@@ -184,6 +186,7 @@ describe('openclaw host bridge', () => {
         inviteHash: 'invite-hash',
         expiresAt: '2026-03-09T00:05:00.000Z',
       });
+      await expect(bridge.dialPeerInvite('invite-token', 'peer-key', { clientId: 'peer-client-9' })).resolves.toBe(fakePeerSession);
       expect(bridge.drainPeerSignals()).toEqual(signals);
       expect(bridge.drainPeerSignalErrors()).toEqual(signalErrors);
       await expect(bridge.getStatus()).resolves.toMatchObject({ state: 'registered' });
@@ -194,6 +197,7 @@ describe('openclaw host bridge', () => {
       expect(authorizePeerSpy).toHaveBeenCalledWith('peer-key', 45, 1);
       expect(createInviteSpy).toHaveBeenNthCalledWith(1, 90);
       expect(createInviteSpy).toHaveBeenNthCalledWith(2, 45);
+      expect(dialPeerSpy).toHaveBeenCalledWith('invite-token', 'peer-key', 'peer-client-9');
       await bridge.stopAccount();
       expect(stopSpy).toHaveBeenCalledTimes(1);
     } finally {
@@ -204,6 +208,7 @@ describe('openclaw host bridge', () => {
       sendSignalSpy.mockRestore();
       authorizePeerSpy.mockRestore();
       createInviteSpy.mockRestore();
+      dialPeerSpy.mockRestore();
       drainSignalsSpy.mockRestore();
       drainSignalErrorsSpy.mockRestore();
     }

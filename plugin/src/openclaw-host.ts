@@ -6,6 +6,7 @@ import { handleRelayPair } from './commands/pair.js';
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { RelayGatewayAdapter } from './gateway-adapter.js';
 import { PairingManager } from './pairing.js';
+import type { RelayPeerSession } from './outbound-peer-session.js';
 import type {
   DiscoveryPeer,
   GatewayStatus,
@@ -71,6 +72,7 @@ export interface RelayAgentBridge {
   sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope, options?: RelayAgentBridgeStartOptions): Promise<void>;
   createPeerInvite(options?: RelayAgentInviteOptions): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }>;
   acceptPeerSignal(sourcePublicKey: string, options?: RelayAgentAcceptPeerOptions): Promise<{ sourcePublicKey: string; fingerprint: string; peerAuthorizedUntil: string; inviteToken: string; inviteHash: string; expiresAt: string }>;
+  dialPeerInvite(inviteToken: string, gatewayPublicKey: string, options?: RelayAgentBridgeStartOptions & { clientId?: string }): Promise<RelayPeerSession>;
   drainPeerSignals(accountId?: string): ReceivedPeerSignal[];
   drainPeerSignalErrors(accountId?: string): SignalErrorFrame[];
 }
@@ -804,6 +806,12 @@ export function createRelayAgentBridge(api: OpenClawPluginApi): RelayAgentBridge
         peerAuthorizedUntil: authorization.expiresAt,
         ...invite,
       };
+    },
+
+    dialPeerInvite: async (inviteToken, gatewayPublicKey, options = {}) => {
+      const { clientId, ...startOptions } = options;
+      const { record } = await ensureRelayAgentRecord(api, startOptions);
+      return record.adapter.dialPeerInvite(inviteToken, gatewayPublicKey, clientId);
     },
 
     drainPeerSignals: (accountId = DEFAULT_ACCOUNT_ID) => {

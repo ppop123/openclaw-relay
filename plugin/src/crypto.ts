@@ -173,6 +173,40 @@ export async function deriveGatewaySession(identity: GatewayIdentity, clientPubl
   };
 }
 
+export async function deriveClientSession(identity: GatewayIdentity, gatewayPublicKeyBytes: Uint8Array, clientNonce: Uint8Array, gatewayNonce: Uint8Array) {
+  const gatewayPublicKey = await crypto.subtle.importKey('raw', arrayBufferFrom(gatewayPublicKeyBytes), x25519Algorithm(), true, []);
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: gatewayPublicKey },
+    identity.privateKey,
+    256,
+  );
+
+  const saltInput = concatBuffers(
+    identity.publicKeyBytes,
+    gatewayPublicKeyBytes,
+    clientNonce,
+    gatewayNonce,
+  );
+  const salt = await crypto.subtle.digest('SHA-256', arrayBufferFrom(saltInput));
+  const hkdfKey = await crypto.subtle.importKey('raw', sharedSecret, 'HKDF', false, ['deriveKey']);
+  const sessionKey = await crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt,
+      info: HKDF_INFO,
+    },
+    hkdfKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+
+  return {
+    cipher: new SessionCipher(sessionKey, SessionCipher.DIRECTION_CLIENT_TO_GATEWAY),
+  };
+}
+
 export function buildNonce(direction: number, counter: number): Uint8Array {
   const nonce = new Uint8Array(12);
   const view = new DataView(nonce.buffer);

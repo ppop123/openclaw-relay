@@ -1,10 +1,11 @@
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { MethodNotFoundError, dispatchRequest } from './dispatch.js';
 import { InvalidParamsError, Layer2ResponseError, RelayFatalError, UnsupportedRuntimeMethodError } from './errors.js';
-import { fingerprintFromPublicKeyBase64, importGatewayIdentity } from './crypto.js';
+import { fingerprintFromPublicKeyBase64, GatewayIdentity, importGatewayIdentity } from './crypto.js';
 import { RelayOutbound } from './outbound.js';
 import { PairingManager, approveClient } from './pairing.js';
 import { PeerDiscoveryService } from './peer-discovery.js';
+import { RelayPeerSession } from './outbound-peer-session.js';
 import { RelayConnection } from './relay-connection.js';
 import { GatewayTransport, GatewaySession } from './transport.js';
 import {
@@ -55,6 +56,7 @@ export class RelayGatewayAdapter {
   readonly accountId: string;
   readonly pairingManager: PairingManager;
   private currentConfig: RelayAccountConfig | undefined;
+  private identity: GatewayIdentity | undefined;
   private connection: RelayConnection | undefined;
   private transport: GatewayTransport | undefined;
   private outbound: RelayOutbound | undefined;
@@ -79,6 +81,7 @@ export class RelayGatewayAdapter {
     this.channelHash = await deriveChannelHash(config.channelToken);
 
     const identity = await importGatewayIdentity(config.gatewayKeyPair);
+    this.identity = identity;
 
     this.peerDiscovery = new PeerDiscoveryService({
       identity,
@@ -204,6 +207,7 @@ export class RelayGatewayAdapter {
     this.transport = undefined;
     this.outbound = undefined;
     this.peerDiscovery = undefined;
+    this.identity = undefined;
     this.pendingPeerApprovals.clear();
     this.connectionState = 'disconnected';
   }
@@ -225,6 +229,21 @@ export class RelayGatewayAdapter {
   async createPeerInvite(ttlSeconds = 300): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }> {
     if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
     return this.peerDiscovery.createInvite(ttlSeconds);
+  }
+
+  async dialPeerInvite(inviteToken: string, gatewayPublicKey: string, clientId?: string): Promise<RelayPeerSession> {
+    if (!this.currentConfig) throw new Error('gateway adapter is not started');
+    if (!this.identity) throw new Error('gateway identity is not initialized');
+    const session = new RelayPeerSession({
+      relayUrl: this.currentConfig.server,
+      inviteToken,
+      gatewayPublicKey,
+      identity: this.identity,
+      ...(clientId ? { clientId } : {}),
+      ...(this.options.webSocketFactory ? { webSocketFactory: this.options.webSocketFactory } : {}),
+    });
+    await session.connect();
+    return session;
   }
 
   async authorizePeerPublicKey(publicKey: string, ttlSeconds = 300, maxUses = 1): Promise<{ fingerprint: string; expiresAt: string }> {
