@@ -1,3 +1,70 @@
+[中文](#中文) | [English](#english)
+
+---
+
+## 中文
+
+# 支持范围与版本
+
+> **权威来源：** [`docs/support-matrix.json`](support-matrix.json) 是机器可读的唯一数据源。本文档是其人类可读版本。
+
+## 组件状态
+
+### 正式支持
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| Go Relay 服务端 | `relay/` | 生产环境 Relay 实现 |
+| Python SDK | `sdk/python/` | 客户端 SDK（协议层 0–2，仅客户端） |
+| 浏览器参考客户端 | `client/` | 基于浏览器的参考客户端 |
+| 协议规范（Protocol specification） | `protocol/` | 线协议规范（v1） |
+| OpenClaw Gateway 插件 | `plugin/` | TypeScript 网关插件，用于将 Relay 支持集成到你的 OpenClaw 运行时；包含本地生命周期冒烟测试脚本 |
+
+以上组件均在积极维护中，有 CI 测试覆盖，受 `v0.5.0` 稳定性保证约束。
+
+### 尚未实现
+
+| 组件 | 路径 | 状态 |
+|------|------|------|
+| JavaScript SDK | `sdk/js/` | 未实现 |
+
+## 协议版本
+
+当前唯一的协议版本为 **v1**。
+
+- 帧（Frame）中的 `version` 字段可选。`0` 和 `1` 均视为 v1。
+- 协议发生破坏性变更时会递增版本号。
+- v1 实现**必须**拒绝 `version > 1` 的帧。
+
+## 测试覆盖
+
+| 组件 | 测试 | 框架 |
+|------|------|------|
+| Go Relay 服务端 | `go test` 套件 | `go test` |
+| Python SDK | `pytest` 套件 | `pytest` |
+| 浏览器参考客户端 | `vitest` 套件 | `vitest` |
+| OpenClaw Gateway 插件 | `vitest` 套件 + 类型检查 + 本地冒烟脚本 | `vitest` + `tsc` + `bash`（插件测试需要 `PATH` 中有 `go`） |
+
+## CI 流水线
+
+CI 流水线执行以下检查：
+
+| 步骤 | 命令 | 范围 | 阻断发布 |
+|------|------|------|----------|
+| Go 测试 | `go test` | Relay 服务端 | 是 |
+| Python 测试 | `pytest` | Python SDK | 是 |
+| JS 测试 | `vitest` | 浏览器客户端 | 是 |
+| 插件测试 | `vitest run plugin/tests` | OpenClaw Gateway 插件 | 是 |
+| 插件类型检查 | `tsc -p plugin/tsconfig.json --noEmit` | OpenClaw Gateway 插件 | 是 |
+| 插件冒烟测试 | `bash scripts/smoke-openclaw-plugin.sh` | 在本地真实 OpenClaw 运行时上测试 Gateway 插件 | 否（手动/本地） |
+| 文档/契约 | `validate-protocol-examples.py` + `check-doc-consistency.sh` | 协议 + 文档 | 是 |
+
+所有正式支持的组件必须在发布前通过各自的测试套件。
+
+---
+
+## English
+
 # Support Matrix and Versioning
 
 > **Canonical source:** [`docs/support-matrix.json`](support-matrix.json) is the machine-readable single source of truth. This document mirrors it in human-readable form.

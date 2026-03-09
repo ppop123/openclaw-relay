@@ -1,3 +1,128 @@
+[中文](#中文) | [English](#english)
+
+---
+
+## 中文
+
+# 浏览器客户端
+
+本文档是 `client/` 下浏览器端 OpenClaw Relay 客户端的入口文档。
+
+浏览器客户端是随项目发布的**浏览器参考客户端**。它不是独立的 JavaScript SDK，也不提供嵌入式 API。它的作用是在真实浏览器环境中演示和实现 Relay 协议的客户端部分。
+
+## 这个客户端是什么
+
+当前浏览器客户端负责：
+
+- 建立到 Relay 的 WebSocket 连接
+- 在浏览器中完成 Layer 1 握手（Handshake）
+- 派生每连接的会话密钥（Session Key）
+- 加解密 Layer 2 流量
+- 管理请求/响应/流式传输状态
+- 渲染一个最小化的聊天界面
+- 持久化浏览器安全设置
+- 在 IndexedDB 可用时持久化浏览器身份密钥对（Identity Keypair）
+
+## 这个客户端不是什么
+
+当前浏览器客户端**不是**：
+
+- 可复用的 JavaScript SDK
+- Gateway 实现
+- Relay 实现
+- 功能完整的生产级聊天应用
+- 跨浏览器的身份导出/导入管理器
+
+## 当前状态
+
+浏览器客户端已正式支持，并纳入 CI 覆盖。
+
+目前提供的功能：
+
+- 真实的浏览器端 Layer 0 / 1 / 2 行为
+- 通过用户提供的固定公钥实现网关公钥锁定（Gateway Public-Key Pinning）
+- 同一浏览器配置下，跨页面刷新保持稳定的加密身份
+- 为非敏感连接设置提供命名的已保存 Relay 配置
+- 连接界面中的身份指纹（Fingerprint）显示、复制，以及受保护的导出/导入操作
+- 流式 `chat.send`
+- 通过 `agents.list` 加载 Agent 列表
+- 重连和刷新时恢复上次选择的 Agent（如果该 Agent 仍然可用）
+- 会话、客户端、配置和网关密钥状态的聊天内诊断信息
+- 本地 `New Chat` 按钮，重置 `sessionId` 但不断开连接
+- 将当前内存中的聊天记录显式导出为 JSON
+- 安全的 Markdown 渲染（用于助手输出）
+- 针对 UI 状态、身份持久化、加密、传输层和 Markdown 安全性的自动化测试
+- 本地真实浏览器 E2E 冒烟流程，覆盖连接、流式聊天、刷新持久化、受保护的身份备份/恢复和记录导出
+
+当前主要限制：
+
+- 不支持本地会话历史持久化
+- 如果 IndexedDB 不可用或被阻止，身份回退为仅页面内存
+
+## 文档索引
+
+| 文档 | 范围 |
+|------|------|
+| `docs/web-client/architecture.md` | 运行时结构、模块边界、状态模型 |
+| `docs/web-client/identity-and-storage.md` | `clientId`、密钥对生命周期、浏览器存储规则 |
+| `docs/web-client/transport.md` | 握手、加密、请求/响应、重连行为 |
+| `docs/web-client/ui-and-state.md` | DOM 结构、应用状态、用户流程、渲染行为 |
+| `docs/web-client/testing-and-troubleshooting.md` | 测试覆盖、手动检查、常见故障模式 |
+| `docs/web-client/manifest.json` | 机器可读的浏览器客户端组件清单 |
+| `docs/web-client/storage-schema.json` | 机器可读的浏览器存储契约 |
+| `docs/web-client/state-machine.json` | 机器可读的连接、请求、UI 和身份状态模型 |
+
+## 速查表
+
+| 主题 | 当前行为 |
+|------|---------|
+| 运行时模型 | 从 `client/index.html` 加载的纯浏览器模块 |
+| 构建步骤 | 无 |
+| LocalStorage | `openclaw-relay-settings`（`relayUrl`、`gatewayPubKey`、`selectedProfileId`、`selectedAgent`）、`openclaw-relay-profiles`（已保存的 Relay 配置）、`openclaw-relay-client-id`（`clientId`） |
+| IndexedDB | `openclaw-relay-browser` → `identity` store，存储浏览器 X25519 密钥对 |
+| 绝不持久化到浏览器存储 | `channelToken`、会话密钥、解密后的消息 |
+| 身份密钥对 | 启动时从 IndexedDB 加载（如果可用）；否则在首次连接时创建，并尽可能持久化 |
+| 刷新行为 | 同一浏览器配置下，刷新后复用相同身份，除非用户重置或持久化不可用 |
+| 身份文件流程 | 导出/导入可移植的 JSON 身份文件，支持可选的密码保护，以及可复制的指纹/公钥辅助功能 |
+| 主传输类 | `client/js/transport.js` → `RelayConnection` |
+| 主加密类 | `client/js/crypto.js` → `RelayCrypto` |
+| 身份存储模块 | `client/js/identity-store.js` |
+| 应用入口 | `client/js/app.js` |
+| 测试命令 | `cd client && npm ci && npm test`（单元测试）、`cd client && npm run test:e2e`（确定性浏览器 E2E）、`cd client && npm run test:e2e:live`（连接真实 Relay/Gateway 的 E2E） |
+
+## 推荐阅读顺序
+
+修改浏览器客户端的工程师建议按以下顺序阅读：
+
+1. `docs/web-client/architecture.md`
+2. `docs/web-client/identity-and-storage.md`
+3. `docs/web-client/transport.md`
+4. `docs/web-client/ui-and-state.md`
+5. `docs/web-client/testing-and-troubleshooting.md`
+
+如需了解具体的线路行为，请参阅：
+
+- `protocol/layer0-channel.md`
+- `protocol/layer1-security.md`
+- `protocol/layer2-transport.md`
+- `protocol/layer3-application.md`
+
+## 真实性原则
+
+本文档描述的是当前实现。当文档与代码冲突时，以代码为准。当协议行为存疑时，以协议文档和机器可读的固定文件为权威来源。
+
+浏览器客户端相关的机器可读权威来源：
+
+- `docs/web-client/manifest.json`
+- `docs/web-client/storage-schema.json`
+- `docs/web-client/state-machine.json`
+
+如果浏览器客户端的 Markdown 说明与上述 JSON 文件在存储键、模块归属或状态转换方面存在矛盾，在文档修正之前，应以 JSON 文件为准。
+
+---
+
+## English
+
 # Web Client
 
 This document is the entry point for the browser-side OpenClaw Relay client under `client/`.

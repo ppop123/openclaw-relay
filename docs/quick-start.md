@@ -1,3 +1,141 @@
+[中文](#中文) | [English](#english)
+
+---
+
+## 中文
+
+# 快速上手
+
+## 大多数人只需要这些
+
+如果你的目标就是 **"从外面连回自己家里或办公室的 OpenClaw"**，最短路径是：
+
+1. 启动一个 Relay 服务端
+2. 在你的 OpenClaw 中安装 Relay 插件
+3. 打开浏览器客户端，连接
+
+这能给你什么：
+
+- 远程访问 **你自己的** OpenClaw
+- 不需要公网 IP
+- 不需要端口映射
+- 端到端加密（E2E encryption）的应用层流量
+
+这 **不** 意味着：
+
+- 这 **不是** 一个公共的 OpenClaw 实例目录
+- 浏览器客户端 **不能** 浏览或连接其他人的 OpenClaw 实例
+- 集群 / 联邦 / 高可用不在 v1 范围内
+
+## 第一步：启动 Relay 服务端
+
+```bash
+cd relay
+go build -o openclaw-relay
+./openclaw-relay
+```
+
+Relay 默认监听 `8443` 端口。
+
+检查是否启动成功：
+
+```bash
+curl http://localhost:8443/status
+```
+
+TLS、来源校验、Cloudflare Tunnel 及生产环境配置见 [部署指南](deployment.md)。
+
+## 第二步：在你的 OpenClaw 中安装插件
+
+安装插件：
+
+```bash
+openclaw plugins install --link /path/to/openclaw-relay/plugin
+```
+
+为本地 OpenClaw 网关启用 Relay 访问：
+
+```bash
+openclaw relay enable --server wss://relay.example.com/ws
+openclaw relay status
+```
+
+准备从浏览器连接时，在终端启动配对：
+
+```bash
+openclaw relay pair
+```
+
+`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。在命令等待期间，打开浏览器客户端，输入打印出的 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）。
+
+常用的后续命令：
+
+```bash
+openclaw relay clients
+openclaw relay revoke --fingerprint <fingerprint>
+openclaw relay rotate-token
+openclaw relay disable
+```
+
+## 第三步：从浏览器连接
+
+使用 `client/` 中的浏览器客户端，输入：
+
+- Relay 地址
+- 通道令牌（channel token）
+- 网关公钥（gateway public key）
+
+然后点击连接。
+
+浏览器客户端文档：
+
+- [`docs/web-client.md`](web-client.md)
+- [`docs/web-client/testing-and-troubleshooting.md`](web-client/testing-and-troubleshooting.md)
+
+## 进阶：Agent 间通信能力
+
+还有一个 **仅限 Agent** 的能力，可以让一个 OpenClaw Agent 与另一个 OpenClaw Agent 通信。
+
+重要边界：
+
+- 网关 / Agent 可以使用
+- 浏览器客户端 **不能** 用来发现或连接其他 OpenClaw 实例
+
+如果你需要这个功能，从这里开始：
+
+- [`plugin/README.md`](../plugin/README.md)
+
+## 开发检查
+
+```bash
+# Go relay server
+cd relay && go test -v -count=1
+
+# Python SDK
+cd sdk/python && pip install -e ".[dev]" && pytest -q
+
+# Web client
+cd client && npm ci && npm test
+
+# OpenClaw gateway plugin
+cd plugin && npm ci && npm test
+cd plugin && npm run typecheck
+```
+
+## 本地冒烟验证
+
+完整的本地 OpenClaw 运行时冒烟测试：
+
+```bash
+bash scripts/smoke-openclaw-plugin.sh
+```
+
+该脚本会将 `plugin/` 安装到一个隔离的 OpenClaw 状态目录，启动本地 Relay，使用新的客户端身份完成配对，启动一个真实的 OpenClaw 网关，通过 Relay 验证 `system.status`，然后测试 `revoke`、重新配对、`rotate-token` 和 `disable` 行为。
+
+---
+
+## English
+
 # Quick Start Guide
 
 ## Most people only need this
