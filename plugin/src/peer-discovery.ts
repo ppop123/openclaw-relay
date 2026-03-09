@@ -158,15 +158,31 @@ export class PeerDiscoveryService {
     };
   }
 
-  async discoverPeers(): Promise<DiscoveryPeer[]> {
+  async discoverPeers(timeoutMs = 10000): Promise<DiscoveryPeer[]> {
     if (this.discoverWaiter) {
       throw new Error('discover request already in flight');
     }
     return new Promise<DiscoveryPeer[]>(async (resolve, reject) => {
-      this.discoverWaiter = { resolve, reject };
+      const timer = setTimeout(() => {
+        if (!this.discoverWaiter) return;
+        const waiter = this.discoverWaiter;
+        this.discoverWaiter = undefined;
+        waiter.reject(new Error(`discover timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.discoverWaiter = {
+        resolve: (peers) => {
+          clearTimeout(timer);
+          resolve(peers);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      };
       try {
         await this.options.sendFrame({ type: 'discover' });
       } catch (error) {
+        clearTimeout(timer);
         this.discoverWaiter = undefined;
         reject(error instanceof Error ? error : new Error(String(error)));
       }

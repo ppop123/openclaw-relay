@@ -216,9 +216,9 @@ export class RelayGatewayAdapter {
     this.pairingManager.begin();
   }
 
-  async discoverPeers() {
+  async discoverPeers(timeoutMs = 10000) {
     if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
-    return this.peerDiscovery.discoverPeers();
+    return this.peerDiscovery.discoverPeers(timeoutMs);
   }
 
   async sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope): Promise<void> {

@@ -7,6 +7,7 @@ import { deriveChannelHash, inspectAccount, validateAccountConfig } from './conf
 import { RelayGatewayAdapter } from './gateway-adapter.js';
 import { PairingManager } from './pairing.js';
 import type { RelayPeerSession } from './outbound-peer-session.js';
+import { createRelayPeerAgentService, isInviteOfferSignal, isInviteRejectSignal, isInviteRequestSignal, RelayPeerAgentService } from './peer-agent-service.js';
 import type {
   DiscoveryPeer,
   GatewayStatus,
@@ -68,7 +69,7 @@ export interface RelayAgentBridge {
   ensureStarted(options?: RelayAgentBridgeStartOptions): Promise<GatewayStatus>;
   stopAccount(accountId?: string): Promise<void>;
   getStatus(accountId?: string): Promise<GatewayStatus | undefined>;
-  discoverPeers(options?: RelayAgentBridgeStartOptions): Promise<DiscoveryPeer[]>;
+  discoverPeers(options?: RelayAgentBridgeStartOptions & { timeoutMs?: number }): Promise<DiscoveryPeer[]>;
   sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope, options?: RelayAgentBridgeStartOptions): Promise<void>;
   createPeerInvite(options?: RelayAgentInviteOptions): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }>;
   acceptPeerSignal(sourcePublicKey: string, options?: RelayAgentAcceptPeerOptions): Promise<{ sourcePublicKey: string; fingerprint: string; peerAuthorizedUntil: string; inviteToken: string; inviteHash: string; expiresAt: string }>;
@@ -204,7 +205,21 @@ function resolveRelayAccount(cfg: OpenClawConfig, accountId = DEFAULT_ACCOUNT_ID
       ? raw.gatewayKeyPair
       : { privateKey: '', publicKey: '' },
     approvedClients: configured ? raw.approvedClients : {},
-    peerDiscovery: configured ? { enabled: Boolean(raw.peerDiscovery?.enabled), ...(raw.peerDiscovery?.metadata ? { metadata: cloneConfig(raw.peerDiscovery.metadata) } : {}) } : { enabled: false },
+    peerDiscovery: configured
+      ? {
+          enabled: Boolean(raw.peerDiscovery?.enabled),
+          ...(raw.peerDiscovery?.metadata ? { metadata: cloneConfig(raw.peerDiscovery.metadata) } : {}),
+          ...(raw.peerDiscovery?.autoAcceptRequests
+            ? {
+                autoAcceptRequests: {
+                  enabled: raw.peerDiscovery.autoAcceptRequests.enabled === true,
+                  ...(typeof raw.peerDiscovery.autoAcceptRequests.ttlSeconds === 'number' ? { ttlSeconds: raw.peerDiscovery.autoAcceptRequests.ttlSeconds } : {}),
+                  ...(typeof raw.peerDiscovery.autoAcceptRequests.maxUses === 'number' ? { maxUses: raw.peerDiscovery.autoAcceptRequests.maxUses } : {}),
+                },
+              }
+            : {}),
+        }
+      : { enabled: false },
     configured,
   };
 }
@@ -217,6 +232,7 @@ function summarizeAccount(account: ResolvedRelayAccount): ChannelAccountSnapshot
     configured: account.configured,
     publicKey: account.gatewayKeyPair.publicKey || null,
     peerDiscoveryEnabled: Boolean(account.peerDiscovery?.enabled),
+    ...(account.peerDiscovery?.autoAcceptRequests ? { peerDiscoveryAutoAcceptEnabled: account.peerDiscovery.autoAcceptRequests.enabled === true } : {}),
   };
 }
 
@@ -650,6 +666,388 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
 
 const activeAccounts = new Map<string, ActiveRelayRecord>();
 const activeChannelRuntimeByAccount = new Map<string, NonNullable<ChannelGatewayContext['channelRuntime']>>();
+const activePeerServices = new Map<string, RelayPeerAgentService>();
+
+class RelayGatewayMethodError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+    this.name = 'RelayGatewayMethodError';
+  }
+}
+
+function getRelayPeerService(api: OpenClawPluginApi, accountId = DEFAULT_ACCOUNT_ID): RelayPeerAgentService {
+  const existing = activePeerServices.get(accountId);
+  if (existing) return existing;
+  const service = createRelayPeerAgentService({ bridge: createRelayAgentBridge(api), accountId });
+  activePeerServices.set(accountId, service);
+  return service;
+}
+
+async function closeRelayPeerService(accountId: string): Promise<void> {
+  const service = activePeerServices.get(accountId);
+  if (!service) return;
+  activePeerServices.delete(accountId);
+  await service.closeAllPeerSessions().catch(() => undefined);
+}
+
+function relayGatewayMethodError(code: string, message: string): RelayGatewayMethodError {
+  return new RelayGatewayMethodError(code, message);
+}
+
+function getAccountIdParam(params: Record<string, unknown>): string {
+  const value = params.accountId;
+  if (value === undefined || value === null || value === '') return DEFAULT_ACCOUNT_ID;
+  if (typeof value !== 'string') {
+    throw relayGatewayMethodError('bad_request', 'accountId must be a string');
+  }
+  return value;
+}
+
+function getRequiredStringParam(params: Record<string, unknown>, key: string): string {
+  const value = params[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw relayGatewayMethodError('bad_request', `${key} must be a non-empty string`);
+  }
+  return value;
+}
+
+function getOptionalStringParam(params: Record<string, unknown>, key: string): string | undefined {
+  const value = params[key];
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') {
+    throw relayGatewayMethodError('bad_request', `${key} must be a string`);
+  }
+  return value;
+}
+
+function getOptionalObjectParam(params: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
+  const value = params[key];
+  if (value === undefined) return undefined;
+  if (!isObject(value)) {
+    throw relayGatewayMethodError('bad_request', `${key} must be an object`);
+  }
+  return structuredClone(value) as Record<string, unknown>;
+}
+
+function getOptionalPositiveIntegerParam(params: Record<string, unknown>, key: string): number | undefined {
+  const value = params[key];
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw relayGatewayMethodError('bad_request', `${key} must be a positive integer`);
+  }
+  return value;
+}
+
+function parseReceivedPeerSignal(value: unknown): ReceivedPeerSignal {
+  const candidate = isObject(value) && isObject(value.signal) ? value.signal : value;
+  if (!isObject(candidate)) {
+    throw relayGatewayMethodError('bad_request', 'signal must be an object');
+  }
+  const source = candidate.source;
+  const envelopeValue = candidate.envelope;
+  if (typeof source !== 'string' || !source) {
+    throw relayGatewayMethodError('bad_request', 'signal.source must be a non-empty string');
+  }
+  if (!isObject(envelopeValue) || envelopeValue.version !== 1 || typeof envelopeValue.kind !== 'string' || !envelopeValue.kind) {
+    throw relayGatewayMethodError('bad_request', 'signal.envelope must contain version=1 and a non-empty kind');
+  }
+  const bodyValue = envelopeValue.body;
+  if (bodyValue !== undefined && !isObject(bodyValue)) {
+    throw relayGatewayMethodError('bad_request', 'signal.envelope.body must be an object');
+  }
+  const receivedAt = typeof candidate.receivedAt === 'string' && candidate.receivedAt
+    ? candidate.receivedAt
+    : new Date().toISOString();
+  const rawValue = candidate.raw;
+  const raw: ReceivedPeerSignal['raw'] = isObject(rawValue)
+    ? {
+        ...rawValue,
+        type: 'signal',
+        source: typeof rawValue.source === 'string' ? rawValue.source : source,
+        ephemeral_key: typeof rawValue.ephemeral_key === 'string' ? rawValue.ephemeral_key : '',
+        payload: typeof rawValue.payload === 'string' ? rawValue.payload : '',
+      }
+    : { type: 'signal', source, ephemeral_key: '', payload: '' };
+  return {
+    source,
+    envelope: {
+      version: 1,
+      kind: envelopeValue.kind,
+      ...(bodyValue ? { body: structuredClone(bodyValue) as Record<string, unknown> } : {}),
+    },
+    receivedAt,
+    raw,
+  };
+}
+
+function formatPeerSignal(signal: ReceivedPeerSignal): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    source: signal.source,
+    kind: signal.envelope.kind,
+    receivedAt: signal.receivedAt,
+    signal,
+  };
+  if (isInviteRequestSignal(signal)) {
+    return {
+      ...base,
+      body: signal.envelope.body ?? {},
+    };
+  }
+  if (isInviteOfferSignal(signal)) {
+    const offer = RelayPeerAgentService.parseInviteOffer(signal);
+    return {
+      ...base,
+      inviteToken: offer.inviteToken,
+      ...(offer.expiresAt ? { expiresAt: offer.expiresAt } : {}),
+      ...(offer.peerAuthorizedUntil ? { peerAuthorizedUntil: offer.peerAuthorizedUntil } : {}),
+      body: signal.envelope.body ?? {},
+    };
+  }
+  if (isInviteRejectSignal(signal)) {
+    const rejection = RelayPeerAgentService.parseInviteReject(signal);
+    return {
+      ...base,
+      ...(rejection.reason ? { reason: rejection.reason } : {}),
+      body: rejection.body,
+    };
+  }
+  return {
+    ...base,
+    ...(signal.envelope.body ? { body: signal.envelope.body } : {}),
+  };
+}
+
+function handleRelayGatewayMethodError(
+  respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }, meta?: Record<string, unknown>) => void,
+  error: unknown,
+): void {
+  if (error instanceof RelayGatewayMethodError) {
+    respond(false, undefined, { code: error.code, message: error.message });
+    return;
+  }
+  respond(false, undefined, {
+    code: 'relay_peer_error',
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
+
+function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
+  if (typeof api.registerGatewayMethod !== 'function') {
+    api.logger.warn('[relay] local gateway peer methods unavailable: OpenClaw runtime does not expose registerGatewayMethod');
+    return;
+  }
+  api.logger.info('[relay] registering local gateway peer methods for relay.peer.*');
+  const bridge = createRelayAgentBridge(api);
+  const register = (
+    method: string,
+    handler: (params: Record<string, unknown>) => Promise<Record<string, unknown>>,
+  ) => {
+    api.registerGatewayMethod(method, async ({ params, respond }) => {
+      try {
+        const payload = await handler(params ?? {});
+        respond(true, payload);
+      } catch (error) {
+        handleRelayGatewayMethodError(respond, error);
+      }
+    });
+  };
+
+  register('relay.peer.status', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const account = resolveRelayAccount(api.runtime.config.loadConfig(), accountId);
+    const service = getRelayPeerService(api, accountId);
+    const status = await bridge.getStatus(accountId);
+    return {
+      accountId,
+      account: summarizeAccount(account),
+      gatewayStatus: status ?? null,
+      connectedPeers: service.listConnectedPeers(),
+    };
+  });
+
+  register('relay.peer.discover', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const timeoutMs = getOptionalPositiveIntegerParam(params, 'timeoutMs');
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    return {
+      accountId,
+      peers: await service.discoverPeers(timeoutMs),
+      connectedPeers: service.listConnectedPeers(),
+    };
+  });
+
+  register('relay.peer.dial', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const targetPublicKey = getRequiredStringParam(params, 'targetPublicKey');
+    const body = getOptionalObjectParam(params, 'body')
+      ?? getOptionalObjectParam(params, 'request')
+      ?? {};
+    const clientId = getOptionalStringParam(params, 'clientId');
+    const timeoutMs = getOptionalPositiveIntegerParam(params, 'timeoutMs');
+    const pollIntervalMs = getOptionalPositiveIntegerParam(params, 'pollIntervalMs');
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    const dialed = await service.requestPeerConnection(targetPublicKey, {
+      body,
+      ...(clientId ? { clientId } : {}),
+      ...(timeoutMs ? { timeoutMs } : {}),
+      ...(pollIntervalMs ? { pollIntervalMs } : {}),
+    });
+    return {
+      accountId,
+      ...dialed,
+      connectedPeers: service.listConnectedPeers(),
+    };
+  });
+
+  register('relay.peer.poll', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const service = getRelayPeerService(api, accountId);
+    return {
+      accountId,
+      signals: service.drainSignals().map(formatPeerSignal),
+      signalErrors: service.drainSignalErrors(),
+      connectedPeers: service.listConnectedPeers(),
+      gatewayStatus: await bridge.getStatus(accountId) ?? null,
+    };
+  });
+
+  register('relay.peer.request', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const targetPublicKey = getRequiredStringParam(params, 'targetPublicKey');
+    const body = getOptionalObjectParam(params, 'body') ?? {};
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    await service.requestPeerInvite(targetPublicKey, body);
+    return {
+      accountId,
+      targetPublicKey,
+      requested: true,
+      body,
+    };
+  });
+
+  register('relay.peer.accept', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const signal = parseReceivedPeerSignal(params.signal ?? params);
+    const ttlSeconds = getOptionalPositiveIntegerParam(params, 'ttlSeconds');
+    const maxUses = getOptionalPositiveIntegerParam(params, 'maxUses');
+    const body = getOptionalObjectParam(params, 'body') ?? {};
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    const offer = await service.acceptPeerRequest(signal, {
+      ...(ttlSeconds ? { ttlSeconds } : {}),
+      ...(maxUses ? { maxUses } : {}),
+    }, body);
+    return {
+      accountId,
+      peerPublicKey: signal.source,
+      ...offer,
+      connectedPeers: service.listConnectedPeers(),
+    };
+  });
+
+  register('relay.peer.reject', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const signal = parseReceivedPeerSignal(params.signal ?? params);
+    const reason = getOptionalStringParam(params, 'reason') ?? 'rejected';
+    const body = getOptionalObjectParam(params, 'body') ?? {};
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    await service.rejectPeerRequest(signal, reason, body);
+    return {
+      accountId,
+      peerPublicKey: signal.source,
+      rejected: true,
+      reason,
+      body,
+    };
+  });
+
+  register('relay.peer.connect', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const signal = parseReceivedPeerSignal(params.signal ?? params);
+    const clientId = getOptionalStringParam(params, 'clientId');
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    await service.connectFromInviteOffer(signal, {
+      ...(clientId ? { clientId } : {}),
+    });
+    return {
+      accountId,
+      peerPublicKey: signal.source,
+      connected: true,
+      connectedPeers: service.listConnectedPeers(),
+    };
+  });
+
+  register('relay.peer.call', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const peerPublicKey = getRequiredStringParam(params, 'peerPublicKey');
+    const method = getRequiredStringParam(params, 'method');
+    const requestParams = getOptionalObjectParam(params, 'params') ?? {};
+    const service = getRelayPeerService(api, accountId);
+    await service.ensureStarted();
+    return {
+      accountId,
+      peerPublicKey,
+      method,
+      result: await service.requestPeer(peerPublicKey, method, requestParams),
+    };
+  });
+
+  register('relay.peer.disconnect', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const peerPublicKey = getOptionalStringParam(params, 'peerPublicKey');
+    const service = getRelayPeerService(api, accountId);
+    if (peerPublicKey) {
+      await service.closePeerSession(peerPublicKey);
+    } else {
+      await service.closeAllPeerSessions();
+    }
+    return {
+      accountId,
+      ...(peerPublicKey ? { peerPublicKey } : {}),
+      connectedPeers: service.listConnectedPeers(),
+    };
+  });
+}
+
+async function maybeAutoAcceptPeerSignals(params: {
+  api: OpenClawPluginApi;
+  accountId: string;
+  log?: PluginLogger;
+}): Promise<void> {
+  const account = resolveRelayAccount(params.api.runtime.config.loadConfig(), params.accountId);
+  const autoAccept = account.peerDiscovery?.autoAcceptRequests;
+  if (autoAccept?.enabled !== true) return;
+  const service = getRelayPeerService(params.api, params.accountId);
+  const signals = service.drainSignals();
+  if (signals.length > 0) {
+    for (const signal of signals) {
+      if (!isInviteRequestSignal(signal)) {
+        params.log?.debug?.(`[relay:${params.accountId}] leaving non-request peer signal unhandled (${signal.envelope.kind})`);
+        continue;
+      }
+      try {
+        await service.acceptPeerRequest(signal, {
+          ttlSeconds: autoAccept.ttlSeconds ?? 300,
+          maxUses: autoAccept.maxUses ?? 1,
+        }, { auto_accepted: true });
+        params.log?.info(`[relay:${params.accountId}] auto-accepted peer request from ${signal.source}`);
+      } catch (error) {
+        params.log?.warn(`[relay:${params.accountId}] auto-accept failed for ${signal.source}: ${String(error)}`);
+      }
+    }
+  }
+  const signalErrors = service.drainSignalErrors();
+  if (signalErrors.length > 0) {
+    for (const frame of signalErrors) {
+      params.log?.warn(`[relay:${params.accountId}] peer signal error${frame.target ? ` for ${frame.target}` : ''}: ${frame.code}`);
+    }
+  }
+}
 
 function buildSnapshot(account: ResolvedRelayAccount, gatewayStatus?: {
   state: string;
@@ -666,6 +1064,7 @@ function buildSnapshot(account: ResolvedRelayAccount, gatewayStatus?: {
     lastError: gatewayStatus?.lastFatalErrorCode ?? null,
     publicKey: account.gatewayKeyPair.publicKey || null,
     peerDiscoveryEnabled: account.peerDiscovery?.enabled === true,
+    ...(account.peerDiscovery?.autoAcceptRequests ? { peerDiscoveryAutoAcceptEnabled: account.peerDiscovery.autoAcceptRequests.enabled === true } : {}),
   };
 }
 
@@ -716,6 +1115,7 @@ async function ensureStartedAccount(params: {
     if (params.abortSignal && abortListener) {
       params.abortSignal.removeEventListener('abort', abortListener);
     }
+    await closeRelayPeerService(params.accountId);
     await adapter.stop().catch(() => undefined);
     activeAccounts.delete(params.accountId);
     activeChannelRuntimeByAccount.delete(params.accountId);
@@ -745,9 +1145,15 @@ async function ensureStartedAccount(params: {
   };
 
   await refreshStatus().catch(() => undefined);
+  await maybeAutoAcceptPeerSignals({ api: params.api, accountId: params.accountId, ...(params.log ? { log: params.log } : {}) }).catch((error) => {
+    params.log?.debug?.(`[relay:${params.accountId}] initial peer automation failed: ${String(error)}`);
+  });
   pollTimer = setInterval(() => {
     void refreshStatus().catch((error) => {
       params.log?.debug?.(`[relay:${params.accountId}] status poll failed: ${String(error)}`);
+    });
+    void maybeAutoAcceptPeerSignals({ api: params.api, accountId: params.accountId, ...(params.log ? { log: params.log } : {}) }).catch((error) => {
+      params.log?.debug?.(`[relay:${params.accountId}] peer automation failed: ${String(error)}`);
     });
   }, 2000);
 
@@ -793,8 +1199,9 @@ export function createRelayAgentBridge(api: OpenClawPluginApi): RelayAgentBridge
     },
 
     discoverPeers: async (options = {}) => {
-      const { record } = await ensureRelayAgentRecord(api, options);
-      return record.adapter.discoverPeers();
+      const { timeoutMs = 10000, ...startOptions } = options;
+      const { record } = await ensureRelayAgentRecord(api, startOptions);
+      return record.adapter.discoverPeers(timeoutMs);
     },
 
     sendPeerSignal: async (targetPublicKey, envelope, options = {}) => {
@@ -838,6 +1245,8 @@ export function createRelayAgentBridge(api: OpenClawPluginApi): RelayAgentBridge
 }
 
 export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin: ChannelPlugin<ResolvedRelayAccount>): { channelPlugin: ChannelPlugin<ResolvedRelayAccount>; registerCli: () => void } {
+  registerRelayGatewayMethods(api);
+
   const channelPlugin: ChannelPlugin<ResolvedRelayAccount> = {
     ...previewPlugin,
     config: {
@@ -916,6 +1325,9 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
         .option('--discover-label <value>', 'Set a human-readable discovery label to advertise to other gateways')
         .option('--discover-metadata-json <json>', 'Set discovery metadata as a JSON object (operator-controlled, gateway-only)')
         .option('--clear-discovery-metadata', 'Remove configured discovery metadata for this account')
+        .option('--peer-auto-accept', 'Automatically accept inbound agent peer invite requests on this gateway')
+        .option('--peer-auto-accept-ttl <seconds>', 'TTL seconds for auto-accepted peer invites')
+        .option('--peer-auto-accept-max-uses <n>', 'Maximum uses for auto-accepted peer invites')
         .action(async (options: {
           server: string;
           account?: string;
@@ -923,6 +1335,9 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
           discoverLabel?: string;
           discoverMetadataJson?: string;
           clearDiscoveryMetadata?: boolean;
+          peerAutoAccept?: boolean;
+          peerAutoAcceptTtl?: string;
+          peerAutoAcceptMaxUses?: string;
         }) => {
           const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
           const store = new OpenClawRelayConfigStore(api.runtime);
@@ -941,6 +1356,15 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
             discoveryMetadata = base;
           }
 
+          const peerAutoAcceptTtl = options.peerAutoAcceptTtl !== undefined ? Number(options.peerAutoAcceptTtl) : undefined;
+          if (peerAutoAcceptTtl !== undefined && (!Number.isInteger(peerAutoAcceptTtl) || peerAutoAcceptTtl <= 0)) {
+            throw new Error('--peer-auto-accept-ttl must be a positive integer');
+          }
+          const peerAutoAcceptMaxUses = options.peerAutoAcceptMaxUses !== undefined ? Number(options.peerAutoAcceptMaxUses) : undefined;
+          if (peerAutoAcceptMaxUses !== undefined && (!Number.isInteger(peerAutoAcceptMaxUses) || peerAutoAcceptMaxUses <= 0)) {
+            throw new Error('--peer-auto-accept-max-uses must be a positive integer');
+          }
+
           await handleRelayEnable(
             store,
             options.server,
@@ -948,6 +1372,9 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
             {
               ...(options.discoverable === true ? { discoverable: true } : {}),
               ...(discoveryMetadata !== undefined ? { discoveryMetadata } : {}),
+              ...(options.peerAutoAccept === true ? { autoAcceptRequestsEnabled: true } : {}),
+              ...(peerAutoAcceptTtl !== undefined ? { autoAcceptTtlSeconds: peerAutoAcceptTtl } : {}),
+              ...(peerAutoAcceptMaxUses !== undefined ? { autoAcceptMaxUses: peerAutoAcceptMaxUses } : {}),
             },
           );
           api.runtime.system.requestHeartbeatNow?.();
@@ -1114,6 +1541,15 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
                       type: 'object',
                       additionalProperties: true,
                     },
+                    autoAcceptRequests: {
+                      type: 'object',
+                      additionalProperties: false,
+                      properties: {
+                        enabled: { type: 'boolean' },
+                        ttlSeconds: { type: 'integer', minimum: 1 },
+                        maxUses: { type: 'integer', minimum: 1 },
+                      },
+                    },
                   },
                 },
               },
@@ -1129,6 +1565,9 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
         'accounts.default.gatewayKeyPair.publicKey': { label: 'Gateway Public Key', advanced: true },
         'accounts.default.peerDiscovery.enabled': { label: 'Enable Agent Discovery', help: 'Allow this OpenClaw gateway to advertise itself to other gateways on the same relay. Human-facing clients still cannot browse peers.' },
         'accounts.default.peerDiscovery.metadata': { label: 'Discovery Metadata', help: 'Operator-controlled metadata advertised only to other discoverable gateways. The relay treats it as opaque data.' },
+        'accounts.default.peerDiscovery.autoAcceptRequests.enabled': { label: 'Auto Accept Peer Requests', help: 'Automatically accept inbound peer invite requests and issue short-lived invites without exposing relay discovery to human-facing clients.' },
+        'accounts.default.peerDiscovery.autoAcceptRequests.ttlSeconds': { label: 'Auto Accept Invite TTL', help: 'How long auto-issued peer invites remain valid.' },
+        'accounts.default.peerDiscovery.autoAcceptRequests.maxUses': { label: 'Auto Accept Invite Max Uses', help: 'How many times an auto-issued peer invite may be used before expiring.' },
       },
     },
     config: {

@@ -5,6 +5,8 @@ import { DiscoveryPeer, PeerSignalEnvelope, ReceivedPeerSignal, SignalErrorFrame
 const INVITE_REQUEST_KIND = 'invite_request';
 const INVITE_OFFER_KIND = 'invite_offer';
 const INVITE_REJECT_KIND = 'invite_reject';
+const DEFAULT_SIGNAL_WAIT_TIMEOUT_MS = 15000;
+const DEFAULT_SIGNAL_POLL_INTERVAL_MS = 250;
 
 export interface RelayPeerAgentServiceOptions {
   bridge: RelayAgentBridge;
@@ -20,6 +22,20 @@ export interface RelayPeerInviteOffer {
   inviteToken: string;
   expiresAt?: string;
   peerAuthorizedUntil?: string;
+}
+
+export interface RelayPeerDialOptions {
+  body?: Record<string, unknown>;
+  clientId?: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}
+
+export interface RelayPeerDialResult {
+  peerPublicKey: string;
+  connected: true;
+  reusedSession: boolean;
+  offer?: RelayPeerInviteOffer;
 }
 
 function asSignalOptions(accountId?: string): RelayAgentBridgeStartOptions {
@@ -48,6 +64,7 @@ export function isInviteRejectSignal(signal: ReceivedPeerSignal): boolean {
 export class RelayPeerAgentService {
   private readonly accountId: string | undefined;
   private readonly activeSessions = new Map<string, RelayPeerSession>();
+  private readonly deferredSignals: ReceivedPeerSignal[] = [];
 
   constructor(private readonly options: RelayPeerAgentServiceOptions) {
     this.accountId = options.accountId;
@@ -57,8 +74,11 @@ export class RelayPeerAgentService {
     await this.options.bridge.ensureStarted({ ...asSignalOptions(this.accountId), ...options });
   }
 
-  async discoverPeers(): Promise<DiscoveryPeer[]> {
-    return this.options.bridge.discoverPeers(asSignalOptions(this.accountId));
+  async discoverPeers(timeoutMs?: number): Promise<DiscoveryPeer[]> {
+    return this.options.bridge.discoverPeers({
+      ...asSignalOptions(this.accountId),
+      ...(timeoutMs ? { timeoutMs } : {}),
+    });
   }
 
   async requestPeerInvite(targetPublicKey: string, body: Record<string, unknown> = {}): Promise<void> {
@@ -120,8 +140,49 @@ export class RelayPeerAgentService {
     };
   }
 
+  private collectSignals(): ReceivedPeerSignal[] {
+    const liveSignals = this.options.bridge.drainPeerSignals(this.accountId);
+    if (this.deferredSignals.length === 0) {
+      return liveSignals;
+    }
+    const merged = [...this.deferredSignals, ...liveSignals];
+    this.deferredSignals.length = 0;
+    return merged;
+  }
+
+  private deferSignals(signals: ReceivedPeerSignal[]): void {
+    if (signals.length === 0) return;
+    this.deferredSignals.push(...signals);
+  }
+
+  private async waitForPeerSignal(
+    peerPublicKey: string,
+    matcher: (signal: ReceivedPeerSignal) => boolean,
+    options: RelayPeerDialOptions = {},
+  ): Promise<ReceivedPeerSignal> {
+    const timeoutMs = options.timeoutMs ?? DEFAULT_SIGNAL_WAIT_TIMEOUT_MS;
+    const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_SIGNAL_POLL_INTERVAL_MS;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      const drained = this.collectSignals();
+      const deferred: ReceivedPeerSignal[] = [];
+      for (const signal of drained) {
+        if (signal.source === peerPublicKey && matcher(signal)) {
+          this.deferSignals(deferred);
+          return signal;
+        }
+        deferred.push(signal);
+      }
+      this.deferSignals(deferred);
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remainingMs)));
+    }
+    throw new Error(`timed out waiting ${timeoutMs}ms for peer signal from ${peerPublicKey}`);
+  }
+
   drainSignals(): ReceivedPeerSignal[] {
-    return this.options.bridge.drainPeerSignals(this.accountId);
+    return this.collectSignals();
   }
 
   drainSignalErrors(): SignalErrorFrame[] {
@@ -143,6 +204,38 @@ export class RelayPeerAgentService {
     });
     this.activeSessions.set(signal.source, session);
     return session;
+  }
+
+  async requestPeerConnection(peerPublicKey: string, options: RelayPeerDialOptions = {}): Promise<RelayPeerDialResult> {
+    if (this.activeSessions.has(peerPublicKey)) {
+      return {
+        peerPublicKey,
+        connected: true,
+        reusedSession: true,
+      };
+    }
+    await this.ensureStarted();
+    await this.requestPeerInvite(peerPublicKey, options.body ?? {});
+    const signal = await this.waitForPeerSignal(
+      peerPublicKey,
+      (candidate) => isInviteOfferSignal(candidate) || isInviteRejectSignal(candidate),
+      options,
+    );
+    if (isInviteRejectSignal(signal)) {
+      const rejected = RelayPeerAgentService.parseInviteReject(signal);
+      throw new Error(rejected.reason ? `peer rejected invite request: ${rejected.reason}` : 'peer rejected invite request');
+    }
+    const offer = RelayPeerAgentService.parseInviteOffer(signal);
+    await this.connectFromInviteOffer(signal, {
+      ...asSignalOptions(this.accountId),
+      ...(options.clientId ? { clientId: options.clientId } : {}),
+    });
+    return {
+      peerPublicKey,
+      connected: true,
+      reusedSession: false,
+      offer,
+    };
   }
 
   getPeerSession(peerPublicKey: string): RelayPeerSession | undefined {

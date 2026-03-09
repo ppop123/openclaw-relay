@@ -77,6 +77,24 @@ openclaw relay enable --server wss://relay.example.com/ws --account default \
 - `--clear-discovery-metadata` removes the metadata object but preserves the current discoverability setting.
 - These flags never expose discovery controls to remote human clients; they only change operator-owned gateway config.
 
+## Local peer control
+
+Once the gateway is running, the owner can drive agent-only peer discovery from the local gateway control plane:
+
+```bash
+openclaw gateway call relay.peer.discover --params '{}' --json
+openclaw gateway call relay.peer.request --params '{"targetPublicKey":"<peer-pubkey>","body":{"purpose":"hello"}}' --json
+openclaw gateway call relay.peer.poll --params '{}' --json
+openclaw gateway call relay.peer.accept --params '{"signal":<poll-signal>,"ttlSeconds":60,"maxUses":1}' --json
+openclaw gateway call relay.peer.connect --params '{"signal":<offer-signal>,"clientId":"peer-client-1"}' --json
+openclaw gateway call relay.peer.call --params '{"peerPublicKey":"<peer-pubkey>","method":"system.status","params":{}}' --json
+```
+
+- These methods are local gateway RPC only; they are not exposed through relay Layer 3.
+- `relay.peer.poll` drains pending signals and signal errors for the selected relay account.
+- `relay.peer.accept` creates an invite-scoped authorization window plus a short-lived invite token; it never reveals the long-lived channel token.
+- `relay.peer.connect` establishes a reusable outbound peer session that subsequent `relay.peer.call` requests can use.
+
 ## Runtime requirements
 
 - Node.js `>=22`

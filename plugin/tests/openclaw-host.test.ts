@@ -7,6 +7,14 @@ import type { OpenClawConfig, OpenClawPluginApi } from '../src/host-types.js';
 function buildApi(initialConfig: OpenClawConfig = {}): OpenClawPluginApi & {
   registeredChannel?: unknown;
   registeredCli?: unknown;
+  registeredGatewayMethods: Map<string, (ctx: {
+    req: Record<string, unknown>;
+    params: Record<string, unknown>;
+    client: Record<string, unknown> | null;
+    isWebchatConnect: (params: Record<string, unknown> | null | undefined) => boolean;
+    respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }, meta?: Record<string, unknown>) => void;
+    context: Record<string, unknown>;
+  }) => Promise<void> | void>;
   writeConfigFileMock: ReturnType<typeof vi.fn>;
   readConfig(): OpenClawConfig;
 } {
@@ -18,6 +26,7 @@ function buildApi(initialConfig: OpenClawConfig = {}): OpenClawPluginApi & {
   return {
     id: 'relay',
     name: 'OpenClaw Relay',
+    registeredGatewayMethods: new Map(),
     config: currentConfig,
     runtime: {
       version: 'test',
@@ -39,6 +48,9 @@ function buildApi(initialConfig: OpenClawConfig = {}): OpenClawPluginApi & {
     },
     registerChannel(registration) {
       this.registeredChannel = registration;
+    },
+    registerGatewayMethod(method, handler) {
+      this.registeredGatewayMethods.set(method, handler);
     },
     registerCli(registrar) {
       this.registeredCli = registrar;
@@ -72,12 +84,248 @@ function buildProgram() {
   return new FakeCommand('root');
 }
 
+async function callGatewayMethod(
+  api: ReturnType<typeof buildApi>,
+  method: string,
+  params: Record<string, unknown> = {},
+): Promise<{ ok: boolean; payload?: unknown; error?: { code: string; message: string }; meta?: Record<string, unknown> }> {
+  const handler = api.registeredGatewayMethods.get(method);
+  if (!handler) {
+    throw new Error(`gateway method not registered: ${method}`);
+  }
+  return await new Promise((resolve, reject) => {
+    let responded = false;
+    Promise.resolve(handler({
+      req: { id: 'req-1', type: 'request', method, params },
+      params,
+      client: { kind: 'local' },
+      isWebchatConnect: () => false,
+      respond: (ok, payload, error, meta) => {
+        responded = true;
+        resolve({ ok, payload, error, meta });
+      },
+      context: {},
+    })).then(() => {
+      if (!responded) {
+        reject(new Error(`gateway method did not respond: ${method}`));
+      }
+    }, reject);
+  });
+}
+
 describe('openclaw host bridge', () => {
   it('registers channel and CLI with the real plugin entry', () => {
     const api = buildApi();
     relayPlugin.register(api);
     expect(api.registeredChannel).toBeTruthy();
     expect(api.registeredCli).toBeTypeOf('function');
+  });
+
+  it('registers local gateway methods for peer orchestration', async () => {
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey: 'pub',
+              },
+              approvedClients: {},
+              peerDiscovery: { enabled: true },
+            },
+          },
+        },
+      },
+    };
+
+    const incomingRequest = {
+      source: 'peer-key',
+      envelope: { version: 1 as const, kind: 'invite_request', body: { hello: 'world' } },
+      receivedAt: '2026-03-09T00:00:00.000Z',
+      raw: { type: 'signal' as const, source: 'peer-key', ephemeral_key: 'ephemeral', payload: 'payload' },
+    };
+    const incomingOffer = {
+      source: 'peer-key',
+      envelope: {
+        version: 1 as const,
+        kind: 'invite_offer',
+        body: {
+          invite_token: 'invite-token',
+          expires_at: '2026-03-09T00:05:00.000Z',
+          peer_authorized_until: '2026-03-09T00:05:00.000Z',
+        },
+      },
+      receivedAt: '2026-03-09T00:01:00.000Z',
+      raw: { type: 'signal' as const, source: 'peer-key', ephemeral_key: 'ephemeral', payload: 'payload-2' },
+    };
+
+    const startSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'start').mockResolvedValue(undefined);
+    const stopSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'stop').mockResolvedValue(undefined);
+    const statusSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'getStatus').mockResolvedValue({
+      state: 'registered',
+      health: 'healthy',
+      approvedClients: 0,
+      activeSessions: 0,
+      peerDiscovery: { enabled: true, publicKey: 'pub', pendingSignals: 1, pendingSignalErrors: 1 },
+    });
+    const discoverSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'discoverPeers').mockResolvedValue([
+      { public_key: 'peer-key', metadata: { label: 'Peer' }, online_since: '2026-03-09T00:00:00.000Z' },
+    ] as any);
+    const sendSignalSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'sendPeerSignal').mockResolvedValue(undefined);
+    const authorizePeerSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'authorizePeerPublicKey').mockResolvedValue({
+      fingerprint: 'sha256:peer',
+      expiresAt: '2026-03-09T00:05:00.000Z',
+    });
+    const createInviteSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'createPeerInvite').mockResolvedValue({
+      inviteToken: 'invite-token',
+      inviteHash: 'invite-hash',
+      expiresAt: '2026-03-09T00:05:00.000Z',
+    });
+    const fakePeerSession = {
+      request: vi.fn(async () => ({ ok: true, version: 'remote' })),
+      requestStream: vi.fn(),
+      close: vi.fn(async () => undefined),
+      isConnected: true,
+    };
+    const dialPeerSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'dialPeerInvite').mockResolvedValue(fakePeerSession as any);
+    const drainSignalsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignals')
+      .mockReturnValueOnce([incomingRequest] as any)
+      .mockReturnValue([] as any);
+    const drainSignalErrorsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignalErrors').mockReturnValue([] as any);
+
+    let api: ReturnType<typeof buildApi> | undefined;
+
+    try {
+      api = buildApi(config);
+      const preview = createRelayChannelDefinition();
+      createOpenClawRelayPlugin(api, preview);
+
+      expect(api.registeredGatewayMethods.has('relay.peer.discover')).toBe(true);
+      expect(api.registeredGatewayMethods.has('relay.peer.dial')).toBe(true);
+      expect(api.registeredGatewayMethods.has('relay.peer.call')).toBe(true);
+
+      const discoverResult = await callGatewayMethod(api, 'relay.peer.discover', { timeoutMs: 4321 });
+      expect(discoverResult.ok).toBe(true);
+      expect(discoverResult.payload).toMatchObject({ accountId: 'default' });
+      expect(discoverSpy).toHaveBeenCalledTimes(1);
+
+      const requestResult = await callGatewayMethod(api, 'relay.peer.request', {
+        targetPublicKey: 'peer-key',
+        body: { purpose: 'test' },
+      });
+      expect(requestResult.ok).toBe(true);
+      expect(sendSignalSpy).toHaveBeenCalledWith('peer-key', {
+        version: 1,
+        kind: 'invite_request',
+        body: { purpose: 'test' },
+      });
+
+      const pollResult = await callGatewayMethod(api, 'relay.peer.poll');
+      expect(pollResult.ok).toBe(true);
+      expect(pollResult.payload).toMatchObject({
+        signals: [
+          {
+            source: 'peer-key',
+            kind: 'invite_request',
+            body: { hello: 'world' },
+          },
+        ],
+      });
+
+      const acceptResult = await callGatewayMethod(api, 'relay.peer.accept', {
+        signal: incomingRequest,
+        ttlSeconds: 45,
+        maxUses: 1,
+        body: { accepted_by: 'owner' },
+      });
+      expect(acceptResult.ok).toBe(true);
+      expect(authorizePeerSpy).toHaveBeenCalledWith('peer-key', 45, 1);
+      expect(createInviteSpy).toHaveBeenCalledWith(45);
+      expect(sendSignalSpy).toHaveBeenLastCalledWith('peer-key', {
+        version: 1,
+        kind: 'invite_offer',
+        body: {
+          invite_token: 'invite-token',
+          expires_at: '2026-03-09T00:05:00.000Z',
+          peer_authorized_until: '2026-03-09T00:05:00.000Z',
+          accepted_by: 'owner',
+        },
+      });
+
+      const connectResult = await callGatewayMethod(api, 'relay.peer.connect', {
+        signal: incomingOffer,
+        clientId: 'peer-client-7',
+      });
+      expect(connectResult.ok).toBe(true);
+      expect(dialPeerSpy).toHaveBeenCalledWith('invite-token', 'peer-key', 'peer-client-7');
+
+      const statusResult = await callGatewayMethod(api, 'relay.peer.status');
+      expect(statusResult.ok).toBe(true);
+      expect(statusResult.payload).toMatchObject({ connectedPeers: ['peer-key'] });
+
+      const callResult = await callGatewayMethod(api, 'relay.peer.call', {
+        peerPublicKey: 'peer-key',
+        method: 'system.status',
+        params: {},
+      });
+      expect(callResult.ok).toBe(true);
+      expect(fakePeerSession.request).toHaveBeenCalledWith('system.status', {});
+      expect(callResult.payload).toMatchObject({ result: { ok: true, version: 'remote' } });
+
+      const disconnectResult = await callGatewayMethod(api, 'relay.peer.disconnect', {
+        peerPublicKey: 'peer-key',
+      });
+      expect(disconnectResult.ok).toBe(true);
+      expect(disconnectResult.payload).toMatchObject({ connectedPeers: [] });
+      expect(fakePeerSession.close).toHaveBeenCalledTimes(1);
+
+      drainSignalsSpy.mockReturnValueOnce([incomingOffer] as any);
+      const dialResult = await callGatewayMethod(api, 'relay.peer.dial', {
+        targetPublicKey: 'peer-key',
+        body: { purpose: 'dial' },
+        clientId: 'peer-client-8',
+        timeoutMs: 500,
+        pollIntervalMs: 1,
+      });
+      expect(dialResult.ok).toBe(true);
+      expect(dialResult.payload).toMatchObject({
+        peerPublicKey: 'peer-key',
+        connected: true,
+        reusedSession: false,
+      });
+      expect(sendSignalSpy).toHaveBeenCalledWith('peer-key', {
+        version: 1,
+        kind: 'invite_request',
+        body: { purpose: 'dial' },
+      });
+      expect(dialPeerSpy).toHaveBeenLastCalledWith('invite-token', 'peer-key', 'peer-client-8');
+
+      await callGatewayMethod(api, 'relay.peer.disconnect');
+      await stopSpy.mock.results[0]?.value;
+      await callGatewayMethod(api, 'relay.peer.status');
+      expect(startSpy).toHaveBeenCalledTimes(1);
+      expect(statusSpy).toHaveBeenCalled();
+      expect(drainSignalsSpy).toHaveBeenCalled();
+      expect(drainSignalErrorsSpy).toHaveBeenCalled();
+    } finally {
+      if (api) {
+        await createRelayAgentBridge(api).stopAccount();
+      }
+      startSpy.mockRestore();
+      stopSpy.mockRestore();
+      statusSpy.mockRestore();
+      discoverSpy.mockRestore();
+      sendSignalSpy.mockRestore();
+      authorizePeerSpy.mockRestore();
+      createInviteSpy.mockRestore();
+      dialPeerSpy.mockRestore();
+      drainSignalsSpy.mockRestore();
+      drainSignalErrorsSpy.mockRestore();
+    }
   });
 
   it('resolves configured relay accounts from OpenClaw config', () => {
@@ -405,6 +653,9 @@ describe('openclaw host bridge', () => {
         account: 'default',
         discoverLabel: 'Shanghai Lab',
         discoverMetadataJson: '{"region":"cn-sha","tier":"prod"}',
+        peerAutoAccept: true,
+        peerAutoAcceptTtl: '60',
+        peerAutoAcceptMaxUses: '1',
       });
 
       expect(api.writeConfigFileMock).toHaveBeenCalled();
@@ -416,6 +667,11 @@ describe('openclaw host bridge', () => {
           tier: 'prod',
           label: 'Shanghai Lab',
         },
+        autoAcceptRequests: {
+          enabled: true,
+          ttlSeconds: 60,
+          maxUses: 1,
+        },
       });
       expect(logs.some((line) => line.includes('peerDiscoveryMetadata'))).toBe(true);
 
@@ -426,7 +682,14 @@ describe('openclaw host bridge', () => {
       });
 
       const clearedAccount = (((api.readConfig().channels as Record<string, any>).relay as Record<string, any>).accounts as Record<string, any>).default;
-      expect(clearedAccount.peerDiscovery).toEqual({ enabled: false });
+      expect(clearedAccount.peerDiscovery).toEqual({
+        enabled: false,
+        autoAcceptRequests: {
+          enabled: true,
+          ttlSeconds: 60,
+          maxUses: 1,
+        },
+      });
     } finally {
       logSpy.mockRestore();
     }
