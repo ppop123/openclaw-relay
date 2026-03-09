@@ -1,6 +1,6 @@
 import { Layer2Message, RelayRequestContext, RelayRuntimeAdapter, RelayStreamResult, RequestMessage } from './types.js';
 import { handleAgentsInfo, handleAgentsList } from './handlers/agents.js';
-import { handleChatSend } from './handlers/chat.js';
+import { handleChatHistory, handleChatSend } from './handlers/chat.js';
 import { handleCronList, handleCronToggle } from './handlers/cron.js';
 import { handleSessionsHistory, handleSessionsList } from './handlers/sessions.js';
 import { handleSystemStatus } from './handlers/system.js';
@@ -13,6 +13,8 @@ export async function dispatchRequest(
   switch (msg.method) {
     case 'chat.send':
       return handleChatSend(runtime, msg.params, ctx);
+    case 'chat.history':
+      return handleChatHistory(runtime, msg.params, ctx);
     case 'agents.list':
       return handleAgentsList(runtime, msg.params, ctx);
     case 'agents.info':

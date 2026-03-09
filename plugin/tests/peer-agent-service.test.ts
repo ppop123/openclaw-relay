@@ -27,7 +27,7 @@ function createBridge(): RelayAgentBridge {
     sendPeerSignal: vi.fn(async () => undefined),
     createPeerInvite: vi.fn(async () => ({ inviteToken: 'invite-token', inviteHash: 'invite-hash', expiresAt: '2026-03-09T00:05:00.000Z' })),
     acceptPeerSignal: vi.fn(async () => ({ sourcePublicKey: 'peer-key', fingerprint: 'sha256:peer', peerAuthorizedUntil: '2026-03-09T00:05:00.000Z', inviteToken: 'invite-token', inviteHash: 'invite-hash', expiresAt: '2026-03-09T00:05:00.000Z' })),
-    dialPeerInvite: vi.fn(async () => ({ request: vi.fn(async () => ({ ok: true })), requestStream: vi.fn(async () => ({ done: true })), close: vi.fn(async () => undefined) } as any)),
+    dialPeerInvite: vi.fn(async () => ({ isConnected: true, request: vi.fn(async () => ({ ok: true })), requestStream: vi.fn(async () => ({ done: true })), close: vi.fn(async () => undefined) } as any)),
     drainPeerSignals: vi.fn(() => []),
     drainPeerSignalErrors: vi.fn(() => []),
   };
@@ -94,5 +94,28 @@ describe('RelayPeerAgentService', () => {
       reason: 'busy',
       body: { reason: 'busy', retry_after: 30 },
     });
+  });
+
+  it('prunes stale peer sessions before reporting or reusing them', async () => {
+    const bridge = createBridge();
+    const staleSession = {
+      isConnected: false,
+      request: vi.fn(async () => ({ ok: true })),
+      requestStream: vi.fn(async () => ({ done: true })),
+      close: vi.fn(async () => undefined),
+    } as any;
+    (bridge.dialPeerInvite as any).mockResolvedValueOnce(staleSession);
+    const service = createRelayPeerAgentService({ bridge, accountId: 'default' });
+
+    const offerSignal = signal('peer-key', 'invite_offer', {
+      invite_token: 'invite-token',
+      expires_at: '2026-03-09T00:05:00.000Z',
+      peer_authorized_until: '2026-03-09T00:05:00.000Z',
+    });
+
+    await service.connectFromInviteOffer(offerSignal, { clientId: 'peer-client-stale' });
+
+    expect(service.listConnectedPeers()).toEqual([]);
+    await expect(service.requestPeer('peer-key', 'system.status', {})).rejects.toThrow('no active peer session');
   });
 });

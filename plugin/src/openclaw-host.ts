@@ -314,6 +314,37 @@ type HistoryMessage = {
   timestamp: string;
 };
 
+function normalizeHistoryContent(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const parts = value.flatMap((item) => {
+      if (!isObject(item)) return [];
+      if (typeof item.text === 'string' && item.text) return [item.text];
+      return [];
+    });
+    return parts.length > 0 ? parts.join('\n') : undefined;
+  }
+  if (isObject(value) && typeof value.text === 'string' && value.text) {
+    return value.text;
+  }
+  return undefined;
+}
+
+function normalizeHistoryTimestamp(message: Record<string, unknown>, entry: Record<string, unknown>): string | undefined {
+  if (typeof message.timestamp === 'string' && message.timestamp) {
+    return message.timestamp;
+  }
+  if (typeof message.timestamp === 'number' && Number.isFinite(message.timestamp)) {
+    return new Date(message.timestamp).toISOString();
+  }
+  if (typeof entry.timestamp === 'string' && entry.timestamp) {
+    return entry.timestamp;
+  }
+  return undefined;
+}
+
 async function readSessionMessages(storePath: string, sessionId: string): Promise<HistoryMessage[]> {
   const transcriptPath = buildTranscriptPath(storePath, sessionId);
   const raw = await readFile(transcriptPath, 'utf-8').catch(() => '');
@@ -326,8 +357,8 @@ async function readSessionMessages(storePath: string, sessionId: string): Promis
       if (entry.type !== 'message' || !isObject(entry.message)) continue;
       const message = entry.message as Record<string, unknown>;
       const role = typeof message.role === 'string' ? message.role : undefined;
-      const content = typeof message.content === 'string' ? message.content : undefined;
-      const timestamp = typeof message.timestamp === 'string' ? message.timestamp : undefined;
+      const content = normalizeHistoryContent(message.content);
+      const timestamp = normalizeHistoryTimestamp(message, entry);
       if (!role || !content || !timestamp) continue;
       messages.push({ role, content, timestamp });
     } catch {

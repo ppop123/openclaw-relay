@@ -22,6 +22,8 @@ const WS_OPEN = 1;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const DEFAULT_STREAM_TIMEOUT_MS = 300_000;
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const PONG_TIMEOUT_MS = 10_000;
 const GATEWAY_PEER_ID = 'gateway';
 
 interface PendingRequest {
@@ -52,6 +54,8 @@ export class RelayPeerSession {
   private cipher: SessionCipher | undefined;
   private connected = false;
   private closed = false;
+  private heartbeatGeneration = 0;
+  private awaitingPongTs: number | null = null;
 
   constructor(private readonly options: RelayPeerSessionOptions) {
     this.webSocketFactory = options.webSocketFactory ?? ((url: string) => new WebSocket(url) as unknown as WebSocketLike);
@@ -111,6 +115,7 @@ export class RelayPeerSession {
       );
       this.cipher = cipher;
       this.connected = true;
+      this.startHeartbeat();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.handleProtocolFailure(err);
@@ -121,6 +126,7 @@ export class RelayPeerSession {
   async close(): Promise<void> {
     this.closed = true;
     this.connected = false;
+    this.clearHeartbeat();
     this.rejectHandshakeWaiters(new Error('peer session closed'));
     this.rejectPendingRequests(new Error('peer session closed'));
     if (this.ws) {
@@ -291,7 +297,10 @@ export class RelayPeerSession {
       return;
     }
 
-    if (frame.type === 'pong') return;
+    if (frame.type === 'pong') {
+      this.awaitingPongTs = null;
+      return;
+    }
 
     if (frame.type === 'ping') {
       await this.sendRaw({ type: 'pong', ts: (frame as PingFrame).ts } satisfies PingFrame);
@@ -384,6 +393,39 @@ export class RelayPeerSession {
     }
   }
 
+  private startHeartbeat(): void {
+    this.clearHeartbeat();
+    const generation = ++this.heartbeatGeneration;
+    void this.runHeartbeat(generation);
+  }
+
+  private clearHeartbeat(): void {
+    this.heartbeatGeneration += 1;
+    this.awaitingPongTs = null;
+  }
+
+  private async runHeartbeat(generation: number): Promise<void> {
+    while (generation === this.heartbeatGeneration && !this.closed) {
+      await this.delay(HEARTBEAT_INTERVAL_MS);
+      if (generation !== this.heartbeatGeneration || this.closed) return;
+      if (!this.ws || this.ws.readyState !== WS_OPEN || !this.connected) return;
+      const ts = Date.now();
+      this.awaitingPongTs = ts;
+      try {
+        await this.sendRaw({ type: 'ping', ts } satisfies PingFrame);
+      } catch {
+        this.handleProtocolFailure(new Error('peer session ping failed'));
+        return;
+      }
+      await this.delay(PONG_TIMEOUT_MS);
+      if (generation !== this.heartbeatGeneration || this.closed) return;
+      if (this.awaitingPongTs === ts) {
+        this.handleProtocolFailure(new Error('peer session pong timeout'));
+        return;
+      }
+    }
+  }
+
   private rejectHandshakeWaiters(error: Error): void {
     for (const waiter of this.frameWaiters.values()) {
       clearTimeout(waiter.timeout);
@@ -408,6 +450,7 @@ export class RelayPeerSession {
   private handleProtocolFailure(error: Error): void {
     this.connected = false;
     this.cipher = undefined;
+    this.clearHeartbeat();
     this.rejectHandshakeWaiters(error);
     this.rejectPendingRequests(error);
     if (this.ws) {
@@ -419,5 +462,9 @@ export class RelayPeerSession {
         // ignore close errors
       }
     }
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

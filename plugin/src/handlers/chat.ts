@@ -23,6 +23,9 @@ export async function handleChatSend(
   if (params.session_id !== undefined && params.session_id !== null && typeof params.session_id !== 'string') {
     throw new InvalidParamsError('session_id must be string or null');
   }
+  if (params.sessionKey !== undefined && params.sessionKey !== null && typeof params.sessionKey !== 'string') {
+    throw new InvalidParamsError('sessionKey must be string or null');
+  }
   if (params.stream !== undefined && typeof params.stream !== 'boolean') {
     throw new InvalidParamsError('stream must be boolean when provided');
   }
@@ -31,9 +34,38 @@ export async function handleChatSend(
     throw new UnsupportedRuntimeMethodError('chat.send');
   }
 
-  const result = await runtime.chatSend(params, ctx);
+  const normalizedParams = {
+    ...params,
+    ...(typeof params.session_id === 'string' && params.session_id
+      ? { session_id: params.session_id }
+      : typeof params.sessionKey === 'string' && params.sessionKey
+        ? { session_id: params.sessionKey }
+        : {}),
+  };
+
+  const result = await runtime.chatSend(normalizedParams, ctx);
   if (isStreamResult(result) || isObject(result)) {
     return result;
   }
   throw new Error('chat.send returned unsupported result type');
+}
+
+export async function handleChatHistory(
+  runtime: RelayRuntimeAdapter,
+  params: Record<string, unknown>,
+  ctx: RelayRequestContext,
+): Promise<Record<string, unknown>> {
+  if (typeof params.sessionKey !== 'string' || params.sessionKey.length === 0) {
+    throw new InvalidParamsError('sessionKey is required');
+  }
+  if (params.limit !== undefined && typeof params.limit !== 'number') {
+    throw new InvalidParamsError('limit must be numeric when provided');
+  }
+  if (!runtime.sessionsHistory) {
+    throw new UnsupportedRuntimeMethodError('chat.history');
+  }
+  return runtime.sessionsHistory({
+    session_id: params.sessionKey,
+    ...(typeof params.limit === 'number' ? { limit: params.limit } : {}),
+  }, ctx);
 }

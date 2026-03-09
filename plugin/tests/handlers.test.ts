@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dispatchRequest, MethodNotFoundError } from '../src/dispatch.js';
 import type { RelayRequestContext, RelayRuntimeAdapter, RequestMessage } from '../src/types.js';
 
@@ -44,5 +44,31 @@ describe('request dispatch', () => {
     };
     const result = await dispatchRequest(runtime, request('chat.send', { message: 'hello', stream: true }), ctx);
     expect('stream' in result).toBe(true);
+  });
+
+  it('maps chat.history to session history by sessionKey', async () => {
+    const runtime: RelayRuntimeAdapter = {
+      sessionsHistory: async (params) => ({
+        messages: [{ role: 'assistant', content: [{ type: 'text', text: 'OK' }] }],
+        echoed: params,
+      }),
+    };
+
+    await expect(dispatchRequest(runtime, request('chat.history', { sessionKey: 'sess_key_1', limit: 5 }), ctx)).resolves.toEqual({
+      messages: [{ role: 'assistant', content: [{ type: 'text', text: 'OK' }] }],
+      echoed: { session_id: 'sess_key_1', limit: 5 },
+    });
+  });
+
+  it('maps chat.send sessionKey onto relay session_id semantics', async () => {
+    const chatSend = vi.fn(async (params) => ({ content: 'OK', session_id: params.session_id, agent: 'demo' }));
+    const runtime: RelayRuntimeAdapter = { chatSend };
+
+    await expect(dispatchRequest(runtime, request('chat.send', { message: 'hello', sessionKey: 'sess_key_2', stream: false }), ctx)).resolves.toEqual({
+      content: 'OK',
+      session_id: 'sess_key_2',
+      agent: 'demo',
+    });
+    expect(chatSend).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'sess_key_2', sessionKey: 'sess_key_2' }), ctx);
   });
 });

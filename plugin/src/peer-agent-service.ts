@@ -206,8 +206,16 @@ export class RelayPeerAgentService {
     return session;
   }
 
+  private getUsableSession(peerPublicKey: string): RelayPeerSession | undefined {
+    const session = this.activeSessions.get(peerPublicKey);
+    if (!session) return undefined;
+    if (session.isConnected) return session;
+    this.activeSessions.delete(peerPublicKey);
+    return undefined;
+  }
+
   async requestPeerConnection(peerPublicKey: string, options: RelayPeerDialOptions = {}): Promise<RelayPeerDialResult> {
-    if (this.activeSessions.has(peerPublicKey)) {
+    if (this.getUsableSession(peerPublicKey)) {
       return {
         peerPublicKey,
         connected: true,
@@ -239,10 +247,13 @@ export class RelayPeerAgentService {
   }
 
   getPeerSession(peerPublicKey: string): RelayPeerSession | undefined {
-    return this.activeSessions.get(peerPublicKey);
+    return this.getUsableSession(peerPublicKey);
   }
 
   listConnectedPeers(): string[] {
+    for (const peerPublicKey of [...this.activeSessions.keys()]) {
+      this.getUsableSession(peerPublicKey);
+    }
     return [...this.activeSessions.keys()].sort();
   }
 
@@ -260,7 +271,7 @@ export class RelayPeerAgentService {
   }
 
   async requestPeer(peerPublicKey: string, method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const session = this.activeSessions.get(peerPublicKey);
+    const session = this.getUsableSession(peerPublicKey);
     if (!session) {
       throw new Error(`no active peer session for ${peerPublicKey}`);
     }
@@ -273,7 +284,7 @@ export class RelayPeerAgentService {
     params: Record<string, unknown>,
     onChunk: (chunk: Record<string, unknown>) => Promise<void> | void,
   ): Promise<Record<string, unknown>> {
-    const session = this.activeSessions.get(peerPublicKey);
+    const session = this.getUsableSession(peerPublicKey);
     if (!session) {
       throw new Error(`no active peer session for ${peerPublicKey}`);
     }

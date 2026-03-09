@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deriveGatewaySession, generateGatewayIdentity, GatewayIdentity } from '../src/crypto.js';
 import { RelayPeerSession } from '../src/outbound-peer-session.js';
 import type { WebSocketLike } from '../src/types.js';
@@ -15,6 +15,7 @@ class MockPeerWebSocket implements WebSocketLike {
     private readonly gatewayIdentity: GatewayIdentity,
     private readonly expectedInviteHash: string,
     private readonly helloAckPublicKey: string = gatewayIdentity.serialized.publicKey,
+    private readonly respondToPing = true,
   ) {
     queueMicrotask(() => this.emit('open', {}));
   }
@@ -51,6 +52,13 @@ class MockPeerWebSocket implements WebSocketLike {
     }
 
     if (frame.type === 'pong') {
+      return;
+    }
+
+    if (frame.type === 'ping') {
+      if (this.respondToPing && typeof frame.ts === 'number') {
+        this.emit('message', { data: JSON.stringify({ type: 'pong', ts: frame.ts }) });
+      }
       return;
     }
 
@@ -124,6 +132,10 @@ class MockPeerWebSocket implements WebSocketLike {
 }
 
 describe('RelayPeerSession', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('joins an invite alias and performs request and stream calls', async () => {
     const localIdentity = await generateGatewayIdentity();
     const remoteIdentity = await generateGatewayIdentity();
@@ -175,5 +187,55 @@ describe('RelayPeerSession', () => {
     });
 
     await expect(session.connect()).rejects.toThrow('Gateway public key mismatch during peer invite dial');
+  });
+
+  it('sends heartbeat pings to keep peer sessions alive', async () => {
+    vi.useFakeTimers();
+    const localIdentity = await generateGatewayIdentity();
+    const remoteIdentity = await generateGatewayIdentity();
+    const inviteToken = 'peer-invite-token';
+    const inviteHash = await sha256Hex(inviteToken);
+    let socket: MockPeerWebSocket | undefined;
+
+    const session = new RelayPeerSession({
+      relayUrl: 'ws://relay.example.test/ws',
+      inviteToken,
+      gatewayPublicKey: remoteIdentity.serialized.publicKey,
+      identity: localIdentity,
+      webSocketFactory: () => {
+        socket = new MockPeerWebSocket(remoteIdentity, inviteHash);
+        return socket;
+      },
+    });
+
+    await session.connect();
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(socket?.sentFrames.some((frame) => frame.type === 'ping')).toBe(true);
+    expect(session.isConnected).toBe(true);
+
+    await session.close();
+  });
+
+  it('drops the peer session when heartbeat pong is missing', async () => {
+    vi.useFakeTimers();
+    const localIdentity = await generateGatewayIdentity();
+    const remoteIdentity = await generateGatewayIdentity();
+    const inviteToken = 'peer-invite-token';
+    const inviteHash = await sha256Hex(inviteToken);
+
+    const session = new RelayPeerSession({
+      relayUrl: 'ws://relay.example.test/ws',
+      inviteToken,
+      gatewayPublicKey: remoteIdentity.serialized.publicKey,
+      identity: localIdentity,
+      webSocketFactory: () => new MockPeerWebSocket(remoteIdentity, inviteHash, remoteIdentity.serialized.publicKey, false),
+    });
+
+    await session.connect();
+    await vi.advanceTimersByTimeAsync(40_000);
+
+    expect(session.isConnected).toBe(false);
+    await expect(session.request('system.status', {})).rejects.toThrow('peer session is not connected');
   });
 });
