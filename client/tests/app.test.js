@@ -558,14 +558,22 @@ describe('pairing handoff via URL fragment', () => {
 });
 
 describe('token visibility toggle', () => {
-  it('toggles channelToken input between password and text', () => {
-    getElement('channelToken').type = 'password';
+  it('toggles access token visibility', () => {
+    const input = getElement('channelToken');
+    const icon = getElement('tokenEyeIcon');
+    const button = getElement('tokenVisibilityBtn');
+    input.type = 'password';
+    icon.textContent = '👁';
 
     app.toggleTokenVisibility();
-    expect(getElement('channelToken').type).toBe('text');
+    expect(input.type).toBe('text');
+    expect(icon.textContent).toBe('🙈');
+    expect(button.title).toBe('Hide access token');
 
     app.toggleTokenVisibility();
-    expect(getElement('channelToken').type).toBe('password');
+    expect(input.type).toBe('password');
+    expect(icon.textContent).toBe('👁');
+    expect(button.title).toBe('Show access token');
   });
 });
 

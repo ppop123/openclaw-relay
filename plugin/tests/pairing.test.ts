@@ -23,9 +23,11 @@ describe('pairing and config commands', () => {
     expect(info.relayUrl).toBe('wss://relay.example.com');
     expect(info.channelToken).toBe(account.channelToken);
     expect(info.uri.startsWith('openclaw-relay://relay.example.com/')).toBe(true);
-    expect(buildPairingWebUrl(info, 'http://localhost:8080/client/')).toBe(
-      `http://localhost:8080/client/#relay=${encodeURIComponent(info.relayUrl)}&token=${encodeURIComponent(info.channelToken)}&key=${encodeURIComponent(info.gatewayPublicKey)}`
-    );
+    const handoffUrl = buildPairingWebUrl(info, 'http://localhost:8080/client/');
+    const handoffParams = new URLSearchParams(new URL(handoffUrl).hash.slice(1));
+    expect(handoffParams.get('relay')).toBe(info.relayUrl);
+    expect(handoffParams.get('token')).toBe(info.channelToken);
+    expect(handoffParams.get('key')).toBe(info.gatewayPublicKey);
 
     const inspect = await store.inspectAccount('default');
     expect(inspect?.gatewayPublicKey).toBe(account.gatewayKeyPair.publicKey);
@@ -114,5 +116,19 @@ describe('pairing and config commands', () => {
 
     await handleRelayDisable(store, 'default');
     expect((await store.load('default'))?.enabled).toBe(false);
+  });
+
+  it('round-trips pairing handoff values through the fragment decoder', () => {
+    const handoffUrl = buildPairingWebUrl({
+      accountId: 'default',
+      relayUrl: 'wss://relay.example.com/ws?mode=a+b',
+      channelToken: 'token + plus',
+      gatewayPublicKey: 'BASE64+KEY/with space',
+      uri: 'openclaw-relay://relay.example.com/default',
+    }, 'http://localhost:8080/client/');
+    const handoffParams = new URLSearchParams(new URL(handoffUrl).hash.slice(1));
+    expect(handoffParams.get('relay')).toBe('wss://relay.example.com/ws?mode=a+b');
+    expect(handoffParams.get('token')).toBe('token + plus');
+    expect(handoffParams.get('key')).toBe('BASE64+KEY/with space');
   });
 });

@@ -48,7 +48,7 @@
 - 通过 `agents.list` 加载 Agent 列表
 - 重连和刷新时恢复上次选择的 Agent（如果该 Agent 仍然可用）
 - 紧凑的聊天状态栏，以及可展开的连接详情（显示会话、客户端、配置、网关、加密和身份状态）
-- 本地 `New Chat` 按钮，重置 `sessionId` 但不断开连接
+- 本地 `New chat` 按钮，重置 `sessionId` 但不断开连接
 - 将当前内存中的聊天记录显式导出为 JSON
 - 安全的 Markdown 渲染（用于助手输出）
 - 针对 UI 状态、配对交接（pairing handoff）、身份持久化、加密、传输层和 Markdown 安全性的自动化测试
@@ -167,11 +167,11 @@ It currently provides:
 - agent list loading via `agents.list`
 - preferred agent restore across reconnects and reloads when that agent is still available
 - a compact chat-panel status bar plus expandable connection details for session, client, profile, gateway, encryption, and identity state
-- local `New Chat` control that resets `sessionId` without disconnecting
+- local `New chat` control that resets `sessionId` without disconnecting
 - explicit export of the current in-memory chat transcript as JSON
 - secure Markdown rendering for assistant output
 - automated tests for UI state, identity persistence, crypto, transport, and Markdown safety
-- a local real-browser E2E smoke flow for connect, pairing handoff, streaming chat, reload persistence, protected identity backup/restore, and transcript export
+- a local real-browser E2E smoke flow for connect, streaming chat, reload persistence, protected identity backup/restore, and transcript export
 
 Its largest current limitations are:
 

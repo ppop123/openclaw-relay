@@ -13,7 +13,7 @@ The browser client uses `vitest`.
 | `client/tests/identity-store.test.js` | IndexedDB identity persistence layout and CRUD behavior |
 | `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
-| `client/tests/app.test.js` | Settings migration, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
+| `client/tests/app.test.js` | Settings migration, pairing-handoff fragment handling, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
 | `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering pinned-key mismatch refusal, connect, agents.list, streamed chat, reload persistence, protected identity export/reset/import, preferred-agent restore, transcript export, and `channelToken` staying out of persisted settings |
 | `scripts/web-client-live-e2e.mjs` | Real relay + gateway Chrome flow covering approved-identity import, connect, encrypted `system.status`, and reload/reconnect with the same persisted identity |
 

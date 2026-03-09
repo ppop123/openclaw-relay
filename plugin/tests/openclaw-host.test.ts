@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import relayPlugin from '../src/index.js';
-import { createOpenClawRelayPlugin, createRelayAgentBridge, createRelayChannelDefinition } from '../src/openclaw-host.js';
+import { createOpenClawRelayPlugin, createRelayAgentBridge, createRelayChannelDefinition, setExternalUrlSpawnerForTests } from '../src/openclaw-host.js';
 import { RelayGatewayAdapter } from '../src/gateway-adapter.js';
 import type { OpenClawConfig, OpenClawPluginApi } from '../src/host-types.js';
 
@@ -750,6 +750,80 @@ describe('openclaw host bridge', () => {
       stopSpy.mockRestore();
       statusSpy.mockRestore();
       inspectSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
+
+  it('warns but still prints pairing info when opening the browser fails', async () => {
+    const publicKey = Buffer.alloc(32).toString('base64');
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey,
+              },
+              approvedClients: {},
+            },
+          },
+        },
+      },
+    };
+    const startSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'start').mockResolvedValue(undefined);
+    const stopSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'stop').mockResolvedValue(undefined);
+    const statusSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'getStatus').mockResolvedValue({
+      state: 'registered',
+      health: 'healthy',
+      approvedClients: 0,
+      activeSessions: 0,
+    });
+    const inspectSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'inspectAccount').mockResolvedValue({
+      enabled: true,
+      server: 'ws://relay.example/ws',
+      channel: 'channel-hash',
+      gatewayPublicKey: publicKey,
+      approvedClients: [{ fingerprint: 'sha256:test' }],
+    });
+    setExternalUrlSpawnerForTests(((..._args) => ({
+      once(event, handler) {
+        if (event === 'close') {
+          queueMicrotask(() => handler(1));
+        }
+        return this;
+      },
+    })) as unknown as typeof import('node:child_process').spawn);
+    const logs: string[] = [];
+    const warns: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
+      logs.push(String(value ?? ''));
+    });
+
+    try {
+      const api = buildApi(config);
+      const preview = createRelayChannelDefinition();
+      const { registerCli } = createOpenClawRelayPlugin(api, preview);
+      const program = buildProgram();
+      registerCli();
+      const registrar = api.registeredCli as (ctx: { program: FakeCommand; logger: any }) => void;
+      registrar({ program, logger: { info() {}, warn(message: string) { warns.push(message); }, error() {}, debug() {} } });
+      const pairAction = program.children.get('relay')?.children.get('pair')?.actionHandler;
+      expect(pairAction).toBeTypeOf('function');
+
+      await pairAction?.({ account: 'default', wait: '1', openWeb: 'http://localhost:8080/client/' });
+
+      expect(logs.some((line) => line.includes('webClientUrl'))).toBe(true);
+      expect(warns.some((line) => line.includes('failed to open web client URL automatically'))).toBe(true);
+    } finally {
+      startSpy.mockRestore();
+      stopSpy.mockRestore();
+      statusSpy.mockRestore();
+      inspectSpy.mockRestore();
+      setExternalUrlSpawnerForTests(undefined);
       logSpy.mockRestore();
     }
   });

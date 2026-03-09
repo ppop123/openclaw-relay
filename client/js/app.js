@@ -760,8 +760,19 @@ export const app = {
 
   toggleTokenVisibility() {
     const input = document.getElementById('channelToken');
+    const icon = document.getElementById('tokenEyeIcon');
+    const button = document.getElementById('tokenVisibilityBtn');
     if (!input) return;
-    input.type = input.type === 'password' ? 'text' : 'password';
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    if (icon) {
+      icon.textContent = visible ? '🙈' : '👁';
+    }
+    if (button) {
+      const label = visible ? 'Hide access token' : 'Show access token';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    }
   },
 
   // ── Notifications ──

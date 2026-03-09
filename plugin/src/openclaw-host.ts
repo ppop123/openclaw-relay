@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import * as childProcess from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
@@ -41,16 +41,31 @@ const DEFAULT_ACCOUNT_ID = 'default';
 const PAIR_WAIT_POLL_MS = 1000;
 const PAIR_WAIT_SECONDS = 300;
 
+let spawnExternalProcess: typeof childProcess.spawn = childProcess.spawn;
+
+export function setExternalUrlSpawnerForTests(spawner: typeof childProcess.spawn | undefined): void {
+  spawnExternalProcess = spawner ?? childProcess.spawn;
+}
+
 function openExternalUrl(url: string): Promise<void> {
   const platform = process.platform;
-  const command = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  const command = platform === 'darwin'
+    ? 'open'
+    : platform === 'win32'
+      ? 'powershell.exe'
+      : 'xdg-open';
+  const args = platform === 'win32'
+    ? ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', 'Start-Process -FilePath $args[0]', '--', url]
+    : [url];
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: 'ignore' });
+    const child = spawnExternalProcess(command, args, { stdio: 'ignore' });
     child.once('error', reject);
-    child.once('spawn', () => {
-      child.unref();
-      resolve();
+    child.once('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`launcher exited with code ${code ?? 'unknown'}`));
     });
   });
 }
