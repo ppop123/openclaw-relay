@@ -91,8 +91,8 @@ openclaw relay enable --server wss://relay.example.com/ws --account default \
   --clear-discovery-metadata
 ```
 
-- `--discover-label` 仅更新人类可读标签，保留已有的 discovery metadata。
-- `--discover-metadata-json` 用提供的 JSON 对象替换 discovery metadata；如果同时指定了 `--discover-label`，标签会合并在上层。
+- `--discover-label` 仅更新人类可读标签，保留已有的发现元数据。
+- `--discover-metadata-json` 用提供的 JSON 对象替换发现元数据；如果同时指定了 `--discover-label`，标签会合并在上层。
 - `--clear-discovery-metadata` 移除 metadata 对象，但保留当前的 discoverability 设置。
 - 这些选项不会向远端人类客户端暴露 discovery 控制；它们只修改操作员拥有的网关配置。
 
