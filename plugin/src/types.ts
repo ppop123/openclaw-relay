@@ -14,9 +14,16 @@ export interface ApprovedClientRecord {
   lastSeenAt?: string;
 }
 
+export interface PeerDiscoveryAutoAcceptConfig {
+  enabled: boolean;
+  ttlSeconds?: number;
+  maxUses?: number;
+}
+
 export interface PeerDiscoveryConfig {
   enabled: boolean;
   metadata?: Record<string, unknown>;
+  autoAcceptRequests?: PeerDiscoveryAutoAcceptConfig;
 }
 
 export interface RelayAccountConfig {
@@ -46,6 +53,7 @@ export interface RelayAccountInspection {
   approvedClients: InspectApprovedClient[];
   peerDiscoveryEnabled: boolean;
   peerDiscoveryMetadata?: Record<string, unknown>;
+  peerDiscoveryAutoAcceptEnabled?: boolean;
 }
 
 export interface RelayConfigStore {

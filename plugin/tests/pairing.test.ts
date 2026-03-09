@@ -71,6 +71,26 @@ describe('pairing and config commands', () => {
     expect(inspectCleared?.peerDiscoveryMetadata).toBeUndefined();
   });
 
+  it('persists auto-accept peer settings in discovery config', async () => {
+    const store = new MemoryRelayConfigStore();
+
+    const account = await handleRelayEnable(store, 'wss://relay.example.com', 'default', {
+      discoverable: true,
+      autoAcceptRequestsEnabled: true,
+      autoAcceptTtlSeconds: 90,
+      autoAcceptMaxUses: 1,
+    });
+
+    expect(account.peerDiscovery).toEqual({
+      enabled: true,
+      autoAcceptRequests: { enabled: true, ttlSeconds: 90, maxUses: 1 },
+    });
+
+    const inspect = await store.inspectAccount('default');
+    expect(inspect?.peerDiscoveryEnabled).toBe(true);
+    expect(inspect?.peerDiscoveryAutoAcceptEnabled).toBe(true);
+  });
+
   it('approves, lists, revokes, rotates token, and disables', async () => {
     const store = new MemoryRelayConfigStore();
     const pairing = new PairingManager();

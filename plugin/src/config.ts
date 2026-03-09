@@ -28,6 +28,15 @@ export function normalizePeerDiscoveryConfig(config: PeerDiscoveryConfig | undef
   return {
     enabled: config?.enabled === true,
     ...(config?.metadata ? { metadata: cloneConfig(config.metadata) } : {}),
+    ...(config?.autoAcceptRequests
+      ? {
+          autoAcceptRequests: {
+            enabled: config.autoAcceptRequests.enabled === true,
+            ...(typeof config.autoAcceptRequests.ttlSeconds === 'number' ? { ttlSeconds: config.autoAcceptRequests.ttlSeconds } : {}),
+            ...(typeof config.autoAcceptRequests.maxUses === 'number' ? { maxUses: config.autoAcceptRequests.maxUses } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -40,6 +49,15 @@ export function validateAccountConfig(config: RelayAccountConfig): void {
   if (config.peerDiscovery && !isPlainObject(config.peerDiscovery)) throw new Error('peerDiscovery must be an object when provided');
   if (config.peerDiscovery?.metadata !== undefined && !isPlainObject(config.peerDiscovery.metadata)) {
     throw new Error('peerDiscovery.metadata must be an object when provided');
+  }
+  if (config.peerDiscovery?.autoAcceptRequests !== undefined && !isPlainObject(config.peerDiscovery.autoAcceptRequests)) {
+    throw new Error('peerDiscovery.autoAcceptRequests must be an object when provided');
+  }
+  if (config.peerDiscovery?.autoAcceptRequests?.ttlSeconds !== undefined && (!Number.isInteger(config.peerDiscovery.autoAcceptRequests.ttlSeconds) || config.peerDiscovery.autoAcceptRequests.ttlSeconds <= 0)) {
+    throw new Error('peerDiscovery.autoAcceptRequests.ttlSeconds must be a positive integer when provided');
+  }
+  if (config.peerDiscovery?.autoAcceptRequests?.maxUses !== undefined && (!Number.isInteger(config.peerDiscovery.autoAcceptRequests.maxUses) || config.peerDiscovery.autoAcceptRequests.maxUses <= 0)) {
+    throw new Error('peerDiscovery.autoAcceptRequests.maxUses must be a positive integer when provided');
   }
 }
 
@@ -58,6 +76,7 @@ export async function inspectAccount(config: RelayAccountConfig): Promise<RelayA
     approvedClients: Object.entries(config.approvedClients).map(([fingerprint, record]) => toInspectApprovedClient(fingerprint, record)),
     peerDiscoveryEnabled: peerDiscovery.enabled,
     ...(peerDiscovery.metadata ? { peerDiscoveryMetadata: cloneConfig(peerDiscovery.metadata) } : {}),
+    ...(peerDiscovery.autoAcceptRequests ? { peerDiscoveryAutoAcceptEnabled: peerDiscovery.autoAcceptRequests.enabled } : {}),
   };
 }
 

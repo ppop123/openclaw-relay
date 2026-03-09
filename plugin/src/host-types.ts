@@ -75,6 +75,17 @@ export interface OpenClawPluginApi {
   runtime: OpenClawRuntime;
   logger: PluginLogger;
   registerChannel: (registration: { plugin: ChannelPlugin<any> } | ChannelPlugin<any>) => void;
+  registerGatewayMethod: (
+    method: string,
+    handler: (ctx: {
+      req: Record<string, unknown>;
+      params: Record<string, unknown>;
+      client: Record<string, unknown> | null;
+      isWebchatConnect: (params: Record<string, unknown> | null | undefined) => boolean;
+      respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }, meta?: Record<string, unknown>) => void;
+      context: Record<string, unknown>;
+    }) => Promise<void> | void,
+  ) => void;
   registerCli: (registrar: (ctx: { program: any; config: OpenClawConfig; logger: PluginLogger }) => void | Promise<void>, opts?: { commands?: string[] }) => void;
 }
 
@@ -88,6 +99,7 @@ export interface ChannelAccountSnapshot extends JsonObject {
   lastConnectedAt?: number | null;
   lastError?: string | null;
   publicKey?: string | null;
+  peerDiscoveryAutoAcceptEnabled?: boolean;
 }
 
 export interface ChannelMeta extends JsonObject {

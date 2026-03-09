@@ -6,7 +6,13 @@ export async function handleRelayEnable(
   store: RelayConfigStore,
   server: string,
   accountId = 'default',
-  options: { discoverable?: boolean; discoveryMetadata?: Record<string, unknown> | null } = {},
+  options: {
+    discoverable?: boolean;
+    discoveryMetadata?: Record<string, unknown> | null;
+    autoAcceptRequestsEnabled?: boolean;
+    autoAcceptTtlSeconds?: number;
+    autoAcceptMaxUses?: number;
+  } = {},
 ) {
   const existing = await store.load(accountId);
   const identity = existing?.gatewayKeyPair ?? (await generateGatewayIdentity()).serialized;
@@ -20,6 +26,23 @@ export async function handleRelayEnable(
       : options.discoveryMetadata === null
         ? {}
         : { metadata: structuredClone(options.discoveryMetadata) as Record<string, unknown> }),
+    ...((options.autoAcceptRequestsEnabled !== undefined || options.autoAcceptTtlSeconds !== undefined || options.autoAcceptMaxUses !== undefined || account.peerDiscovery?.autoAcceptRequests)
+      ? {
+          autoAcceptRequests: {
+            enabled: options.autoAcceptRequestsEnabled ?? account.peerDiscovery?.autoAcceptRequests?.enabled ?? false,
+            ...(options.autoAcceptTtlSeconds !== undefined
+              ? { ttlSeconds: options.autoAcceptTtlSeconds }
+              : account.peerDiscovery?.autoAcceptRequests?.ttlSeconds !== undefined
+                ? { ttlSeconds: account.peerDiscovery.autoAcceptRequests.ttlSeconds }
+                : {}),
+            ...(options.autoAcceptMaxUses !== undefined
+              ? { maxUses: options.autoAcceptMaxUses }
+              : account.peerDiscovery?.autoAcceptRequests?.maxUses !== undefined
+                ? { maxUses: account.peerDiscovery.autoAcceptRequests.maxUses }
+                : {}),
+          },
+        }
+      : {}),
   };
   const next = {
     ...account,
