@@ -57,10 +57,10 @@ openclaw relay status
 When you are ready to connect from the browser, start pairing in one terminal:
 
 ```bash
-openclaw relay pair --wait 30
+openclaw relay pair
 ```
 
-`openclaw relay pair --wait 30` prints the pairing details immediately and then keeps the pairing window open for 30 seconds. While that command is waiting, open the browser client and use the printed relay URL, channel token, and gateway public key.
+`openclaw relay pair` prints the pairing details and keeps the pairing window open (default 5 minutes). While the command is waiting, open the browser client and enter the printed relay URL, channel token, and gateway public key.
 
 Useful day-2 commands:
 

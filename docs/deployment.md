@@ -177,7 +177,7 @@ Then enable and pair it against your relay:
 
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws
-openclaw relay pair --wait 30
+openclaw relay pair
 openclaw relay status
 ```
 

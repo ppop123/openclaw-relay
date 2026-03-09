@@ -41,7 +41,7 @@ openclaw relay enable --server wss://relay.example.com/ws --discoverable
 openclaw relay enable --server wss://relay.example.com/ws --discoverable \
   --discover-label "Shanghai Lab" \
   --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["peer-discovery"]}'
-openclaw relay pair --wait 30
+openclaw relay pair
 openclaw relay status
 ```
 

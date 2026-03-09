@@ -42,16 +42,6 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 - The gateway only accepts a new client key during an explicit **pairing mode** initiated by the user; outside pairing mode, unknown client keys are rejected.
 - Public relay discovery must survive registry fetch failures by using a cached last-known-good list and optional mirror URLs.
 
-### Non-Functional Targets
-
-| Area | v1 Target |
-|------|-----------|
-| Security | Relay cannot decrypt application traffic; every connection derives a fresh session key |
-| Availability | Existing sessions may break on relay restart; clients should reconnect automatically within 10 seconds |
-| Capacity | One relay instance supports up to 500 active channels and 10 clients per channel |
-| Operability | Structured logs, `/status`, rate limits, payload limits, and health monitoring are mandatory |
-| Evolvability | Protocol layers remain separable so future SDKs and custom clients can reuse the same contract |
-
 ## 2. System Architecture
 
 ```
@@ -117,10 +107,9 @@ v1 targets a **single relay node** deployment. Clustering, federation, and high-
 
 **Dependencies**: Standard library only (net/http, crypto/tls, nhooyr.io/websocket)
 
-**Deployment options**:
-- Single binary: `./openclaw-relay --tls auto --domain relay.example.com`
-- Docker: `docker run -p 443:443 ghcr.io/openclaw/relay`
-- Systemd unit file provided
+**Deployment**:
+- Build from source: `cd relay && go build -o openclaw-relay`
+- Run: `./openclaw-relay --tls auto --domain relay.example.com`
 
 **Configuration** (CLI flags only, no config file):
 
@@ -215,9 +204,7 @@ openclaw relay disable
 **Technology**: Single-page web application (vanilla JS or lightweight framework)
 
 **Deployment**:
-- Served by OpenClaw gateway on LAN: `http://gateway:18789/console/`
-- Hosted as static files for remote access (GitHub Pages, any CDN)
-- Can be wrapped in Tauri (desktop) or Capacitor (mobile) by users
+- Hosted as static files (GitHub Pages, any CDN, or local `file://`)
 
 **Core features** (reference implementation):
 - Connect to relay or direct to gateway
@@ -234,39 +221,9 @@ openclaw relay disable
 - System monitoring dashboard
 - Custom themes / branding
 
-The client is meant to be forked and extended. The `sdk/js` package provides the protocol implementation so custom clients can focus on UI.
-
 ### 3.4 SDK
 
-**JavaScript SDK** (`sdk/js/`):
-
-```javascript
-import { RelayClient } from '@openclaw/relay-sdk';
-
-const client = new RelayClient({
-  relay: 'wss://relay.example.com',
-  token: 'kx8f-a3mv-9pqz',
-  gatewayPublicKey: '...',
-});
-
-await client.connect();
-
-// Send a chat message with streaming
-const stream = await client.chat('tangseng', 'What is the news today?');
-for await (const chunk of stream) {
-  process.stdout.write(chunk.delta);
-}
-
-// List agents
-const agents = await client.agents.list();
-
-// Receive notifications
-client.on('agent.output', (data) => {
-  console.log(`${data.agent} produced: ${data.title}`);
-});
-```
-
-**Python SDK** (`sdk/python/`):
+**Python SDK** (`sdk/python/`) — implemented, layers 0–2:
 
 ```python
 from openclaw_relay import RelayClient
@@ -403,52 +360,15 @@ The Connection Manager in the client maintains both paths:
 
 When the user moves between networks, the client automatically switches. The application layer (Layer 3) is identical in both cases — only the transport changes.
 
-## 7. Implementation Phases
+## 7. Current Status
 
-### Phase 1: Foundation (Secure MVP)
+Phase 1 (Foundation / Secure MVP) is complete and shipped as v0.5.0:
 
-Deliverables:
-- Protocol specification (frozen for v1)
-- Relay server in Go (channel matching, forwarding, /status, abuse controls, structured logging)
-- E2E encryption (Layer 1: pairing, session establishment, AES-GCM)
-- Python SDK (Layer 0-2 implementation)
-- OpenClaw relay channel plugin (secure pairing + basic chat)
-- Minimal web client (connect, pair, chat)
-- `relays.json` with validation CI
+- Protocol specification (v1, frozen)
+- Go relay server with channel matching, forwarding, /status, abuse controls, structured logging
+- E2E encryption (Layer 1: X25519 + HKDF + AES-256-GCM)
+- Python SDK (layers 0–2)
+- OpenClaw relay channel plugin (secure pairing, chat, agent-to-agent peer discovery)
+- Browser reference client (connect, pair, chat, streaming)
 
-What works after Phase 1:
-- User can deploy a relay, enable relay plugin, securely pair a web client, chat with agents over E2E encrypted channel
-
-### Phase 2: Completeness
-
-Deliverables:
-- JavaScript SDK
-- Streaming support in client
-- Notification inbox in client
-- Session history in client
-- mDNS LAN discovery
-- Key rotation
-- Operator runbook for public relays
-
-### Phase 3: Ecosystem
-
-Deliverables:
-- Tauri desktop wrapper
-- Mobile-responsive client
-- Agent management in client
-- File operations
-- Public relay monitoring CI
-- Documentation site
-- Evaluate Noise IK/XX handshake for forward secrecy (ADR)
-
-## 8. Open Questions
-
-1. **Should the relay support WebSocket compression?** Per-message deflate reduces bandwidth but adds CPU overhead. Probably worth it for text-heavy AI responses.
-
-2. **Binary or text WebSocket frames?** Text (JSON) is easier to debug. Binary is more efficient. Recommendation: text for Layer 0, binary for encrypted payloads within DATA frames.
-
-3. **Should the plugin be contributed upstream to OpenClaw?** Ideally yes — as a built-in channel like Feishu. If not accepted, it can be distributed as a standalone npm package that plugs into OpenClaw's plugin system.
-
-4. **Relay federation?** Should relays be able to connect to each other for redundancy? Probably not in v1 — adds complexity. Users can just switch relays if one goes down.
-
-5. **Should the protocol version be negotiated?** Currently both sides declare `version: 1`. If v2 introduces breaking changes, a negotiation mechanism will be needed. Recommendation: defer until v2 is planned.
+Not yet implemented: JavaScript SDK, mDNS LAN discovery, Tauri/mobile wrappers.

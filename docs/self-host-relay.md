@@ -1,6 +1,6 @@
 # Self-Hosting a Relay
 
-> **Note**: This document describes the planned deployment experience. The relay binary and Docker image are not yet available.
+> **⚠ This document describes a planned future experience.** Pre-built binaries and Docker images are not yet available. To run a relay today, build from source — see [`deployment.md`](deployment.md) for the current workflow.
 
 ## Requirements
 
