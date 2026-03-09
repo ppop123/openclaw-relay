@@ -1124,15 +1124,16 @@ async function ensureStartedAccount(params: {
     params.setStatus?.(buildSnapshot(resolved));
   };
 
+  const record: ActiveRelayRecord = { adapter, pairing, stop };
+  activeAccounts.set(params.accountId, record);
+
   try {
-    await adapter.start();
+    await adapter.start({ waitForRegistered: false });
   } catch (error) {
+    activeAccounts.delete(params.accountId);
     await stop();
     throw error;
   }
-
-  const record: ActiveRelayRecord = { adapter, pairing, stop };
-  activeAccounts.set(params.accountId, record);
   if (params.channelRuntime) {
     activeChannelRuntimeByAccount.set(params.accountId, params.channelRuntime);
   }

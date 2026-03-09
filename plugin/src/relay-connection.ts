@@ -72,10 +72,14 @@ export class RelayConnection {
     };
   }
 
-  async start(): Promise<void> {
+  async start(waitForRegistered = true): Promise<void> {
     this.stopped = false;
     if (!this.connectPromise) {
       this.connectPromise = this.connectOnce();
+    }
+    if (!waitForRegistered) {
+      void this.connectPromise.catch(() => undefined);
+      return;
     }
     return this.connectPromise;
   }

@@ -72,7 +72,7 @@ export class RelayGatewayAdapter {
     this.pairingManager = options.pairingManager ?? new PairingManager();
   }
 
-  async start(): Promise<void> {
+  async start(options: { waitForRegistered?: boolean } = {}): Promise<void> {
     const config = await this.options.configStore.load(this.accountId);
     if (!config) throw new Error(`account '${this.accountId}' not found`);
     validateAccountConfig(config);
@@ -191,7 +191,23 @@ export class RelayGatewayAdapter {
       ...(this.options.webSocketFactory ? { webSocketFactory: this.options.webSocketFactory } : {}),
     });
 
-    await this.connection.start();
+    await this.connection.start(options.waitForRegistered ?? true);
+  }
+
+  async waitForReady(timeoutMs = 10000): Promise<GatewayStatus> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      const status = await this.getStatus();
+      if (status.state === 'registered') {
+        return status;
+      }
+      if (status.lastFatalErrorCode) {
+        throw new Error(`relay connection fatal: ${status.lastFatalErrorCode}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    const status = await this.getStatus();
+    throw new Error(`relay gateway not ready after ${timeoutMs}ms (state=${status.state})`);
   }
 
   async stop(): Promise<void> {
@@ -218,22 +234,26 @@ export class RelayGatewayAdapter {
 
   async discoverPeers(timeoutMs = 10000) {
     if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
+    await this.waitForReady(timeoutMs);
     return this.peerDiscovery.discoverPeers(timeoutMs);
   }
 
   async sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope): Promise<void> {
     if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
+    await this.waitForReady();
     await this.peerDiscovery.sendSignal(targetPublicKey, envelope);
   }
 
   async createPeerInvite(ttlSeconds = 300): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }> {
     if (!this.peerDiscovery) throw new Error('peer discovery is not initialized');
+    await this.waitForReady();
     return this.peerDiscovery.createInvite(ttlSeconds);
   }
 
   async dialPeerInvite(inviteToken: string, gatewayPublicKey: string, clientId?: string): Promise<RelayPeerSession> {
     if (!this.currentConfig) throw new Error('gateway adapter is not started');
     if (!this.identity) throw new Error('gateway identity is not initialized');
+    await this.waitForReady();
     const session = new RelayPeerSession({
       relayUrl: this.currentConfig.server,
       inviteToken,
