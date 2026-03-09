@@ -1,7 +1,7 @@
 {
   "$schema_comment": "Release candidate manifest. Machine-readable declaration of what this release includes, claims, and requires.",
   "release_candidate": true,
-  "version": "0.3.1",
+  "version": "0.5.0",
   "protocol_version": 1,
   "official_components": [
     "relay/",
@@ -67,10 +67,10 @@
     "notes": "v1 does NOT provide forward secrecy. Compromising an identity private key allows computing the ECDH shared secret and (with captured session nonces) deriving all past and future session keys. ADR needed for v2 (consider Noise IK/XX)."
   },
   "known_limitations": [
-    "Single relay node only \u2014 no clustering, federation, or HA",
+    "Single relay node only — no clustering, federation, or HA",
     "No forward secrecy in v1",
-    "Stream resumption not supported \u2014 interrupted streams require new request",
-    "Requests are not idempotent by default \u2014 no automatic retries for state-changing methods",
+    "Stream resumption not supported — interrupted streams require new request",
+    "Requests are not idempotent by default — no automatic retries for state-changing methods",
     "No CA/PKI-backed gateway identity. The browser reference client uses a user-supplied pinned gateway public key and production deployments should verify that key out of band.",
     "JavaScript SDK is not yet implemented",
     "OpenClaw gateway plugin requires a current OpenClaw runtime with channel and CLI plugin APIs enabled",
