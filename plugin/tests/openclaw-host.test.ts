@@ -281,7 +281,7 @@ describe('openclaw host bridge', () => {
 
       const statusResult = await callGatewayMethod(api, 'relay.peer.status');
       expect(statusResult.ok).toBe(true);
-      expect(statusResult.payload).toMatchObject({ connectedPeers: ['peer-key'] });
+      expect(statusResult.payload).toMatchObject({ connectedPeers: ['peer-key'], peerSessions: [{ peerPublicKey: 'peer-key', connected: true }] });
 
       const callResult = await callGatewayMethod(api, 'relay.peer.call', {
         peerPublicKey: 'peer-key',
@@ -289,8 +289,8 @@ describe('openclaw host bridge', () => {
         params: {},
       });
       expect(callResult.ok).toBe(true);
-      expect(fakePeerSession.request).toHaveBeenCalledWith('system.status', {});
-      expect(callResult.payload).toMatchObject({ result: { ok: true, version: 'remote' } });
+      expect(fakePeerSession.request).toHaveBeenCalledWith('system.status', {}, undefined);
+      expect(callResult.payload).toMatchObject({ result: { ok: true, version: 'remote' }, peerSessions: [{ peerPublicKey: 'peer-key', connected: true }] });
 
       const disconnectResult = await callGatewayMethod(api, 'relay.peer.disconnect', {
         peerPublicKey: 'peer-key',

@@ -1,8 +1,27 @@
 # Quick Start Guide
 
-## Running the Relay Server (implemented)
+## Most people only need this
 
-Build and start a relay:
+If your goal is simply **"I want to use my own OpenClaw from outside my home or office"**, the shortest path is:
+
+1. Start a relay server
+2. Install the relay plugin into your own OpenClaw
+3. Open the browser client and connect
+
+What this gives you:
+
+- remote access to **your own** OpenClaw
+- no public IP requirement
+- no port forwarding
+- end-to-end encrypted application traffic
+
+What this does **not** mean:
+
+- it is **not** a public directory of other people's OpenClaw instances
+- human-facing clients do **not** browse or contact other OpenClaw instances
+- clustering / federation / HA are not part of v1
+
+## Step 1: Start a relay server
 
 ```bash
 cd relay
@@ -10,58 +29,19 @@ go build -o openclaw-relay
 ./openclaw-relay
 ```
 
-The relay listens on port 8443 by default. See [Deployment Guide](deployment.md) for TLS, origin validation, and production configuration.
+The relay listens on port `8443` by default.
 
-Verify it's running:
+Check that it is up:
 
 ```bash
 curl http://localhost:8443/status
 ```
 
-## Running Tests (implemented)
+For TLS, origin validation, Cloudflare Tunnel, and production notes, see [Deployment Guide](deployment.md).
 
-```bash
-# Go relay server
-cd relay && go test -v -count=1
+## Step 2: Install the plugin into your own OpenClaw
 
-# Python SDK
-cd sdk/python && pip install -e ".[dev]" && pytest -q
-
-# Web client
-cd client && npm ci && npm test
-
-# OpenClaw gateway plugin
-cd client && npm ci && cd .. && client/node_modules/.bin/vitest run plugin/tests
-cd plugin && npm ci && npm run typecheck
-```
-
-## Self-Hosted Relay with TLS (implemented)
-
-On a machine with a public IP and domain:
-
-```bash
-./openclaw-relay --tls auto --domain relay.yourdomain.com
-```
-
-This obtains a Let's Encrypt certificate automatically. Port 80 and 443 must be accessible.
-
-## Using the Python SDK (implemented)
-
-```python
-from openclaw_relay import RelayClient
-
-async with RelayClient(
-    relay="wss://relay.example.com",
-    token="your-channel-token",
-    gateway_public_key="<base64>",
-) as client:
-    async for chunk in await client.chat("agent-name", "Hello!"):
-        print(chunk.delta, end="")
-```
-
-## Installing the OpenClaw Gateway Plugin (implemented)
-
-Install the plugin into your own OpenClaw runtime:
+Install the plugin:
 
 ```bash
 openclaw plugins install --link /path/to/openclaw-relay/plugin
@@ -75,7 +55,7 @@ openclaw relay pair --wait 30
 openclaw relay status
 ```
 
-Manage approved clients:
+Useful day-2 commands:
 
 ```bash
 openclaw relay clients
@@ -84,12 +64,57 @@ openclaw relay rotate-token
 openclaw relay disable
 ```
 
-## Local Smoke Validation
+## Step 3: Connect from the browser
 
-For post-release or pre-release confidence against a real local OpenClaw runtime, run:
+Use the browser client in `client/` and enter:
+
+- relay URL
+- channel token
+- gateway public key
+
+Then connect.
+
+The browser client docs live here:
+
+- [`docs/web-client.md`](web-client.md)
+- [`docs/web-client/testing-and-troubleshooting.md`](web-client/testing-and-troubleshooting.md)
+
+## Advanced: agent-only peer capability
+
+There is also an **agent-only** capability that lets one OpenClaw agent talk to another OpenClaw agent.
+
+Important boundary:
+
+- gateways / agents may use it
+- human-facing clients may **not** use it to find or contact other OpenClaw instances
+
+If you want that flow, start here:
+
+- [`plugin/README.md`](../plugin/README.md)
+
+## Development checks
+
+```bash
+# Go relay server
+cd relay && go test -v -count=1
+
+# Python SDK
+cd sdk/python && pip install -e ".[dev]" && pytest -q
+
+# Web client
+cd client && npm ci && npm test
+
+# OpenClaw gateway plugin
+cd plugin && npm ci && npm test
+cd plugin && npm run typecheck
+```
+
+## Local smoke validation
+
+For a real local OpenClaw runtime smoke test:
 
 ```bash
 bash scripts/smoke-openclaw-plugin.sh
 ```
 
-This script installs `plugin/` into an isolated OpenClaw state directory, starts a local relay, performs pairing with a fresh client identity, starts a real OpenClaw gateway, verifies `system.status` over the relay, then exercises `revoke`, re-pair, `rotate-token`, and `disable`.
+This script installs `plugin/` into an isolated OpenClaw state directory, starts a local relay, performs pairing with a fresh client identity, starts a real OpenClaw gateway, verifies `system.status` over the relay, then exercises `revoke`, re-pair, `rotate-token`, and `disable` behavior.

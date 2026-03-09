@@ -96,7 +96,7 @@ describe('RelayPeerAgentService', () => {
     });
   });
 
-  it('prunes stale peer sessions before reporting or reusing them', async () => {
+  it('prunes stale peer sessions before reporting and only throws when autoDial is disabled', async () => {
     const bridge = createBridge();
     const staleSession = {
       isConnected: false,
@@ -116,7 +116,84 @@ describe('RelayPeerAgentService', () => {
     await service.connectFromInviteOffer(offerSignal, { clientId: 'peer-client-stale' });
 
     expect(service.listConnectedPeers()).toEqual([]);
-    await expect(service.requestPeer('peer-key', 'system.status', {})).rejects.toThrow('no active peer session');
+    expect(service.listPeerSessionStatuses()).toMatchObject([
+      { peerPublicKey: 'peer-key', connected: false, canAutoDial: true, lastClientId: 'peer-client-stale' },
+    ]);
+    await expect(service.requestPeer('peer-key', 'system.status', {}, { autoDial: false })).rejects.toThrow('no active peer session');
+  });
+
+  it('auto-dials on first peer request when no session exists', async () => {
+    const bridge = createBridge();
+    (bridge.drainPeerSignals as any)
+      .mockReturnValueOnce([
+        signal('peer-key', 'invite_offer', {
+          invite_token: 'invite-token',
+          expires_at: '2026-03-09T00:05:00.000Z',
+          peer_authorized_until: '2026-03-09T00:05:00.000Z',
+        }),
+      ])
+      .mockReturnValue([]);
+    const requestSpy = vi.fn(async () => ({ ok: true, version: 'remote' }));
+    (bridge.dialPeerInvite as any).mockResolvedValueOnce({
+      isConnected: true,
+      request: requestSpy,
+      requestStream: vi.fn(async () => ({ done: true })),
+      close: vi.fn(async () => undefined),
+    } as any);
+    const service = createRelayPeerAgentService({ bridge, accountId: 'default' });
+
+    await expect(service.requestPeer('peer-key', 'system.status', {}, { clientId: 'peer-client-auto' })).resolves.toEqual({ ok: true, version: 'remote' });
+    expect(bridge.sendPeerSignal).toHaveBeenCalledWith(
+      'peer-key',
+      { version: 1, kind: 'invite_request', body: {} },
+      { accountId: 'default' },
+    );
+    expect(bridge.dialPeerInvite).toHaveBeenCalledWith('invite-token', 'peer-key', expect.objectContaining({ accountId: 'default', clientId: 'peer-client-auto' }));
+    expect(requestSpy).toHaveBeenCalledWith('system.status', {}, undefined);
+  });
+
+  it('redials once when a live peer session drops during request', async () => {
+    const bridge = createBridge();
+    (bridge.drainPeerSignals as any)
+      .mockReturnValueOnce([
+        signal('peer-key', 'invite_offer', {
+          invite_token: 'invite-token-1',
+          expires_at: '2026-03-09T00:05:00.000Z',
+          peer_authorized_until: '2026-03-09T00:05:00.000Z',
+        }),
+      ])
+      .mockReturnValueOnce([
+        signal('peer-key', 'invite_offer', {
+          invite_token: 'invite-token-2',
+          expires_at: '2026-03-09T00:06:00.000Z',
+          peer_authorized_until: '2026-03-09T00:06:00.000Z',
+        }),
+      ])
+      .mockReturnValue([]);
+    const firstRequest = vi.fn(async () => { throw new Error('peer relay websocket closed'); });
+    const secondRequest = vi.fn(async () => ({ ok: true, version: 'redialed' }));
+    const closeSpy = vi.fn(async () => undefined);
+    (bridge.dialPeerInvite as any)
+      .mockResolvedValueOnce({
+        isConnected: true,
+        request: firstRequest,
+        requestStream: vi.fn(async () => ({ done: true })),
+        close: closeSpy,
+      } as any)
+      .mockResolvedValueOnce({
+        isConnected: true,
+        request: secondRequest,
+        requestStream: vi.fn(async () => ({ done: true })),
+        close: vi.fn(async () => undefined),
+      } as any);
+    const service = createRelayPeerAgentService({ bridge, accountId: 'default' });
+
+    await expect(service.requestPeer('peer-key', 'system.status', {}, { clientId: 'peer-client-redial' })).resolves.toEqual({ ok: true, version: 'redialed' });
+    expect(bridge.dialPeerInvite).toHaveBeenCalledTimes(2);
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(service.listPeerSessionStatuses()).toMatchObject([
+      { peerPublicKey: 'peer-key', connected: true, lastClientId: 'peer-client-redial' },
+    ]);
   });
 
   it('removes a connected peer immediately when the session closes later', async () => {
@@ -142,5 +219,8 @@ describe('RelayPeerAgentService', () => {
     expect(service.listConnectedPeers()).toEqual(['peer-key']);
     onClosed?.(new Error('peer session closed'));
     expect(service.listConnectedPeers()).toEqual([]);
+    expect(service.listPeerSessionStatuses()).toMatchObject([
+      { peerPublicKey: 'peer-key', connected: false, lastError: 'peer session closed' },
+    ]);
   });
 });

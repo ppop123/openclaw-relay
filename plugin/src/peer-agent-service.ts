@@ -1,6 +1,6 @@
 import { RelayPeerSession } from './outbound-peer-session.js';
-import { RelayAgentAcceptPeerOptions, RelayAgentBridge, RelayAgentBridgeStartOptions, RelayAgentInviteOptions } from './openclaw-host.js';
-import { DiscoveryPeer, PeerSignalEnvelope, ReceivedPeerSignal, SignalErrorFrame } from './types.js';
+import { RelayAgentAcceptPeerOptions, RelayAgentBridge, RelayAgentBridgeStartOptions } from './openclaw-host.js';
+import { DiscoveryPeer, ReceivedPeerSignal, SignalErrorFrame } from './types.js';
 
 const INVITE_REQUEST_KIND = 'invite_request';
 const INVITE_OFFER_KIND = 'invite_offer';
@@ -31,11 +31,38 @@ export interface RelayPeerDialOptions {
   pollIntervalMs?: number;
 }
 
+export interface RelayPeerRequestOptions extends RelayPeerDialOptions {
+  autoDial?: boolean;
+  requestTimeoutMs?: number;
+}
+
 export interface RelayPeerDialResult {
   peerPublicKey: string;
   connected: true;
   reusedSession: boolean;
   offer?: RelayPeerInviteOffer;
+}
+
+export interface RelayPeerSessionStatus {
+  peerPublicKey: string;
+  connected: boolean;
+  canAutoDial: boolean;
+  lastClientId?: string;
+  lastDialStartedAt?: string;
+  lastConnectedAt?: string;
+  lastDisconnectedAt?: string;
+  lastError?: string;
+  offer?: RelayPeerInviteOffer;
+}
+
+interface RelayPeerRecord {
+  session: RelayPeerSession | undefined;
+  lastClientId: string | undefined;
+  lastDialStartedAt: string | undefined;
+  lastConnectedAt: string | undefined;
+  lastDisconnectedAt: string | undefined;
+  lastError: string | undefined;
+  offer: RelayPeerInviteOffer | undefined;
 }
 
 function asSignalOptions(accountId?: string): RelayAgentBridgeStartOptions {
@@ -47,6 +74,19 @@ function requireObject(value: unknown, label: string): Record<string, unknown> {
     throw new Error(`${label} must be an object`);
   }
   return value as Record<string, unknown>;
+}
+
+function shouldRetryWithRedial(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message || String(error);
+  return (
+    message.includes('no active peer session')
+    || message.includes('peer session is not connected')
+    || message.includes('peer relay websocket closed')
+    || message.includes('peer relay websocket error')
+    || message.includes('peer session ping failed')
+    || message.includes('peer session pong timeout')
+  );
 }
 
 export function isInviteRequestSignal(signal: ReceivedPeerSignal): boolean {
@@ -63,7 +103,7 @@ export function isInviteRejectSignal(signal: ReceivedPeerSignal): boolean {
 
 export class RelayPeerAgentService {
   private readonly accountId: string | undefined;
-  private readonly activeSessions = new Map<string, RelayPeerSession>();
+  private readonly peerRecords = new Map<string, RelayPeerRecord>();
   private readonly deferredSignals: ReceivedPeerSignal[] = [];
 
   constructor(private readonly options: RelayPeerAgentServiceOptions) {
@@ -140,6 +180,44 @@ export class RelayPeerAgentService {
     };
   }
 
+  private getOrCreatePeerRecord(peerPublicKey: string): RelayPeerRecord {
+    const existing = this.peerRecords.get(peerPublicKey);
+    if (existing) return existing;
+    const created: RelayPeerRecord = { session: undefined, lastClientId: undefined, lastDialStartedAt: undefined, lastConnectedAt: undefined, lastDisconnectedAt: undefined, lastError: undefined, offer: undefined };
+    this.peerRecords.set(peerPublicKey, created);
+    return created;
+  }
+
+  private markPeerDisconnected(peerPublicKey: string, error?: Error): void {
+    const record = this.getOrCreatePeerRecord(peerPublicKey);
+    record.session = undefined;
+    record.lastDisconnectedAt = new Date().toISOString();
+    if (error?.message) {
+      record.lastError = error.message;
+    }
+  }
+
+  private markPeerConnected(peerPublicKey: string, session: RelayPeerSession, options: { clientId?: string; offer?: RelayPeerInviteOffer }): void {
+    const record = this.getOrCreatePeerRecord(peerPublicKey);
+    record.session = session;
+    record.lastConnectedAt = new Date().toISOString();
+    record.lastError = undefined;
+    if (options.clientId) {
+      record.lastClientId = options.clientId;
+    }
+    if (options.offer) {
+      record.offer = options.offer;
+    }
+  }
+
+  private markPeerDialStarted(peerPublicKey: string, clientId?: string): void {
+    const record = this.getOrCreatePeerRecord(peerPublicKey);
+    record.lastDialStartedAt = new Date().toISOString();
+    if (clientId) {
+      record.lastClientId = clientId;
+    }
+  }
+
   private collectSignals(): ReceivedPeerSignal[] {
     const liveSignals = this.options.bridge.drainPeerSignals(this.accountId);
     if (this.deferredSignals.length === 0) {
@@ -197,27 +275,44 @@ export class RelayPeerAgentService {
     if (typeof body.invite_token !== 'string' || !body.invite_token) {
       throw new Error('invite_offer body.invite_token is required');
     }
+    const offer = RelayPeerAgentService.parseInviteOffer(signal);
     await this.closePeerSession(signal.source).catch(() => undefined);
     const session = await this.options.bridge.dialPeerInvite(body.invite_token, signal.source, {
       ...asSignalOptions(this.accountId),
       ...options,
-      onClosed: () => {
-        const current = this.activeSessions.get(signal.source);
+      onClosed: (error) => {
+        const current = this.peerRecords.get(signal.source)?.session;
         if (current === session) {
-          this.activeSessions.delete(signal.source);
+          this.markPeerDisconnected(signal.source, error);
         }
       },
     });
-    this.activeSessions.set(signal.source, session);
+    this.markPeerConnected(signal.source, session, { ...(options.clientId ? { clientId: options.clientId } : {}), offer });
     return session;
   }
 
   private getUsableSession(peerPublicKey: string): RelayPeerSession | undefined {
-    const session = this.activeSessions.get(peerPublicKey);
+    const session = this.peerRecords.get(peerPublicKey)?.session;
     if (!session) return undefined;
     if (session.isConnected) return session;
-    this.activeSessions.delete(peerPublicKey);
+    this.markPeerDisconnected(peerPublicKey);
     return undefined;
+  }
+
+  private async ensurePeerSession(peerPublicKey: string, options: RelayPeerRequestOptions = {}): Promise<RelayPeerSession> {
+    const existing = this.getUsableSession(peerPublicKey);
+    if (existing) {
+      return existing;
+    }
+    if (options.autoDial === false) {
+      throw new Error(`no active peer session for ${peerPublicKey}`);
+    }
+    await this.requestPeerConnection(peerPublicKey, options);
+    const redialed = this.getUsableSession(peerPublicKey);
+    if (!redialed) {
+      throw new Error(`failed to establish peer session for ${peerPublicKey}`);
+    }
+    return redialed;
   }
 
   async requestPeerConnection(peerPublicKey: string, options: RelayPeerDialOptions = {}): Promise<RelayPeerDialResult> {
@@ -228,6 +323,7 @@ export class RelayPeerAgentService {
         reusedSession: true,
       };
     }
+    this.markPeerDialStarted(peerPublicKey, options.clientId);
     await this.ensureStarted();
     await this.requestPeerInvite(peerPublicKey, options.body ?? {});
     const signal = await this.waitForPeerSignal(
@@ -237,7 +333,9 @@ export class RelayPeerAgentService {
     );
     if (isInviteRejectSignal(signal)) {
       const rejected = RelayPeerAgentService.parseInviteReject(signal);
-      throw new Error(rejected.reason ? `peer rejected invite request: ${rejected.reason}` : 'peer rejected invite request');
+      const error = new Error(rejected.reason ? `peer rejected invite request: ${rejected.reason}` : 'peer rejected invite request');
+      this.markPeerDisconnected(peerPublicKey, error);
+      throw error;
     }
     const offer = RelayPeerAgentService.parseInviteOffer(signal);
     await this.connectFromInviteOffer(signal, {
@@ -256,32 +354,63 @@ export class RelayPeerAgentService {
     return this.getUsableSession(peerPublicKey);
   }
 
-  listConnectedPeers(): string[] {
-    for (const peerPublicKey of [...this.activeSessions.keys()]) {
-      this.getUsableSession(peerPublicKey);
+  listPeerSessionStatuses(): RelayPeerSessionStatus[] {
+    const statuses: RelayPeerSessionStatus[] = [];
+    for (const peerPublicKey of [...this.peerRecords.keys()].sort()) {
+      const record = this.getOrCreatePeerRecord(peerPublicKey);
+      const connected = Boolean(record.session?.isConnected);
+      if (!connected && record.session) {
+        this.markPeerDisconnected(peerPublicKey);
+      }
+      statuses.push({
+        peerPublicKey,
+        connected: Boolean(this.peerRecords.get(peerPublicKey)?.session?.isConnected),
+        canAutoDial: true,
+        ...(record.lastClientId ? { lastClientId: record.lastClientId } : {}),
+        ...(record.lastDialStartedAt ? { lastDialStartedAt: record.lastDialStartedAt } : {}),
+        ...(record.lastConnectedAt ? { lastConnectedAt: record.lastConnectedAt } : {}),
+        ...(record.lastDisconnectedAt ? { lastDisconnectedAt: record.lastDisconnectedAt } : {}),
+        ...(record.lastError ? { lastError: record.lastError } : {}),
+        ...(record.offer ? { offer: structuredClone(record.offer) } : {}),
+      });
     }
-    return [...this.activeSessions.keys()].sort();
+    return statuses;
+  }
+
+  listConnectedPeers(): string[] {
+    return this.listPeerSessionStatuses()
+      .filter((entry) => entry.connected)
+      .map((entry) => entry.peerPublicKey);
   }
 
   async closePeerSession(peerPublicKey: string): Promise<void> {
-    const session = this.activeSessions.get(peerPublicKey);
+    const record = this.peerRecords.get(peerPublicKey);
+    const session = record?.session;
     if (!session) return;
-    this.activeSessions.delete(peerPublicKey);
+    record!.session = undefined;
+    record!.lastDisconnectedAt = new Date().toISOString();
     await session.close();
   }
 
   async closeAllPeerSessions(): Promise<void> {
-    for (const peerPublicKey of [...this.activeSessions.keys()]) {
+    for (const peerPublicKey of this.listPeerSessionStatuses().map((entry) => entry.peerPublicKey)) {
       await this.closePeerSession(peerPublicKey);
     }
   }
 
-  async requestPeer(peerPublicKey: string, method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const session = this.getUsableSession(peerPublicKey);
-    if (!session) {
-      throw new Error(`no active peer session for ${peerPublicKey}`);
+  async requestPeer(peerPublicKey: string, method: string, params: Record<string, unknown>, options: RelayPeerRequestOptions = {}): Promise<Record<string, unknown>> {
+    let session = await this.ensurePeerSession(peerPublicKey, options);
+    try {
+      return await session.request(method, params, options.requestTimeoutMs);
+    } catch (error) {
+      if (!shouldRetryWithRedial(error) || options.autoDial === false) {
+        this.markPeerDisconnected(peerPublicKey, error instanceof Error ? error : new Error(String(error)));
+        throw error;
+      }
+      await this.closePeerSession(peerPublicKey).catch(() => undefined);
+      session = await this.ensurePeerSession(peerPublicKey, options);
+      return session.request(method, params, options.requestTimeoutMs);
     }
-    return session.request(method, params);
   }
 
   async requestPeerStream(
@@ -289,12 +418,20 @@ export class RelayPeerAgentService {
     method: string,
     params: Record<string, unknown>,
     onChunk: (chunk: Record<string, unknown>) => Promise<void> | void,
+    options: RelayPeerRequestOptions = {},
   ): Promise<Record<string, unknown>> {
-    const session = this.getUsableSession(peerPublicKey);
-    if (!session) {
-      throw new Error(`no active peer session for ${peerPublicKey}`);
+    let session = await this.ensurePeerSession(peerPublicKey, options);
+    try {
+      return await session.requestStream(peerPublicKey ? method : method, params, onChunk, options.requestTimeoutMs);
+    } catch (error) {
+      if (!shouldRetryWithRedial(error) || options.autoDial === false) {
+        this.markPeerDisconnected(peerPublicKey, error instanceof Error ? error : new Error(String(error)));
+        throw error;
+      }
+      await this.closePeerSession(peerPublicKey).catch(() => undefined);
+      session = await this.ensurePeerSession(peerPublicKey, options);
+      return session.requestStream(method, params, onChunk, options.requestTimeoutMs);
     }
-    return session.requestStream(method, params, onChunk);
   }
 
   static parseInviteOffer(signal: ReceivedPeerSignal): RelayPeerInviteOffer {

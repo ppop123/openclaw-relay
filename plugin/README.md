@@ -11,10 +11,20 @@ This package contains the OpenClaw Relay gateway plugin. Install it into your ow
 
 ## What it provides
 
-- Relay channel configuration and account management
+In plain language, this plugin turns **your own OpenClaw** into a relay-reachable gateway.
+
+That means:
+
+- you can connect back to your own OpenClaw through a relay
+- you can pair/revoke browser or SDK clients
+- you can optionally enable the new **agent-only peer capability** between gateways
+
+Under the hood it includes:
+
+- relay channel configuration and account management
 - Layer 1 crypto and session establishment
 - Layer 2 request / response / stream handling
-- Pairing state and approved-client persistence
+- pairing state and approved-client persistence
 - CLI commands: `enable`, `pair`, `clients`, `revoke`, `disable`, `rotate-token`, `status`
 
 ## Install
@@ -79,25 +89,33 @@ openclaw relay enable --server wss://relay.example.com/ws --account default \
 
 ## Local peer control
 
-Once the gateway is running, the owner can drive agent-only peer discovery from the local gateway control plane:
+Once the gateway is running, the owner can drive agent-only peer discovery from the **local** gateway control plane.
+
+The shortest useful path is:
 
 ```bash
 openclaw gateway call relay.peer.selfcheck --params '{}' --json
 openclaw gateway call relay.peer.discover --params '{}' --json
+openclaw gateway call relay.peer.call --params '{"peerPublicKey":"<peer-pubkey>","method":"system.status","params":{},"autoDial":true}' --json
+```
+
+If you want the lower-level steps, they are still available:
+
+```bash
 openclaw gateway call relay.peer.request --params '{"targetPublicKey":"<peer-pubkey>","body":{"purpose":"hello"}}' --json
 openclaw gateway call relay.peer.poll --params '{}' --json
 openclaw gateway call relay.peer.accept --params '{"signal":<poll-signal>,"ttlSeconds":60,"maxUses":1}' --json
 openclaw gateway call relay.peer.connect --params '{"signal":<offer-signal>,"clientId":"peer-client-1"}' --json
 openclaw gateway call relay.peer.dial --params '{"targetPublicKey":"<peer-pubkey>","clientId":"peer-client-1"}' --json
-openclaw gateway call relay.peer.call --params '{"peerPublicKey":"<peer-pubkey>","method":"system.status","params":{}}' --json
 ```
 
 - These methods are local gateway RPC only; they are not exposed through relay Layer 3.
-- `relay.peer.selfcheck` is the quickest readiness probe: it reports relay registration, peer-discovery flags, connected peers, and whether the local OpenClaw host exposes the runtime pieces needed for `chat.send` / history.
+- `relay.peer.selfcheck` is the quickest readiness probe: it reports relay registration, peer-discovery flags, connected peers, known peer-session state, and whether the local OpenClaw host exposes the runtime pieces needed for `chat.send` / history.
+- `relay.peer.call` can now auto-establish a peer session when needed, so it is the simplest operator-facing way to verify or use a peer.
 - `relay.peer.poll` drains pending signals and signal errors for the selected relay account.
 - `relay.peer.accept` creates an invite-scoped authorization window plus a short-lived invite token; it never reveals the long-lived channel token.
-- `relay.peer.connect` establishes a reusable outbound peer session that subsequent `relay.peer.call` requests can use.
-- `relay.peer.dial` wraps request + wait + connect into a single operator-facing step and is the recommended path for live peer checks.
+- `relay.peer.connect` establishes a reusable outbound peer session explicitly.
+- `relay.peer.dial` wraps request + wait + connect into a single operator-facing step and remains useful when you want to inspect connection setup separately from the actual peer call.
 
 ## Runtime requirements
 

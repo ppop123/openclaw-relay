@@ -69,18 +69,41 @@ v1 目标是**单 Relay 节点部署**。集群、联邦、多活和高可用明
 
 ### 如何使用
 
-如果你是第一次上手，最直接的用法是：
+把它想简单一点：
 
-1. **部署一个 Relay**：先按 [`docs/deployment.md`](docs/deployment.md) 或 [`docs/quick-start.md`](docs/quick-start.md) 跑起 `relay/`
-2. **在自己的 OpenClaw 上安装插件**：把 `plugin/` 安装进本地 OpenClaw runtime，然后执行 `openclaw relay enable --server <relay>` 和 `openclaw relay pair --wait 30`
-3. **用浏览器连接**：打开 `client/` 的 Web client，填入 relay 地址、channel token 和 gateway 公钥后连接
+- `relay/` 是一台公开可访问的中转站
+- `plugin/` 是装在你自己 OpenClaw 里的“回家通道”
+- `client/` 是你在浏览器里远程使用自己 OpenClaw 的界面
+
+#### 最常见的用法：远程使用你自己的 OpenClaw
+
+大多数人只需要 3 步：
+
+1. **部署一个 Relay**：按 [`docs/quick-start.md`](docs/quick-start.md) 或 [`docs/deployment.md`](docs/deployment.md) 跑起 `relay/`
+2. **把 Relay 插件装进你自己的 OpenClaw**：执行 `openclaw plugins install --link /path/to/openclaw-relay/plugin`，然后运行 `openclaw relay enable --server <relay>` 和 `openclaw relay pair --wait 30`
+3. **打开浏览器连接**：用 `client/` 里的 Web client，填入 relay 地址、channel token 和 gateway 公钥后连接
+
+你得到的是：
+
+- 可以从外面连回自己的 OpenClaw
+- 不需要公网 IP
+- 不需要端口映射
+- Relay 只负责转发，看不懂消息内容
+
+#### 高级用法：让两台 OpenClaw 的 agent 互相协作
+
+这个能力现在也已经可用，但它是 **agent-only**，默认不打开：
+
+- 只有 gateway / agent 可以发现并联系别家的 agent
+- **人类客户端不能拿它去找别人的 OpenClaw**
+- 这是操作员显式 opt-in 的高级能力，入口见 [`plugin/README.md`](plugin/README.md)
 
 如果你不是直接用浏览器，而是要自己写客户端：
 
 - **Python 客户端**：从 `sdk/python/` 开始
 - **自定义客户端 / 审计实现**：从 `protocol/` 和 [`docs/ai-implementation-guide.md`](docs/ai-implementation-guide.md) 开始
 
-推荐阅读顺序：[`docs/quick-start.md`](docs/quick-start.md) → [`docs/deployment.md`](docs/deployment.md) → [`docs/web-client.md`](docs/web-client.md)。
+推荐阅读顺序：[`docs/quick-start.md`](docs/quick-start.md) → [`docs/deployment.md`](docs/deployment.md) → [`docs/web-client.md`](docs/web-client.md) → [`plugin/README.md`](plugin/README.md)。
 
 ### 组件一览
 
@@ -230,18 +253,41 @@ v1 targets a **single relay node** deployment. Clustering, federation, multi-nod
 
 ### How To Use It
 
-If you are starting fresh, the shortest path is:
+The simple mental model is:
 
-1. **Deploy a relay**: bring up `relay/` using [`docs/deployment.md`](docs/deployment.md) or [`docs/quick-start.md`](docs/quick-start.md)
-2. **Install the gateway plugin in your own OpenClaw runtime**: install `plugin/`, then run `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`
+- `relay/` is the public relay node
+- `plugin/` is the bridge installed inside your own OpenClaw
+- `client/` is the browser UI you use to talk to your own OpenClaw remotely
+
+#### Most common use: reach your own OpenClaw from anywhere
+
+Most people only need 3 steps:
+
+1. **Deploy a relay**: bring up `relay/` with [`docs/quick-start.md`](docs/quick-start.md) or [`docs/deployment.md`](docs/deployment.md)
+2. **Install the relay plugin in your own OpenClaw**: run `openclaw plugins install --link /path/to/openclaw-relay/plugin`, then `openclaw relay enable --server <relay>` and `openclaw relay pair --wait 30`
 3. **Connect from the browser**: open the web client from `client/`, enter the relay URL, channel token, and gateway public key, then connect
+
+What you get:
+
+- remote access to your own OpenClaw
+- no public IP requirement
+- no port forwarding
+- the relay forwards traffic but cannot read message content
+
+#### Advanced use: let two OpenClaw agents cooperate
+
+This now works too, but it is **agent-only** and stays opt-in:
+
+- only gateways / agents may discover and contact other agents
+- **human-facing clients must not browse or contact other OpenClaw instances**
+- this is an operator-enabled advanced feature; see [`plugin/README.md`](plugin/README.md)
 
 If you are not using the browser reference client and want to build your own client:
 
 - **Python client**: start with `sdk/python/`
 - **Custom client / audited implementation**: start with `protocol/` and [`docs/ai-implementation-guide.md`](docs/ai-implementation-guide.md)
 
-Recommended reading order: [`docs/quick-start.md`](docs/quick-start.md) → [`docs/deployment.md`](docs/deployment.md) → [`docs/web-client.md`](docs/web-client.md).
+Recommended reading order: [`docs/quick-start.md`](docs/quick-start.md) → [`docs/deployment.md`](docs/deployment.md) → [`docs/web-client.md`](docs/web-client.md) → [`plugin/README.md`](plugin/README.md).
 
 ### Components
 

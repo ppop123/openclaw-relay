@@ -856,6 +856,15 @@ function getOptionalPositiveIntegerParam(params: Record<string, unknown>, key: s
   return value;
 }
 
+function getOptionalBooleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
+  const value = params[key];
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'boolean') {
+    throw relayGatewayMethodError('bad_request', `${key} must be a boolean`);
+  }
+  return value;
+}
+
 function parseReceivedPeerSignal(value: unknown): ReceivedPeerSignal {
   const candidate = isObject(value) && isObject(value.signal) ? value.signal : value;
   if (!isObject(candidate)) {
@@ -949,6 +958,12 @@ function classifyRelayPeerError(error: Error): { code: string; message: string }
   if (message.includes('timed out waiting')) {
     return { code: 'peer_signal_timeout', message };
   }
+  if (message.includes('peer rejected invite request')) {
+    return { code: 'peer_rejected', message };
+  }
+  if (message.includes('Request timeout:')) {
+    return { code: 'peer_request_timeout', message };
+  }
   if (message.includes('Remote gateway went offline') || message.includes('Gateway is offline for this invite alias')) {
     return { code: 'peer_offline', message };
   }
@@ -1022,6 +1037,7 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
       account: summarizeAccount(account),
       gatewayStatus: status,
       connectedPeers,
+      peerSessions: service.listPeerSessionStatuses(),
       runtimeSupport,
       checks: {
         relayRegistered: status?.state === 'registered',
@@ -1042,6 +1058,7 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
       account: summarizeAccount(account),
       gatewayStatus: status ?? null,
       connectedPeers: service.listConnectedPeers(),
+      peerSessions: service.listPeerSessionStatuses(),
     };
   });
 
@@ -1167,13 +1184,31 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
     const peerPublicKey = getRequiredStringParam(params, 'peerPublicKey');
     const method = getRequiredStringParam(params, 'method');
     const requestParams = getOptionalObjectParam(params, 'params') ?? {};
+    const autoDial = getOptionalBooleanParam(params, 'autoDial');
+    const body = getOptionalObjectParam(params, 'body')
+      ?? getOptionalObjectParam(params, 'request')
+      ?? {};
+    const clientId = getOptionalStringParam(params, 'clientId');
+    const timeoutMs = getOptionalPositiveIntegerParam(params, 'timeoutMs');
+    const pollIntervalMs = getOptionalPositiveIntegerParam(params, 'pollIntervalMs');
+    const requestTimeoutMs = getOptionalPositiveIntegerParam(params, 'requestTimeoutMs');
     const service = getRelayPeerService(api, accountId);
     await service.ensureStarted();
+    const result = await service.requestPeer(peerPublicKey, method, requestParams, {
+      ...(autoDial !== undefined ? { autoDial } : {}),
+      ...(Object.keys(body).length > 0 ? { body } : {}),
+      ...(clientId ? { clientId } : {}),
+      ...(timeoutMs ? { timeoutMs } : {}),
+      ...(pollIntervalMs ? { pollIntervalMs } : {}),
+      ...(requestTimeoutMs ? { requestTimeoutMs } : {}),
+    });
     return {
       accountId,
       peerPublicKey,
       method,
-      result: await service.requestPeer(peerPublicKey, method, requestParams),
+      connectedPeers: service.listConnectedPeers(),
+      result,
+      peerSessions: service.listPeerSessionStatuses(),
     };
   });
 

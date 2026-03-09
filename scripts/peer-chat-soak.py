@@ -52,6 +52,11 @@ def call_peer(runtime: PeerRuntime, peer_public_key: str, method: str, params: d
         'peerPublicKey': peer_public_key,
         'method': method,
         'params': params,
+        'autoDial': True,
+        'clientId': f'{runtime.label}-peer-soak',
+        'body': {'purpose': 'peer-chat-soak'},
+        'timeoutMs': min(args.timeout_ms, 20000),
+        'requestTimeoutMs': args.timeout_ms,
     })
 
 
