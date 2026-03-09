@@ -1,10 +1,11 @@
+import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { handleRelayClients, handleRelayRevoke } from './commands/clients.js';
 import { handleRelayDisable, handleRelayRotateToken } from './commands/disable.js';
 import { handleRelayEnable } from './commands/enable.js';
-import { handleRelayPair } from './commands/pair.js';
+import { buildPairingWebUrl, handleRelayPair } from './commands/pair.js';
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { RelayGatewayAdapter } from './gateway-adapter.js';
 import { PairingManager } from './pairing.js';
@@ -39,6 +40,20 @@ const RELAY_CHANNEL_ID = 'relay';
 const DEFAULT_ACCOUNT_ID = 'default';
 const PAIR_WAIT_POLL_MS = 1000;
 const PAIR_WAIT_SECONDS = 300;
+
+function openExternalUrl(url: string): Promise<void> {
+  const platform = process.platform;
+  const command = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: 'ignore' });
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
 
 type ResolvedRelayAccount = RelayAccountConfig & {
   accountId: string;
@@ -1634,7 +1649,9 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
         .command('pair')
         .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
         .option('--wait <seconds>', 'How long to keep pairing mode open', String(PAIR_WAIT_SECONDS))
-        .action(async (options: { account?: string; wait?: string }) => {
+        .option('--print-web-url <base>', 'Print a ready-to-open browser client URL with pairing parameters in the fragment')
+        .option('--open-web <base>', 'Open a browser client URL with pairing parameters in the fragment')
+        .action(async (options: { account?: string; wait?: string; printWebUrl?: string; openWeb?: string }) => {
           const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
           const waitSecondsRaw = Number(options.wait ?? PAIR_WAIT_SECONDS);
           const waitSeconds = Number.isFinite(waitSecondsRaw) && waitSecondsRaw > 0 ? waitSecondsRaw : PAIR_WAIT_SECONDS;
@@ -1644,7 +1661,19 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
           const startedHere = !activeAccounts.has(accountId);
           const record = await ensureStartedAccount({ api, accountId, log: logger });
           const info = await handleRelayPair(store, record.pairing, accountId);
-          console.log(JSON.stringify({ ok: true, pairing: info }, null, 2));
+          const webBase = options.openWeb ?? options.printWebUrl;
+          const webClientUrl = webBase ? buildPairingWebUrl(info, webBase) : undefined;
+          console.log(JSON.stringify({
+            ok: true,
+            pairing: webClientUrl ? { ...info, webClientUrl } : info,
+          }, null, 2));
+          if (options.openWeb && webClientUrl) {
+            try {
+              await openExternalUrl(webClientUrl);
+            } catch (error) {
+              logger.warn(`failed to open web client URL automatically: ${String(error)}`);
+            }
+          }
 
           const deadline = Date.now() + waitSeconds * 1000;
           while (Date.now() < deadline) {

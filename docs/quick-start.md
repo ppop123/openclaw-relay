@@ -25,7 +25,7 @@
 
 - 这 **不是** 一个公共的 OpenClaw 实例目录
 - 浏览器客户端 **不能** 浏览或连接其他人的 OpenClaw 实例
-- 集群 / 联邦 / 高可用不在 v1 范围内
+- 集群 / 多节点互联 / 高可用不在 v1 范围内
 
 ## 第一步：启动 Relay 服务端
 
@@ -66,7 +66,15 @@ openclaw relay status
 openclaw relay pair
 ```
 
-`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。在命令等待期间，打开浏览器客户端，输入打印出的 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）。
+`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。在命令等待期间，你可以手动把打印出的 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）填进浏览器客户端。
+
+如果浏览器客户端部署在固定地址，还可以直接生成一键连接链接：
+
+```bash
+openclaw relay pair --print-web-url http://localhost:8080/client/
+```
+
+终端会额外打印一个 Web client URL。浏览器打开这个链接后，会自动填入三个配对参数，并立即清理地址栏里的敏感 fragment。
 
 常用的后续命令：
 
@@ -79,11 +87,10 @@ openclaw relay disable
 
 ## 第三步：从浏览器连接
 
-使用 `client/` 中的浏览器客户端，输入：
+使用 `client/` 中的浏览器客户端：
 
-- Relay 地址
-- 通道令牌（channel token）
-- 网关公钥（gateway public key）
+- 如果你是手动配对，就输入 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）
+- 如果你用了 `--print-web-url`，浏览器会自动填入这些值
 
 然后点击连接。
 

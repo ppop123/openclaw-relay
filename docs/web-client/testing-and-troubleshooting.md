@@ -78,28 +78,29 @@ Current automated tests do **not** fully cover:
 
 When validating the web client manually, check the following:
 
-1. page loads and form fields render correctly
-2. saved `relayUrl` and `gatewayPubKey` restore correctly
-3. saving a relay profile persists only profile name, relay URL, and gateway public key
-4. selecting a saved profile repopulates the form without restoring `channelToken`
-5. `channelToken` does not restore after refresh
-6. identity card shows whether a browser identity is already available
-7. connect succeeds against a live gateway
-8. the diagnostics bar shows session/client/profile/gateway context after connect
-9. `agents.list` populates the selector and restores the saved agent when available
-10. changing the selected agent updates safe settings without affecting secrets
-11. `chat.send` streams chunks and final text renders correctly
-12. `Export Chat` downloads the current local transcript without persisting it automatically
-13. `New Chat` clears the local transcript and resets `sessionId` without disconnecting
-14. disconnect returns the UI to connect mode
-15. reconnect after transient relay loss restores chat functionality
-16. gateway public-key mismatch is rejected
-17. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
-18. importing that protected file with the same passphrase restores the expected fingerprint
-19. fingerprint and public-key copy actions place the full values on the clipboard
-20. exporting without a passphrase shows a confirmation warning
-21. full page reload preserves the same client fingerprint when IndexedDB is available
-22. identity reset causes the next connect to present a different client fingerprint
+1. page loads and the quick-connect fields render correctly
+2. a pairing handoff URL fragment auto-fills the connect form and then clears itself from the address bar
+3. saved `relayUrl` and `gatewayPubKey` restore correctly when no pairing handoff is present
+4. saving a relay profile persists only profile name, relay URL, and gateway public key
+5. selecting a saved profile repopulates the form without restoring `channelToken`
+6. `channelToken` does not restore after refresh
+7. the browser-identity summary shows whether a persistent identity is already available
+8. connect succeeds against a live gateway
+9. the status bar and connection-details panel reflect session/client/profile/gateway context after connect
+10. `agents.list` populates the selector and restores the saved agent when available
+11. changing the selected agent updates safe settings without affecting secrets
+12. `chat.send` streams chunks and final text renders correctly
+13. `Save conversation` downloads the current local transcript without persisting it automatically
+14. `New chat` clears the local transcript and resets `sessionId` without disconnecting
+15. disconnect returns the UI to connect mode
+16. reconnect after transient relay loss restores chat functionality
+17. gateway public-key mismatch is rejected
+18. exporting the current identity with a passphrase downloads an encrypted JSON file successfully
+19. importing that protected file with the same passphrase restores the expected fingerprint
+20. fingerprint and public-key copy actions place the full values on the clipboard
+21. exporting without a passphrase shows a confirmation warning
+22. full page reload preserves the same client fingerprint when IndexedDB is available
+23. identity reset causes the next connect to present a different client fingerprint
 
 ## Common Failure Patterns
 

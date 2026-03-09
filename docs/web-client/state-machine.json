@@ -286,8 +286,10 @@
     "modes": {
       "connect_panel": {
         "visible_sections": [
-          "connect form",
-          "identity card"
+          "quick connect fields",
+          "identity summary line",
+          "saved profiles section (collapsed by default)",
+          "browser identity section (collapsed by default)"
         ],
         "hidden_sections": [
           "chat panel"
@@ -296,7 +298,9 @@
       "chat_panel": {
         "visible_sections": [
           "agent bar",
-          "session diagnostics bar",
+          "status bar",
+          "profile save banner (conditional)",
+          "connection details (collapsed)",
           "messages",
           "input area"
         ],

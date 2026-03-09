@@ -17,25 +17,34 @@ function createElement(overrides = {}) {
     value: '',
     files: [],
     disabled: false,
+    hidden: false,
     textContent: '',
     innerHTML: '',
     title: '',
     href: '',
     download: '',
+    type: 'text',
     scrollTop: 0,
     scrollHeight: 0,
     style: {},
-    classList: { add: vi.fn(), remove: vi.fn() },
+    classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
     focus: vi.fn(),
     select: vi.fn(),
     click: vi.fn(),
     appendChild: vi.fn(),
     addEventListener: vi.fn(),
-    setAttribute: vi.fn(),
     querySelector: vi.fn(() => createElement()),
     remove: vi.fn(),
     ...overrides,
   };
+  if (!('setAttribute' in element)) {
+    element.setAttribute = vi.fn((name, value) => {
+      element[name] = value;
+    });
+  }
+  if (!('getAttribute' in element)) {
+    element.getAttribute = vi.fn((name) => element[name] ?? null);
+  }
   createdElements.push(element);
   return element;
 }
@@ -64,6 +73,17 @@ vi.stubGlobal('document', {
 
 vi.stubGlobal('window', {
   app: null,
+});
+
+vi.stubGlobal('history', {
+  replaceState: vi.fn(),
+});
+
+vi.stubGlobal('location', {
+  hash: '',
+  href: 'http://localhost/',
+  origin: 'http://localhost',
+  pathname: '/',
 });
 
 vi.stubGlobal('navigator', {
@@ -103,6 +123,11 @@ beforeEach(() => {
   globalThis.URL.createObjectURL.mockClear();
   globalThis.URL.revokeObjectURL.mockClear();
   globalThis.navigator.clipboard.writeText.mockClear();
+  globalThis.history.replaceState.mockClear();
+  globalThis.location.hash = '';
+  globalThis.location.href = 'http://localhost/';
+  globalThis.location.origin = 'http://localhost';
+  globalThis.location.pathname = '/';
 
   app.connection.exportIdentityBundle = defaultExportIdentityBundle;
   app.connection.importIdentityBundle = defaultImportIdentityBundle;
@@ -489,8 +514,183 @@ describe('agent preference', () => {
   });
 });
 
+describe('pairing handoff via URL fragment', () => {
+  it('auto-fills form fields from URL fragment and clears fragment', () => {
+    globalThis.location.hash = '#relay=wss%3A%2F%2Frelay.example.com%2Fws&token=test-token-123&key=BASE64PUBKEY';
+    globalThis.location.href = `http://localhost/${globalThis.location.hash}`;
+
+    const used = app._applyPairingFragment();
+
+    expect(used).toBe(true);
+    expect(getElement('relayUrl').value).toBe('wss://relay.example.com/ws');
+    expect(getElement('channelToken').value).toBe('test-token-123');
+    expect(getElement('gatewayPubKey').value).toBe('BASE64PUBKEY');
+    expect(globalThis.history.replaceState).toHaveBeenCalledWith(null, '', 'http://localhost/');
+  });
+
+  it('does not fill fields when fragment is empty', () => {
+    const used = app._applyPairingFragment();
+    expect(used).toBe(false);
+    expect(getElement('relayUrl').value).toBe('');
+  });
+
+  it('skips saved profile restore when pairing fragment is present during init', async () => {
+    store.set(STORAGE_KEY, JSON.stringify({
+      selectedProfileId: 'saved_profile',
+      relayUrl: 'wss://saved.example.com/ws',
+      gatewayPubKey: 'SAVEDKEY',
+    }));
+    store.set(PROFILES_KEY, JSON.stringify([{
+      id: 'saved_profile',
+      name: 'Saved relay',
+      relayUrl: 'wss://saved.example.com/ws',
+      gatewayPubKey: 'SAVEDKEY',
+    }]));
+    globalThis.location.hash = '#relay=wss%3A%2F%2Fpair.example.com%2Fws&token=pair-token&key=PAIRKEY';
+    globalThis.location.href = `http://localhost/${globalThis.location.hash}`;
+
+    await app.init();
+
+    expect(getElement('relayUrl').value).toBe('wss://pair.example.com/ws');
+    expect(getElement('gatewayPubKey').value).toBe('PAIRKEY');
+    expect(getElement('profileSelect').value).toBe('');
+  });
+});
+
+describe('token visibility toggle', () => {
+  it('toggles channelToken input between password and text', () => {
+    getElement('channelToken').type = 'password';
+
+    app.toggleTokenVisibility();
+    expect(getElement('channelToken').type).toBe('text');
+
+    app.toggleTokenVisibility();
+    expect(getElement('channelToken').type).toBe('password');
+  });
+});
+
+describe('collapsible sections', () => {
+  it('toggles profiles section via aria-expanded and hidden', () => {
+    const toggle = getElement('profilesToggle');
+    const content = getElement('profilesContent');
+    toggle['aria-expanded'] = 'false';
+    content.hidden = true;
+
+    app.toggleSection('profiles');
+
+    expect(toggle.setAttribute).toHaveBeenCalledWith('aria-expanded', 'true');
+    expect(content.hidden).toBe(false);
+  });
+
+  it('collapses expanded connection details section', () => {
+    const toggle = getElement('connDetailsToggle');
+    const content = getElement('connectionDetailsContent');
+    toggle['aria-expanded'] = 'true';
+    content.hidden = false;
+
+    app.toggleSection('connectionDetails');
+
+    expect(toggle.setAttribute).toHaveBeenCalledWith('aria-expanded', 'false');
+    expect(content.hidden).toBe(true);
+  });
+});
+
+describe('identity summary line', () => {
+  it('shows fingerprint and persistence mode in summary', () => {
+    app.connection.identityPersistence = 'persisted';
+    app.connection.identityFingerprint = 'sha256:1234567890abcdef1234567890abcdef';
+    app.connection._storedIdentityRecord = {
+      publicKey: 'PUBKEY123',
+      fingerprint: app.connection.identityFingerprint,
+    };
+
+    app._updateIdentitySummary();
+
+    expect(getElement('identitySummaryText').textContent).toMatch(/persistent/);
+    expect(getElement('identitySummaryText').textContent).toMatch(/sha256:/);
+  });
+
+  it('shows error banner when identity load fails', () => {
+    app.connection._identityLoadFailed = true;
+
+    app._updateIdentitySummary();
+
+    expect(getElement('identitySummaryText').textContent).toMatch(/load failed/);
+    expect(getElement('identityErrorBanner').hidden).toBe(false);
+  });
+});
+
+describe('profiles view state', () => {
+  it('shows empty state when no profiles exist', () => {
+    app.profiles = [];
+    app._updateProfilesView();
+    expect(getElement('profilesEmpty').hidden).toBe(false);
+    expect(getElement('profilesList').hidden).toBe(true);
+  });
+
+  it('shows list when profiles exist', () => {
+    app.profiles = [{ id: 'p1', name: 'Test' }];
+    app._updateProfilesView();
+    expect(getElement('profilesEmpty').hidden).toBe(true);
+    expect(getElement('profilesList').hidden).toBe(false);
+  });
+});
+
+describe('status bar text', () => {
+  it('shows Not connected when disconnected', () => {
+    app.connection.state = 'disconnected';
+    app._updateDiagnostics();
+    expect(getElement('statusBarText').textContent).toBe('Not connected');
+  });
+
+  it('shows Connecting… when connecting', () => {
+    app.connection.state = 'connecting';
+    app._updateDiagnostics();
+    expect(getElement('statusBarText').textContent).toBe('Connecting…');
+  });
+
+  it('shows host and Encrypted when connected', () => {
+    app.connection.state = 'connected';
+    app.connection.relayUrl = 'wss://relay.example.com/ws';
+    app.connection.encrypted = true;
+    getElement('agentSelect').value = 'wukong';
+
+    app._updateDiagnostics();
+
+    expect(getElement('statusBarText').textContent).toMatch(/relay\.example\.com/);
+    expect(getElement('statusBarText').textContent).toMatch(/Encrypted/);
+    expect(getElement('statusBarText').textContent).toMatch(/wukong/);
+  });
+});
+
+describe('profile save banner', () => {
+  it('shows a save banner after connect for unsaved connections', () => {
+    app.connection.relayUrl = 'wss://relay.example.com/ws';
+    app.connection.gatewayPubKeyB64 = 'PUBKEY';
+
+    app._showProfileSavePrompt();
+
+    expect(getElement('profileSaveBanner').hidden).toBe(false);
+  });
+
+  it('does not show a save banner when the connection already exists as a profile', () => {
+    app.profiles = [{
+      id: 'saved',
+      name: 'Saved relay',
+      relayUrl: 'wss://relay.example.com/ws',
+      gatewayPubKey: 'PUBKEY',
+    }];
+    app.connection.relayUrl = 'wss://relay.example.com/ws';
+    app.connection.gatewayPubKeyB64 = 'PUBKEY';
+
+    app._showProfileSavePrompt();
+
+    expect(getElement('profileSaveBanner').hidden).toBe(true);
+  });
+});
+
 describe('diagnostics and session controls', () => {
-  it('renders session, client, profile, and gateway diagnostics', () => {
+  it('renders connection details and legacy diagnostics values', () => {
     app.connection.clientId = 'web_deadbeef';
     app.sessionId = 'sess_123';
     app.chatTranscript = [{ role: 'system', text: 'Connected.' }];
@@ -511,6 +711,10 @@ describe('diagnostics and session controls', () => {
     expect(getElement('clientValue').textContent).toBe('web_deadbeef');
     expect(getElement('profileValue').textContent).toBe('Saved relay');
     expect(getElement('gatewayValue').textContent).toMatch(/SAVEDKEY/);
+    expect(getElement('detailSession').textContent).toBe('sess_123');
+    expect(getElement('detailClient').textContent).toBe('web_deadbeef');
+    expect(getElement('detailProfile').textContent).toBe('Saved relay');
+    expect(getElement('detailGateway').textContent).toMatch(/SAVEDKEY/);
     expect(getElement('exportChatBtn').disabled).toBe(false);
   });
 

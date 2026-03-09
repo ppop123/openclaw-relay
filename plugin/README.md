@@ -48,8 +48,11 @@ openclaw relay enable --server wss://relay.example.com/ws --discoverable \
   --discover-label "Shanghai Lab" \
   --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["peer-discovery"]}'
 openclaw relay pair
+openclaw relay pair --print-web-url http://localhost:8080/client/
 openclaw relay status
 ```
+
+`openclaw relay pair --print-web-url <base>` 会输出一个浏览器可直接打开的配对链接。链接中的敏感参数放在 URL fragment 中，浏览器读取后会立即清除，不会发给服务器。`--open-web <base>` 还会尝试直接打开默认浏览器。
 
 `--discoverable` 仅在操作员明确希望此网关加入 agent 间 discovery 层时使用。它**不会**开启任何面向人类用户的 peer 浏览界面。Discovery metadata 是可选的、由操作员控制的，且仅对同一 Relay 上的其他 discoverable 网关可见。
 
@@ -68,14 +71,14 @@ openclaw relay disable
 
 - 面向人类的客户端仍然只与自己的 OpenClaw 实例通信。
 - 面向人类的客户端不得通过此插件浏览或联系其他 OpenClaw 实例。
-- 操作员通过 OpenClaw 配置中的 `channels.relay.accounts.<id>.peerDiscovery.enabled` 控制 discoverability。
-- 插件当前复用网关的 X25519 身份作为 discovery 公钥，操作员可附加不透明的 discovery metadata（如标签、地域提示、能力标签等）。
-- 网关内部方法包括 `discover`、`signal`、`invite_create`、invite 作用域的 peer 接受以及出站 invite 拨号，宿主仅通过本地 `createRelayAgentBridge(api)` 桥接和 `RelayPeerAgentService` 暴露给 OpenClaw 内部和 agent 使用。
+- 操作员通过 OpenClaw 配置中的 `channels.relay.accounts.<id>.peerDiscovery.enabled` 控制是否可被发现。
+- 插件当前复用网关的 X25519 身份作为 discovery 公钥，操作员可附加不透明的发现元数据（如标签、地域提示、能力标签等）。
+- 网关内部方法包括 `discover`、`signal`、`invite_create`、invite 作用域的 peer 接受以及出站 invite 拨号，宿主仅通过本地 `createRelayAgentBridge(api)` 桥接和 `RelayPeerAgentService` 向 OpenClaw 内部和 agent 公开。
 - Discovery 没有新增任何 Relay 请求/响应方法。远端人类客户端仍然无法通过 Layer 3 调用 `discover`、`signal` 或 `invite_create`。
 
 ### Discovery metadata 工作流
 
-使用 discovery metadata 让网关间发现对 agent 可用，同时不扩大面向人类的产品表面：
+使用发现元数据让网关间发现对 agent 可用，同时不扩大面向人类的产品表面：
 
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws --account default \
@@ -210,8 +213,11 @@ openclaw relay enable --server wss://relay.example.com/ws --discoverable \
   --discover-label "Shanghai Lab" \
   --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["peer-discovery"]}'
 openclaw relay pair
+openclaw relay pair --print-web-url http://localhost:8080/client/
 openclaw relay status
 ```
+
+`openclaw relay pair --print-web-url <base>` prints a browser-ready pairing handoff link. Sensitive pairing parameters live in the URL fragment, so the browser reads them locally and then clears them without sending them to the server. `--open-web <base>` also attempts to open the default browser automatically.
 
 Use `--discoverable` only when the operator explicitly wants this gateway to participate in the agent-only discovery layer. It does **not** enable any human-facing peer browsing UX. Discovery metadata is optional, operator-controlled, and only advertised to other discoverable gateways on the same relay.
 

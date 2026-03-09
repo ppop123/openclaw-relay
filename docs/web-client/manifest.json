@@ -43,7 +43,12 @@
         "agent list state",
         "chat ui flow",
         "current transcript tracking and export",
-        "session diagnostics rendering",
+        "pairing fragment auto-fill and cleanup",
+        "connect-panel L0/L1/L2 section management",
+        "token visibility toggle",
+        "identity summary rendering",
+        "inline profile-save banner rendering",
+        "status bar and connection-details rendering",
         "local new-chat session reset",
         "status rendering"
       ]

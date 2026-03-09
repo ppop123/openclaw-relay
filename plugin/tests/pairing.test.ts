@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryRelayConfigStore } from '../src/config.js';
 import { handleRelayDisable, handleRelayRotateToken } from '../src/commands/disable.js';
 import { handleRelayEnable } from '../src/commands/enable.js';
-import { handleRelayPair } from '../src/commands/pair.js';
+import { buildPairingWebUrl, handleRelayPair } from '../src/commands/pair.js';
 import { handleRelayClients, handleRelayRevoke } from '../src/commands/clients.js';
 import { PairingManager, approveClient } from '../src/pairing.js';
 
@@ -23,6 +23,9 @@ describe('pairing and config commands', () => {
     expect(info.relayUrl).toBe('wss://relay.example.com');
     expect(info.channelToken).toBe(account.channelToken);
     expect(info.uri.startsWith('openclaw-relay://relay.example.com/')).toBe(true);
+    expect(buildPairingWebUrl(info, 'http://localhost:8080/client/')).toBe(
+      `http://localhost:8080/client/#relay=${encodeURIComponent(info.relayUrl)}&token=${encodeURIComponent(info.channelToken)}&key=${encodeURIComponent(info.gatewayPublicKey)}`
+    );
 
     const inspect = await store.inspectAccount('default');
     expect(inspect?.gatewayPublicKey).toBe(account.gatewayKeyPair.publicKey);

@@ -16,20 +16,19 @@ The header contains:
 - application title
 - connection status dot
 - connection status label
-- connection details text
 - disconnect button
 
 ### Connect Panel
 
-The connect form collects:
+The connect form is split into three layers:
 
-- saved relay profile selection
-- profile name for saving safe settings
-- relay URL
-- channel token
-- gateway public key
+- **L0 Quick Connect**: relay URL, channel token, gateway public key, connect button, connect error, and a one-line browser-identity summary
+- **L1 Saved Profiles**: a collapsible section for saved relay profiles, with an empty state when no profiles exist yet
+- **L2 Browser Identity**: a collapsible identity-management section with copy, export, import, reset, and passphrase controls
 
-It also includes a client-identity card that shows:
+The browser can also pre-fill the L0 fields from a pairing fragment in the page URL. After reading those values, it immediately clears the fragment from the address bar.
+
+The browser-identity section shows:
 
 - whether a persistent browser identity is available
 - the current client fingerprint summary when known
@@ -45,12 +44,14 @@ The chat panel contains:
 
 - agent selector
 - selected agent status line
-- session diagnostics bar
+- a compact status bar
+- an inline profile-save banner when the current connection is not yet saved
+- expandable connection details
 - scrollable message list
 - multiline message input
 - send button
-- `Export Chat` button for current-transcript download
-- `New Chat` button for local session reset
+- `Save conversation` button for current-transcript download
+- `New chat` button for local session reset
 
 ### Toast Layer
 
@@ -76,12 +77,13 @@ Identity metadata itself is owned by `connection`; `app.js` only renders it.
 
 On `DOMContentLoaded`:
 
-1. the app cleans any historical `channelToken` from persisted settings
-2. the app restores the selected saved profile or the last safe custom settings
-3. the app wires transport callbacks
-4. the send button becomes input-driven and connection-aware
-5. the app hydrates any persisted browser identity
-6. the connect panel renders the current identity status, fingerprint summary, recovery hint, and identity actions
+1. the app checks the browser URL fragment for pairing handoff values and, when present, fills the connect form then clears the fragment from the address bar
+2. the app cleans any historical `channelToken` from persisted settings
+3. the app restores the selected saved profile or the last safe custom settings unless pairing handoff already supplied the connect values
+4. the app wires transport callbacks
+5. the send button becomes input-driven and connection-aware
+6. the app hydrates any persisted browser identity
+7. the connect panel renders the current identity status, summary line, recovery hint, and identity actions
 
 ## Profile Management Flow
 
@@ -121,15 +123,16 @@ When the user submits the connect form:
 1. required fields are validated for non-empty input
 2. the relay URL is normalized to end with `/ws` if needed
 3. safe settings are saved
-4. the button moves to a `Connecting...` state
+4. the button moves to a `Connecting…` state
 5. `RelayConnection.connect()` runs
 6. on success:
    - connect panel is hidden
    - chat panel is shown
    - agent list is fetched
-   - a system message announces encrypted connection
+   - a system message announces a secure connection to the user's OpenClaw
    - the identity card is refreshed with the active fingerprint summary
-   - the diagnostics bar refreshes session/client/profile/gateway status
+   - the status bar and connection details refresh
+   - an inline profile-save banner may appear when this relay + gateway combination is not yet saved
 7. on failure:
    - the connect error panel is populated
    - the form remains visible
@@ -145,10 +148,10 @@ When the user submits the connect form:
 - clears rendered messages
 - clears current `sessionId`
 - clears the in-memory agent list
-- resets the diagnostics bar back to connect-mode values
+- resets the status bar and connection-details values back to connect-mode defaults
 - keeps persisted safe settings and the persisted browser identity intact
 
-## Session Diagnostics and New Chat
+## Status Bar, Connection Details, and New Chat
 
 `app.exportCurrentChat()`:
 
@@ -156,12 +159,18 @@ When the user submits the connect form:
 - downloads a JSON artifact containing relay URL, client id, session id, and ordered messages
 - does not persist the transcript automatically in browser storage
 
-The chat panel diagnostics bar shows:
+The chat panel status bar shows a human-focused summary:
 
-- the current `sessionId` or `New chat` when no session exists yet
+- `Not connected`, `Connecting…`, or `Connected to <relay-host> · Encrypted · <agent>`
+- `New chat` and `Save conversation` actions on the right
+
+The expandable connection-details panel separately shows:
+
+- the current `sessionId` or `New chat`
 - the current relay-side `clientId`
 - the selected saved profile name or `Custom / unsaved`
 - a shortened summary of the pinned gateway public key
+- current encryption state and browser identity durability
 
 `app.startNewChat()`:
 
@@ -169,7 +178,7 @@ The chat panel diagnostics bar shows:
 - clears the rendered transcript in the current tab
 - resets local `sessionId` to `null`
 - keeps the relay connection, selected agent, and browser identity intact
-- updates the diagnostics bar immediately
+- updates the status bar and connection details immediately
 
 ## Identity Copy Flow
 
@@ -246,7 +255,7 @@ When the user sends a message:
 6. assistant text is re-rendered through `renderMarkdown()` on every chunk
 7. a cursor marker is shown while streaming is in progress
 8. the final `response` may update `sessionId`
-9. diagnostics refresh whenever `sessionId` changes
+9. the status bar and connection details refresh whenever `sessionId` changes
 10. final text is rendered without the cursor
 
 If the request fails:
@@ -267,21 +276,17 @@ Unknown notification types are currently ignored by the UI layer.
 
 ## Status Indicator Behavior
 
-The status indicator reflects `connection.state`.
+The header status indicator and chat-panel status bar reflect `connection.state`.
 
 | State | Header Label |
 |-------|--------------|
-| `disconnected` | `Disconnected` |
-| `connecting` | `Connecting...` |
+| `disconnected` | `Not connected` |
+| `connecting` | `Connecting…` |
 | `connected` | `Connected` |
 
-When connected, `statusDetails` shows:
+When connected, the chat-panel status bar summarizes the relay host, encryption state, and selected agent.
 
-- relay host
-- `(encrypted)` when Layer 1 succeeded
-- a shortened identity fingerprint when known
-
-The chat-panel diagnostics bar separately shows session/client/profile/gateway context.
+The expandable connection-details panel separately shows session/client/profile/gateway context plus encryption and identity durability.
 
 The send button is enabled only when:
 

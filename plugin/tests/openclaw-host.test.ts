@@ -754,6 +754,72 @@ describe('openclaw host bridge', () => {
     }
   });
 
+  it('prints a ready-to-open web client URL for pair handoff', async () => {
+    const publicKey = Buffer.alloc(32).toString('base64');
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey,
+              },
+              approvedClients: {},
+            },
+          },
+        },
+      },
+    };
+    const startSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'start').mockResolvedValue(undefined);
+    const stopSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'stop').mockResolvedValue(undefined);
+    const statusSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'getStatus').mockResolvedValue({
+      state: 'registered',
+      health: 'healthy',
+      approvedClients: 0,
+      activeSessions: 0,
+    });
+    const inspectSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'inspectAccount')
+      .mockResolvedValue({
+        enabled: true,
+        server: 'ws://relay.example/ws',
+        channel: 'channel-hash',
+        gatewayPublicKey: publicKey,
+        approvedClients: [{ fingerprint: 'sha256:test' }],
+      });
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
+      logs.push(String(value ?? ''));
+    });
+
+    try {
+      const api = buildApi(config);
+      const preview = createRelayChannelDefinition();
+      const { registerCli } = createOpenClawRelayPlugin(api, preview);
+      const program = buildProgram();
+      registerCli();
+      const registrar = api.registeredCli as (ctx: { program: FakeCommand; logger: any }) => void;
+      registrar({ program, logger: { info() {}, warn() {}, error() {}, debug() {} } });
+      const pairAction = program.children.get('relay')?.children.get('pair')?.actionHandler;
+      expect(pairAction).toBeTypeOf('function');
+
+      await pairAction?.({ account: 'default', wait: '5', printWebUrl: 'http://localhost:8080/client/' });
+
+      expect(logs.some((line) => line.includes('webClientUrl'))).toBe(true);
+      expect(logs.some((line) => line.includes('#relay='))).toBe(true);
+    } finally {
+      startSpy.mockRestore();
+      stopSpy.mockRestore();
+      statusSpy.mockRestore();
+      inspectSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
+
   it('updates discovery metadata through the relay enable CLI', async () => {
     const config: OpenClawConfig = {
       channels: {

@@ -40,8 +40,11 @@ export const app = {
   currentStreamEl: null,
   currentStreamText: '',
   streamEpoch: 0,
+  _profileSavePromptDismissed: false,
 
   async init() {
+    const usedPairingFragment = this._applyPairingFragment();
+
     // Migration: clean up any historically saved channelToken (bearer secret)
     const saved = this._loadSettings();
     if (saved.channelToken) {
@@ -56,7 +59,10 @@ export const app = {
     this._renderProfiles(saved.selectedProfileId || '');
 
     const selectedProfile = saved.selectedProfileId ? this._findProfile(saved.selectedProfileId) : null;
-    if (selectedProfile) {
+    if (usedPairingFragment) {
+      document.getElementById('profileName').value = '';
+      this._setProfileSelection('');
+    } else if (selectedProfile) {
       this._applyProfileToForm(selectedProfile);
       this._setProfileSelection(selectedProfile.id);
     } else if (saved.relayUrl || saved.gatewayPubKey) {
@@ -72,6 +78,7 @@ export const app = {
       this._setProfileSelection('');
     }
     this._updateProfileActionState();
+    this._updateProfilesView();
 
     // Wire transport callbacks to UI
     this.connection.onStateChange = (state) => this._updateStatus(state);
@@ -98,6 +105,26 @@ export const app = {
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
     this._updateDiagnostics();
+  },
+
+  _applyPairingFragment() {
+    const hash = globalThis.location?.hash;
+    if (!hash || hash.length < 2) return false;
+
+    const params = new URLSearchParams(hash.slice(1));
+    const relay = params.get('relay');
+    const token = params.get('token');
+    const key = params.get('key');
+
+    if (!relay && !token && !key) return false;
+
+    if (relay) document.getElementById('relayUrl').value = relay;
+    if (token) document.getElementById('channelToken').value = token;
+    if (key) document.getElementById('gatewayPubKey').value = key;
+
+    const cleanUrl = `${globalThis.location.origin}${globalThis.location.pathname}`;
+    globalThis.history?.replaceState?.(null, '', cleanUrl);
+    return true;
   },
 
   // ── Connection ──
@@ -148,7 +175,8 @@ export const app = {
       await this._fetchAgents();
 
       // Add system message
-      this._addSystemMessage('Connected. End-to-end encryption active.');
+      this._addSystemMessage('Connected securely to your OpenClaw.');
+      this._showProfileSavePrompt();
 
       // Focus input
       document.getElementById('messageInput').focus();
@@ -170,6 +198,8 @@ export const app = {
     this.streamEpoch += 1;
     this.currentStreamEl = null;
     this.currentStreamText = '';
+    this._profileSavePromptDismissed = false;
+    this._hideProfileSavePrompt();
     this.connection.disconnect();
 
     this._returnToConnectView();
@@ -247,6 +277,7 @@ export const app = {
     this.selectedAgentPreference = selectedAgent;
     this._saveSettings({ selectedAgent });
     this._updateAgentStatus();
+    this._updateDiagnostics();
   },
 
   saveProfile() {
@@ -277,8 +308,10 @@ export const app = {
 
     this._saveProfiles();
     this._renderProfiles(profile.id);
+    this._updateProfilesView();
     this._applyProfileToForm(profile);
     this._saveSettings({ relayUrl, gatewayPubKey, selectedProfileId: profile.id });
+    this._hideProfileSavePrompt();
     this._updateDiagnostics();
     showToast(existingId ? 'Profile updated.' : 'Profile saved.', 'info');
   },
@@ -305,6 +338,7 @@ export const app = {
     this.profiles = this.profiles.filter((item) => item.id !== profileId);
     this._saveProfiles();
     this._renderProfiles('');
+    this._updateProfilesView();
     this._setProfileSelection('');
     this._updateProfileActionState();
     this._saveSettings({
@@ -450,6 +484,7 @@ export const app = {
     document.getElementById('chatPanel').classList.remove('active');
     document.getElementById('connectPanel').style.display = '';
     document.getElementById('disconnectBtn').style.display = 'none';
+    this._hideProfileSavePrompt();
 
     // Clear messages
     document.getElementById('messages').innerHTML = '';
@@ -457,6 +492,45 @@ export const app = {
     this.sessionId = null;
     this.agents = [];
     this._updateDiagnostics();
+  },
+
+  _showProfileSavePrompt() {
+    if (this._profileSavePromptDismissed) return;
+
+    const relayUrl = this.connection.relayUrl || '';
+    const gatewayPubKey = this.connection.gatewayPubKeyB64 || '';
+    if (!relayUrl || !gatewayPubKey) return;
+
+    const exists = this.profiles.some((profile) => (
+      profile.relayUrl === relayUrl && profile.gatewayPubKey === gatewayPubKey
+    ));
+    if (exists) {
+      this._hideProfileSavePrompt();
+      return;
+    }
+
+    const banner = document.getElementById('profileSaveBanner');
+    if (banner) banner.hidden = false;
+  },
+
+  _acceptProfileSave() {
+    const relayUrl = this.connection.relayUrl || '';
+    const gatewayPubKey = this.connection.gatewayPubKeyB64 || '';
+    if (!relayUrl || !gatewayPubKey) return;
+
+    document.getElementById('profileName').value = document.getElementById('profileName').value.trim() || this._deriveProfileName(relayUrl);
+    this.saveProfile();
+    this._profileSavePromptDismissed = false;
+  },
+
+  _dismissProfileSave() {
+    this._profileSavePromptDismissed = true;
+    this._hideProfileSavePrompt();
+  },
+
+  _hideProfileSavePrompt() {
+    const banner = document.getElementById('profileSaveBanner');
+    if (banner) banner.hidden = true;
   },
 
   // ── Agents ──
@@ -488,6 +562,7 @@ export const app = {
       this.selectedAgentPreference = selectedAgent;
       this._saveSettings({ selectedAgent });
       this._updateAgentStatus();
+      this._updateDiagnostics();
     } catch (err) {
       select.innerHTML = '<option value="">Failed to load agents</option>';
       showToast('Failed to fetch agents: ' + err.message, 'error');
@@ -665,6 +740,30 @@ export const app = {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   },
 
+  toggleSection(section) {
+    const config = {
+      profiles: { toggle: 'profilesToggle', content: 'profilesContent' },
+      identity: { toggle: 'identityToggle', content: 'identityContent' },
+      connectionDetails: { toggle: 'connDetailsToggle', content: 'connectionDetailsContent' },
+    };
+    const entry = config[section];
+    if (!entry) return;
+
+    const toggleBtn = document.getElementById(entry.toggle);
+    const content = document.getElementById(entry.content);
+    if (!toggleBtn || !content) return;
+
+    const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+    toggleBtn.setAttribute('aria-expanded', String(!expanded));
+    content.hidden = expanded;
+  },
+
+  toggleTokenVisibility() {
+    const input = document.getElementById('channelToken');
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+  },
+
   // ── Notifications ──
 
   _handleNotify(event, data) {
@@ -686,22 +785,26 @@ export const app = {
     const text = document.getElementById('statusText');
     const details = document.getElementById('statusDetails');
 
-    dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'connecting' ? 'connecting' : '');
+    dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'connecting' || state === 'reconnecting' ? 'connecting' : '');
 
     const labels = {
-      disconnected: 'Disconnected',
-      connecting: 'Connecting...',
-      connected: 'Connected'
+      disconnected: 'Not connected',
+      connecting: 'Connecting…',
+      reconnecting: 'Reconnecting…',
+      connected: 'Connected',
     };
     text.textContent = labels[state] || state;
 
     if (state === 'connected') {
-      const url = new URL(this.connection.relayUrl);
+      let host = '';
+      try {
+        host = new URL(this.connection.relayUrl).host;
+      } catch {}
       const suffix = this.connection.encrypted ? ' (encrypted)' : '';
       const fingerprint = this.connection.identityFingerprint
         ? ` · ${this._shortFingerprint(this.connection.identityFingerprint)}`
         : '';
-      details.textContent = url.host + suffix + fingerprint;
+      details.textContent = host ? host + suffix + fingerprint : `Secure${suffix}${fingerprint}`;
       document.getElementById('sendBtn').disabled = !document.getElementById('messageInput').value.trim();
     } else {
       details.textContent = '';
@@ -718,27 +821,125 @@ export const app = {
     const gatewayEl = document.getElementById('gatewayValue');
     const newChatBtn = document.getElementById('newChatBtn');
     const exportChatBtn = document.getElementById('exportChatBtn');
-
-    if (!sessionEl || !clientEl || !profileEl || !gatewayEl || !newChatBtn || !exportChatBtn) {
-      return;
-    }
+    const statusBarText = document.getElementById('statusBarText');
+    const detailSession = document.getElementById('detailSession');
+    const detailClient = document.getElementById('detailClient');
+    const detailGateway = document.getElementById('detailGateway');
+    const detailProfile = document.getElementById('detailProfile');
+    const detailEncryption = document.getElementById('detailEncryption');
+    const detailIdentity = document.getElementById('detailIdentity');
 
     const selectedProfile = this._findProfile(this._getSelectedProfileId());
     const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim() || this.connection.gatewayPubKeyB64 || '';
+    const identitySummary = this.connection.getIdentitySummary();
+    const agentName = document.getElementById('agentSelect')?.value || '';
 
-    sessionEl.textContent = this.sessionId || 'New chat';
-    sessionEl.title = this.sessionId || '';
-    clientEl.textContent = this.connection.clientId || 'Pending';
-    clientEl.title = this.connection.clientId || '';
-    profileEl.textContent = selectedProfile?.name || 'Custom / unsaved';
-    profileEl.title = selectedProfile?.name || '';
-    gatewayEl.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
-    gatewayEl.title = gatewayPubKey;
-    newChatBtn.disabled = this.connection.state !== 'connected';
-    exportChatBtn.disabled = this.chatTranscript.length === 0;
+    let relayHost = '';
+    try {
+      const relayUrl = this.connection.relayUrl || this._normalizeRelayUrl(document.getElementById('relayUrl').value.trim());
+      relayHost = relayUrl ? new URL(relayUrl).host : '';
+    } catch {}
+
+    if (statusBarText) {
+      if (this.connection.state === 'connected') {
+        const parts = [relayHost ? `Connected to ${relayHost}` : 'Connected securely'];
+        parts.push(this.connection.encrypted ? 'Encrypted' : 'Security pending');
+        if (agentName) parts.push(agentName);
+        statusBarText.textContent = parts.join(' · ');
+      } else if (this.connection.state === 'connecting') {
+        statusBarText.textContent = 'Connecting…';
+      } else if (this.connection.state === 'reconnecting') {
+        statusBarText.textContent = 'Reconnecting…';
+      } else {
+        statusBarText.textContent = 'Not connected';
+      }
+    }
+
+    if (sessionEl) {
+      sessionEl.textContent = this.sessionId || 'New chat';
+      sessionEl.title = this.sessionId || '';
+    }
+    if (clientEl) {
+      clientEl.textContent = this.connection.clientId || 'Pending';
+      clientEl.title = this.connection.clientId || '';
+    }
+    if (profileEl) {
+      profileEl.textContent = selectedProfile?.name || 'Custom / unsaved';
+      profileEl.title = selectedProfile?.name || '';
+    }
+    if (gatewayEl) {
+      gatewayEl.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
+      gatewayEl.title = gatewayPubKey;
+    }
+    if (detailSession) {
+      detailSession.textContent = this.sessionId || 'New chat';
+      detailSession.title = this.sessionId || '';
+    }
+    if (detailClient) {
+      detailClient.textContent = this.connection.clientId || 'Pending';
+      detailClient.title = this.connection.clientId || '';
+    }
+    if (detailGateway) {
+      detailGateway.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
+      detailGateway.title = gatewayPubKey;
+    }
+    if (detailProfile) {
+      detailProfile.textContent = selectedProfile?.name || 'Custom / unsaved';
+      detailProfile.title = selectedProfile?.name || '';
+    }
+    if (detailEncryption) {
+      detailEncryption.textContent = this.connection.state === 'connected'
+        ? (this.connection.encrypted ? 'AES-256-GCM' : 'Negotiating')
+        : '—';
+    }
+    if (detailIdentity) {
+      if (identitySummary.persistence === 'persisted') {
+        detailIdentity.textContent = 'Persistent (IndexedDB)';
+      } else if (identitySummary.persistence === 'memory') {
+        detailIdentity.textContent = 'Temporary (page only)';
+      } else if (identitySummary.persistence === 'unsupported') {
+        detailIdentity.textContent = 'Temporary (persistence unavailable)';
+      } else {
+        detailIdentity.textContent = '—';
+      }
+    }
+
+    if (newChatBtn) newChatBtn.disabled = this.connection.state !== 'connected';
+    if (exportChatBtn) exportChatBtn.disabled = this.chatTranscript.length === 0;
+  },
+
+  _updateIdentitySummary() {
+    const el = document.getElementById('identitySummaryText');
+    const banner = document.getElementById('identityErrorBanner');
+    if (!el) return;
+
+    const summary = this.connection.getIdentitySummary();
+
+    if (summary.loadFailed) {
+      el.textContent = 'Browser identity: load failed';
+      if (banner) banner.hidden = false;
+      return;
+    }
+
+    if (banner) banner.hidden = true;
+
+    if (summary.fingerprint) {
+      const mode = summary.persistence === 'persisted' ? 'persistent' : summary.persistence === 'memory' ? 'temporary' : summary.persistence;
+      el.textContent = `Browser identity: ${this._shortFingerprint(summary.fingerprint)} · ${mode}`;
+      return;
+    }
+
+    if (summary.persistence === 'unsupported') {
+      el.textContent = 'Browser identity: persistence unavailable';
+      return;
+    }
+
+    el.textContent = 'Browser identity: not created yet';
   },
 
   _updateIdentityStatus() {
+    this._updateIdentitySummary();
+
     const modeEl = document.getElementById('identityMode');
     const fingerprintEl = document.getElementById('identityFingerprint');
     const metaEl = document.getElementById('identityMeta');
@@ -749,6 +950,10 @@ export const app = {
     const copyFingerprintBtn = document.getElementById('copyFingerprintBtn');
     const copyPublicKeyBtn = document.getElementById('copyPublicKeyBtn');
     const summary = this.connection.getIdentitySummary();
+
+    if (!modeEl || !fingerprintEl || !metaEl || !recoveryEl || !exportBtn || !importBtn || !resetBtn || !copyFingerprintBtn || !copyPublicKeyBtn) {
+      return;
+    }
 
     resetBtn.disabled = !summary.canReset;
     exportBtn.disabled = !summary.canExport;
@@ -791,6 +996,16 @@ export const app = {
     fingerprintEl.textContent = 'A stable client identity will be created on first connect and saved in this browser.';
     fingerprintEl.title = '';
     metaEl.textContent = 'You can also import an existing identity file before connecting.';
+  },
+
+  _updateProfilesView() {
+    const empty = document.getElementById('profilesEmpty');
+    const list = document.getElementById('profilesList');
+    if (!empty || !list) return;
+
+    const hasProfiles = this.profiles.length > 0;
+    empty.hidden = hasProfiles;
+    list.hidden = !hasProfiles;
   },
 
   // ── Settings persistence ──

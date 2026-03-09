@@ -397,8 +397,9 @@ async function run() {
     await page.fill('#messageInput', 'Ping from browser E2E');
     await page.click('#sendBtn');
     await page.waitForFunction(() => document.getElementById('messages').textContent.includes('Hello from browser E2E.'));
-    await page.waitForFunction(() => document.getElementById('sessionValue').textContent === 'sess_browser_e2e');
-    await page.waitForFunction(() => document.getElementById('profileValue').textContent === 'Custom / unsaved');
+    await page.click('#connDetailsToggle');
+    await page.waitForFunction(() => document.getElementById('detailSession').textContent === 'sess_browser_e2e');
+    await page.waitForFunction(() => document.getElementById('detailProfile').textContent === 'Custom / unsaved');
 
     log('exporting the current transcript');
     const [download] = await Promise.all([
@@ -430,6 +431,7 @@ async function run() {
 
     log('exporting a protected identity backup');
     const identityPassphrase = 'browser-e2e-passphrase';
+    await page.click('#identityToggle');
     await page.fill('#identityPassphrase', identityPassphrase);
     const [identityDownload] = await Promise.all([
       page.waitForEvent('download'),

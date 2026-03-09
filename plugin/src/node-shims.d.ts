@@ -6,4 +6,5 @@ declare module 'node:fs/promises' {
 
 declare const process: {
   uptime: () => number;
+  platform: string;
 };
