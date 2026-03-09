@@ -207,6 +207,22 @@ describe('openclaw host bridge', () => {
       expect(api.registeredGatewayMethods.has('relay.peer.discover')).toBe(true);
       expect(api.registeredGatewayMethods.has('relay.peer.dial')).toBe(true);
       expect(api.registeredGatewayMethods.has('relay.peer.call')).toBe(true);
+      expect(api.registeredGatewayMethods.has('relay.peer.selfcheck')).toBe(true);
+
+      const selfcheckResult = await callGatewayMethod(api, 'relay.peer.selfcheck');
+      expect(selfcheckResult.ok).toBe(true);
+      expect(selfcheckResult.payload).toMatchObject({
+        accountId: 'default',
+        checks: {
+          relayRegistered: true,
+          peerDiscoveryEnabled: true,
+        },
+        runtimeSupport: {
+          sessionsHistory: true,
+          sessionsList: true,
+          systemStatus: true,
+        },
+      });
 
       const discoverResult = await callGatewayMethod(api, 'relay.peer.discover', { timeoutMs: 4321 });
       expect(discoverResult.ok).toBe(true);
@@ -261,7 +277,7 @@ describe('openclaw host bridge', () => {
         clientId: 'peer-client-7',
       });
       expect(connectResult.ok).toBe(true);
-      expect(dialPeerSpy).toHaveBeenCalledWith('invite-token', 'peer-key', 'peer-client-7');
+      expect(dialPeerSpy).toHaveBeenCalledWith('invite-token', 'peer-key', 'peer-client-7', expect.any(Function));
 
       const statusResult = await callGatewayMethod(api, 'relay.peer.status');
       expect(statusResult.ok).toBe(true);
@@ -302,7 +318,7 @@ describe('openclaw host bridge', () => {
         kind: 'invite_request',
         body: { purpose: 'dial' },
       });
-      expect(dialPeerSpy).toHaveBeenLastCalledWith('invite-token', 'peer-key', 'peer-client-8');
+      expect(dialPeerSpy).toHaveBeenLastCalledWith('invite-token', 'peer-key', 'peer-client-8', expect.any(Function));
 
       await callGatewayMethod(api, 'relay.peer.disconnect');
       await stopSpy.mock.results[0]?.value;
@@ -454,7 +470,7 @@ describe('openclaw host bridge', () => {
       expect(authorizePeerSpy).toHaveBeenCalledWith('peer-key', 45, 1);
       expect(createInviteSpy).toHaveBeenNthCalledWith(1, 90);
       expect(createInviteSpy).toHaveBeenNthCalledWith(2, 45);
-      expect(dialPeerSpy).toHaveBeenCalledWith('invite-token', 'peer-key', 'peer-client-9');
+      expect(dialPeerSpy).toHaveBeenCalledWith('invite-token', 'peer-key', 'peer-client-9', undefined);
       await bridge.stopAccount();
       expect(stopSpy).toHaveBeenCalledTimes(1);
     } finally {

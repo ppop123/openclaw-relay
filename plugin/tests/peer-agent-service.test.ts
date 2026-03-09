@@ -78,7 +78,7 @@ describe('RelayPeerAgentService', () => {
     const session = await service.connectFromInviteOffer(offerSignal, { clientId: 'peer-client-1' });
     expect(isInviteOfferSignal(offerSignal)).toBe(true);
     expect(isInviteRequestSignal(requestSignal)).toBe(true);
-    expect(bridge.dialPeerInvite).toHaveBeenCalledWith('invite-token', 'peer-key', { accountId: 'default', clientId: 'peer-client-1' });
+    expect(bridge.dialPeerInvite).toHaveBeenCalledWith('invite-token', 'peer-key', expect.objectContaining({ accountId: 'default', clientId: 'peer-client-1' }));
     expect(service.listConnectedPeers()).toEqual(['peer-key']);
 
     await expect(service.requestPeer('peer-key', 'system.status', {})).resolves.toEqual({ ok: true });
@@ -117,5 +117,30 @@ describe('RelayPeerAgentService', () => {
 
     expect(service.listConnectedPeers()).toEqual([]);
     await expect(service.requestPeer('peer-key', 'system.status', {})).rejects.toThrow('no active peer session');
+  });
+
+  it('removes a connected peer immediately when the session closes later', async () => {
+    const bridge = createBridge();
+    let onClosed: ((error?: Error) => void) | undefined;
+    (bridge.dialPeerInvite as any).mockImplementationOnce(async (_inviteToken, _peerKey, options) => {
+      onClosed = options?.onClosed;
+      return {
+        isConnected: true,
+        request: vi.fn(async () => ({ ok: true })),
+        requestStream: vi.fn(async () => ({ done: true })),
+        close: vi.fn(async () => undefined),
+      } as any;
+    });
+    const service = createRelayPeerAgentService({ bridge, accountId: 'default' });
+    const offerSignal = signal('peer-key', 'invite_offer', {
+      invite_token: 'invite-token',
+      expires_at: '2026-03-09T00:05:00.000Z',
+      peer_authorized_until: '2026-03-09T00:05:00.000Z',
+    });
+
+    await service.connectFromInviteOffer(offerSignal, { clientId: 'peer-client-live' });
+    expect(service.listConnectedPeers()).toEqual(['peer-key']);
+    onClosed?.(new Error('peer session closed'));
+    expect(service.listConnectedPeers()).toEqual([]);
   });
 });

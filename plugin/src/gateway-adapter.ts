@@ -250,7 +250,7 @@ export class RelayGatewayAdapter {
     return this.peerDiscovery.createInvite(ttlSeconds);
   }
 
-  async dialPeerInvite(inviteToken: string, gatewayPublicKey: string, clientId?: string): Promise<RelayPeerSession> {
+  async dialPeerInvite(inviteToken: string, gatewayPublicKey: string, clientId?: string, onClosed?: (error?: Error) => void): Promise<RelayPeerSession> {
     if (!this.currentConfig) throw new Error('gateway adapter is not started');
     if (!this.identity) throw new Error('gateway identity is not initialized');
     await this.waitForReady();
@@ -261,6 +261,7 @@ export class RelayGatewayAdapter {
       identity: this.identity,
       ...(clientId ? { clientId } : {}),
       ...(this.options.webSocketFactory ? { webSocketFactory: this.options.webSocketFactory } : {}),
+      ...(onClosed ? { onClosed } : {}),
     });
     await session.connect();
     return session;

@@ -82,18 +82,22 @@ openclaw relay enable --server wss://relay.example.com/ws --account default \
 Once the gateway is running, the owner can drive agent-only peer discovery from the local gateway control plane:
 
 ```bash
+openclaw gateway call relay.peer.selfcheck --params '{}' --json
 openclaw gateway call relay.peer.discover --params '{}' --json
 openclaw gateway call relay.peer.request --params '{"targetPublicKey":"<peer-pubkey>","body":{"purpose":"hello"}}' --json
 openclaw gateway call relay.peer.poll --params '{}' --json
 openclaw gateway call relay.peer.accept --params '{"signal":<poll-signal>,"ttlSeconds":60,"maxUses":1}' --json
 openclaw gateway call relay.peer.connect --params '{"signal":<offer-signal>,"clientId":"peer-client-1"}' --json
+openclaw gateway call relay.peer.dial --params '{"targetPublicKey":"<peer-pubkey>","clientId":"peer-client-1"}' --json
 openclaw gateway call relay.peer.call --params '{"peerPublicKey":"<peer-pubkey>","method":"system.status","params":{}}' --json
 ```
 
 - These methods are local gateway RPC only; they are not exposed through relay Layer 3.
+- `relay.peer.selfcheck` is the quickest readiness probe: it reports relay registration, peer-discovery flags, connected peers, and whether the local OpenClaw host exposes the runtime pieces needed for `chat.send` / history.
 - `relay.peer.poll` drains pending signals and signal errors for the selected relay account.
 - `relay.peer.accept` creates an invite-scoped authorization window plus a short-lived invite token; it never reveals the long-lived channel token.
 - `relay.peer.connect` establishes a reusable outbound peer session that subsequent `relay.peer.call` requests can use.
+- `relay.peer.dial` wraps request + wait + connect into a single operator-facing step and is the recommended path for live peer checks.
 
 ## Runtime requirements
 
@@ -121,3 +125,17 @@ cd plugin && npm run smoke
 ```
 
 The smoke script uses an isolated OpenClaw state/config under `.tmp/`, starts a local relay, completes pairing, verifies a `system.status` request over the real relay path, then validates `revoke`, re-pair, `rotate-token`, and `disable` behavior.
+
+## Peer soak validation
+
+For a real two-host durability run against live OpenClaw gateways:
+
+```bash
+python3 scripts/peer-chat-soak.py --minutes 15
+```
+
+The soak script:
+- reads `relay.peer.selfcheck` from both hosts
+- establishes peer sessions in both directions
+- lets the two OpenClaw instances talk to each other for the requested duration
+- writes a JSONL transcript plus summary under `.tmp/peer-chat-soak-*`

@@ -1,4 +1,6 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { handleRelayClients, handleRelayRevoke } from './commands/clients.js';
 import { handleRelayDisable, handleRelayRotateToken } from './commands/disable.js';
 import { handleRelayEnable } from './commands/enable.js';
@@ -73,7 +75,7 @@ export interface RelayAgentBridge {
   sendPeerSignal(targetPublicKey: string, envelope: PeerSignalEnvelope, options?: RelayAgentBridgeStartOptions): Promise<void>;
   createPeerInvite(options?: RelayAgentInviteOptions): Promise<{ inviteToken: string; inviteHash: string; expiresAt: string }>;
   acceptPeerSignal(sourcePublicKey: string, options?: RelayAgentAcceptPeerOptions): Promise<{ sourcePublicKey: string; fingerprint: string; peerAuthorizedUntil: string; inviteToken: string; inviteHash: string; expiresAt: string }>;
-  dialPeerInvite(inviteToken: string, gatewayPublicKey: string, options?: RelayAgentBridgeStartOptions & { clientId?: string }): Promise<RelayPeerSession>;
+  dialPeerInvite(inviteToken: string, gatewayPublicKey: string, options?: RelayAgentBridgeStartOptions & { clientId?: string; onClosed?: (error?: Error) => void }): Promise<RelayPeerSession>;
   drainPeerSignals(accountId?: string): ReceivedPeerSignal[];
   drainPeerSignalErrors(accountId?: string): SignalErrorFrame[];
 }
@@ -240,13 +242,60 @@ function getAgentEntries(cfg: OpenClawConfig): AgentConfigEntry[] {
   return Array.isArray(cfg.agents?.list) ? cfg.agents!.list!.filter(isObject) as AgentConfigEntry[] : [];
 }
 
-function buildSessionStorePath(stateDir: string, agentId: string): string {
-  return `${stateDir.replace(/\/$/, '')}/agents/${agentId}/sessions/sessions.json`;
+const VALID_AGENT_ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const INVALID_AGENT_ID_RE = /[^a-z0-9-]+/g;
+const LEADING_AGENT_DASH_RE = /^-+/;
+const TRAILING_AGENT_DASH_RE = /-+$/;
+
+function normalizeAgentId(agentId: string): string {
+  const trimmed = agentId.trim();
+  if (!trimmed) return 'main';
+  if (VALID_AGENT_ID_RE.test(trimmed)) return trimmed.toLowerCase();
+  return trimmed.toLowerCase().replace(INVALID_AGENT_ID_RE, '-').replace(LEADING_AGENT_DASH_RE, '').replace(TRAILING_AGENT_DASH_RE, '').slice(0, 64) || 'main';
 }
 
-function buildTranscriptPath(storePath: string, sessionId: string): string {
-  const baseDir = storePath.replace(/\/sessions\.json$/, '');
-  return `${baseDir}/${sessionId}.jsonl`;
+function resolveConfigPath(rawPath: string): string {
+  const trimmed = rawPath.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith('~')) {
+    return resolve(homedir(), trimmed.slice(1).replace(/^[/\\]+/, ''));
+  }
+  return resolve(trimmed);
+}
+
+function resolveSessionStorePath(stateDir: string, cfg: OpenClawConfig, agentId: string): string {
+  const configuredStore = typeof (cfg as { session?: { store?: unknown } }).session?.store === 'string'
+    ? (cfg as { session?: { store?: string } }).session?.store?.trim()
+    : undefined;
+  if (configuredStore) {
+    const expanded = configuredStore.includes('{agentId}')
+      ? configuredStore.replaceAll('{agentId}', normalizeAgentId(agentId))
+      : configuredStore;
+    return resolveConfigPath(expanded);
+  }
+  return join(stateDir.replace(/\/$/, ''), 'agents', normalizeAgentId(agentId), 'sessions', 'sessions.json');
+}
+
+function resolveCronStorePath(stateDir: string, cfg: OpenClawConfig): string {
+  const configuredStore = typeof (cfg as { cron?: { store?: unknown } }).cron?.store === 'string'
+    ? (cfg as { cron?: { store?: string } }).cron?.store?.trim()
+    : undefined;
+  return configuredStore ? resolveConfigPath(configuredStore) : join(stateDir.replace(/\/$/, ''), 'cron', 'jobs.json');
+}
+
+function resolvePathWithinDir(baseDir: string, candidate: string): string {
+  const trimmed = candidate.trim();
+  const normalized = normalize(trimmed);
+  if (!normalized || normalized.startsWith('..') || isAbsolute(normalized)) {
+    throw new Error('path must stay within base directory');
+  }
+  const resolvedBase = resolve(baseDir);
+  const resolvedTarget = resolve(resolvedBase, normalized);
+  const rel = relative(resolvedBase, resolvedTarget);
+  if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+    return resolvedTarget;
+  }
+  throw new Error('path must stay within base directory');
 }
 
 async function readJsonFile<T>(path: string): Promise<T | undefined> {
@@ -278,6 +327,8 @@ type SessionIndexEntry = {
   updatedAt: number;
   agentId: string;
   storePath: string;
+  sessionFile?: string;
+  stateDir: string;
 };
 
 async function loadSessionIndex(runtime: OpenClawRuntime, cfg: OpenClawConfig): Promise<SessionIndexEntry[]> {
@@ -287,7 +338,7 @@ async function loadSessionIndex(runtime: OpenClawRuntime, cfg: OpenClawConfig): 
   for (const agent of getAgentEntries(cfg)) {
     const agentId = typeof agent.id === 'string' ? agent.id.trim() : '';
     if (!agentId) continue;
-    const storePath = buildSessionStorePath(stateDir, agentId);
+    const storePath = resolveSessionStorePath(stateDir, cfg, agentId);
     const store = await readJsonFile<Record<string, SessionStoreEntry>>(storePath);
     if (!store || !isObject(store)) continue;
     for (const [key, entry] of Object.entries(store)) {
@@ -301,6 +352,8 @@ async function loadSessionIndex(runtime: OpenClawRuntime, cfg: OpenClawConfig): 
         updatedAt,
         agentId: typeof entry.agentId === 'string' && entry.agentId ? entry.agentId : agentId,
         storePath,
+        ...(typeof entry.sessionFile === 'string' && entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
+        stateDir,
       });
     }
   }
@@ -342,25 +395,59 @@ function normalizeHistoryTimestamp(message: Record<string, unknown>, entry: Reco
   if (typeof entry.timestamp === 'string' && entry.timestamp) {
     return entry.timestamp;
   }
+  if (typeof entry.timestamp === 'number' && Number.isFinite(entry.timestamp)) {
+    return new Date(entry.timestamp).toISOString();
+  }
   return undefined;
 }
 
-async function readSessionMessages(storePath: string, sessionId: string): Promise<HistoryMessage[]> {
-  const transcriptPath = buildTranscriptPath(storePath, sessionId);
-  const raw = await readFile(transcriptPath, 'utf-8').catch(() => '');
+function resolveTranscriptCandidates(entry: SessionIndexEntry): string[] {
+  const candidates: string[] = [];
+  const pushCandidate = (candidate: string | undefined) => {
+    if (!candidate) return;
+    if (!candidates.includes(candidate)) {
+      candidates.push(candidate);
+    }
+  };
+  const sessionsDir = dirname(resolve(entry.storePath));
+  if (entry.sessionFile) {
+    try {
+      pushCandidate(resolvePathWithinDir(sessionsDir, entry.sessionFile));
+    } catch {
+      // Ignore invalid sessionFile paths and fall back to standard candidates.
+    }
+  }
+  pushCandidate(join(sessionsDir, `${entry.sessionId}.jsonl`));
+  pushCandidate(join(entry.stateDir, 'agents', normalizeAgentId(entry.agentId), 'sessions', `${entry.sessionId}.jsonl`));
+  pushCandidate(join(homedir(), '.openclaw', 'sessions', `${entry.sessionId}.jsonl`));
+  return candidates;
+}
+
+async function readSessionMessages(entry: SessionIndexEntry): Promise<HistoryMessage[]> {
+  let raw = '';
+  for (const candidate of resolveTranscriptCandidates(entry)) {
+    raw = await readFile(candidate, 'utf-8').catch(() => '');
+    if (raw) break;
+  }
   if (!raw) return [];
   const messages: HistoryMessage[] = [];
   for (const line of raw.split(/\r?\n/)) {
     if (!line.trim()) continue;
     try {
-      const entry = JSON.parse(line) as Record<string, unknown>;
-      if (entry.type !== 'message' || !isObject(entry.message)) continue;
-      const message = entry.message as Record<string, unknown>;
-      const role = typeof message.role === 'string' ? message.role : undefined;
-      const content = normalizeHistoryContent(message.content);
-      const timestamp = normalizeHistoryTimestamp(message, entry);
-      if (!role || !content || !timestamp) continue;
-      messages.push({ role, content, timestamp });
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (isObject(parsed.message)) {
+        const message = parsed.message as Record<string, unknown>;
+        const role = typeof message.role === 'string' ? message.role : undefined;
+        const content = normalizeHistoryContent(message.content);
+        const timestamp = normalizeHistoryTimestamp(message, parsed);
+        if (!role || !content || !timestamp) continue;
+        messages.push({ role, content, timestamp });
+        continue;
+      }
+      if (parsed.type === 'compaction') {
+        const timestamp = normalizeHistoryTimestamp({}, parsed) ?? new Date().toISOString();
+        messages.push({ role: 'system', content: 'Compaction', timestamp });
+      }
     } catch {
       continue;
     }
@@ -374,26 +461,26 @@ async function findSessionByIdOrKey(runtime: OpenClawRuntime, cfg: OpenClawConfi
 }
 
 async function buildSessionPreview(entry: SessionIndexEntry): Promise<string> {
-  const messages = await readSessionMessages(entry.storePath, entry.sessionId);
+  const messages = await readSessionMessages(entry);
   const sample = messages.find((message) => message.role === 'user') ?? messages[0];
   if (!sample) return '';
   return sample.content.length > 120 ? `${sample.content.slice(0, 117)}...` : sample.content;
 }
 
-async function loadCronJobs(runtime: OpenClawRuntime): Promise<Array<Record<string, unknown>>> {
+async function loadCronJobs(runtime: OpenClawRuntime, cfg: OpenClawConfig): Promise<Array<Record<string, unknown>>> {
   const stateDir = runtime.state?.resolveStateDir?.();
   if (!stateDir) return [];
-  const jobsPath = `${stateDir.replace(/\/$/, '')}/cron/jobs.json`;
+  const jobsPath = resolveCronStorePath(stateDir, cfg);
   const payload = await readJsonFile<{ version?: number; jobs?: Array<Record<string, unknown>> }>(jobsPath);
   return Array.isArray(payload?.jobs) ? payload!.jobs! : [];
 }
 
-async function writeCronJobs(runtime: OpenClawRuntime, jobs: Array<Record<string, unknown>>): Promise<void> {
+async function writeCronJobs(runtime: OpenClawRuntime, cfg: OpenClawConfig, jobs: Array<Record<string, unknown>>): Promise<void> {
   const stateDir = runtime.state?.resolveStateDir?.();
   if (!stateDir) {
     throw new Error('runtime state directory is unavailable');
   }
-  const jobsPath = `${stateDir.replace(/\/$/, '')}/cron/jobs.json`;
+  const jobsPath = resolveCronStorePath(stateDir, cfg);
   const existing = await readJsonFile<Record<string, unknown>>(jobsPath);
   const version = typeof existing?.version === 'number' ? existing.version : 1;
   await writeJsonFile(jobsPath, {
@@ -593,7 +680,7 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
       const filtered = requestedAgent ? index.filter((entry) => entry.agentId === requestedAgent) : index;
       const page = filtered.slice(offset, offset + limit);
       const sessions = await Promise.all(page.map(async (entry) => {
-        const messages = await readSessionMessages(entry.storePath, entry.sessionId);
+        const messages = await readSessionMessages(entry);
         const startedAt = messages[0]?.timestamp ?? new Date(entry.updatedAt).toISOString();
         const lastMessageAt = messages[messages.length - 1]?.timestamp ?? new Date(entry.updatedAt).toISOString();
         return {
@@ -620,7 +707,7 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
       if (!entry) {
         throw new Error(`session '${sessionId}' not found`);
       }
-      const messages = await readSessionMessages(entry.storePath, entry.sessionId);
+      const messages = await readSessionMessages(entry);
       const filtered = before
         ? messages.filter((message) => Date.parse(message.timestamp) < before)
         : messages;
@@ -632,7 +719,7 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
     },
 
     cronList: async () => {
-      const jobs = await loadCronJobs(api.runtime);
+      const jobs = await loadCronJobs(api.runtime, api.runtime.config.loadConfig());
       return {
         tasks: jobs.map((job) => ({
           id: typeof job.id === 'string' ? job.id : '',
@@ -653,7 +740,7 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
     cronToggle: async (params) => {
       const id = String(params.id);
       const enabled = Boolean(params.enabled);
-      const jobs = await loadCronJobs(api.runtime);
+      const jobs = await loadCronJobs(api.runtime, api.runtime.config.loadConfig());
       let found = false;
       const next = jobs.map((job) => {
         if (job.id !== id) return job;
@@ -667,13 +754,13 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
       if (!found) {
         throw new Error(`cron job '${id}' not found`);
       }
-      await writeCronJobs(api.runtime, next);
+      await writeCronJobs(api.runtime, api.runtime.config.loadConfig(), next);
       return { id, enabled };
     },
 
     systemStatus: async () => {
       const cfg = api.runtime.config.loadConfig();
-      const jobs = await loadCronJobs(api.runtime);
+      const jobs = await loadCronJobs(api.runtime, api.runtime.config.loadConfig());
       const configuredChannels = Object.keys(getChannels(cfg)).sort();
       const channels: Record<string, string> = {};
       for (const channelId of configuredChannels) {
@@ -848,17 +935,44 @@ function formatPeerSignal(signal: ReceivedPeerSignal): Record<string, unknown> {
   };
 }
 
+function classifyRelayPeerError(error: Error): { code: string; message: string } {
+  const message = error.message || String(error);
+  if (error instanceof RelayGatewayMethodError) {
+    return { code: error.code, message: error.message };
+  }
+  if ('code' in error && typeof (error as { code?: unknown }).code === 'string') {
+    return { code: String((error as { code: string }).code), message };
+  }
+  if (message.includes('no active peer session') || message.includes('peer session is not connected')) {
+    return { code: 'peer_not_connected', message };
+  }
+  if (message.includes('timed out waiting')) {
+    return { code: 'peer_signal_timeout', message };
+  }
+  if (message.includes('Remote gateway went offline') || message.includes('Gateway is offline for this invite alias')) {
+    return { code: 'peer_offline', message };
+  }
+  if (message.includes('Gateway public key mismatch')) {
+    return { code: 'peer_identity_mismatch', message };
+  }
+  if (message.includes('relay gateway not ready')) {
+    return { code: 'relay_not_ready', message };
+  }
+  return { code: 'relay_peer_error', message };
+}
+
 function handleRelayGatewayMethodError(
   respond: (ok: boolean, payload?: unknown, error?: { code: string; message: string }, meta?: Record<string, unknown>) => void,
   error: unknown,
 ): void {
-  if (error instanceof RelayGatewayMethodError) {
-    respond(false, undefined, { code: error.code, message: error.message });
+  if (error instanceof Error) {
+    const classified = classifyRelayPeerError(error);
+    respond(false, undefined, classified);
     return;
   }
   respond(false, undefined, {
     code: 'relay_peer_error',
-    message: error instanceof Error ? error.message : String(error),
+    message: String(error),
   });
 }
 
@@ -882,6 +996,41 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
       }
     });
   };
+
+  register('relay.peer.selfcheck', async (params) => {
+    const accountId = getAccountIdParam(params);
+    const account = resolveRelayAccount(api.runtime.config.loadConfig(), accountId);
+    const service = getRelayPeerService(api, accountId);
+    let status = await bridge.getStatus(accountId) ?? null;
+    if (!status || status.state === 'disconnected') {
+      try {
+        status = await bridge.ensureStarted({ accountId });
+      } catch {
+        status = await bridge.getStatus(accountId) ?? status;
+      }
+    }
+    const connectedPeers = service.listConnectedPeers();
+    const channelRuntime = activeChannelRuntimeByAccount.get(accountId);
+    const runtimeSupport = {
+      chatSend: Boolean(channelRuntime?.reply?.dispatchReplyWithBufferedBlockDispatcher && channelRuntime?.reply?.finalizeInboundContext),
+      sessionsHistory: true,
+      sessionsList: true,
+      systemStatus: true,
+    };
+    return {
+      accountId,
+      account: summarizeAccount(account),
+      gatewayStatus: status,
+      connectedPeers,
+      runtimeSupport,
+      checks: {
+        relayRegistered: status?.state === 'registered',
+        peerDiscoveryEnabled: Boolean(account.peerDiscovery?.enabled),
+        peerAutoAcceptEnabled: account.peerDiscovery?.autoAcceptRequests?.enabled === true,
+        chatRuntimeReady: runtimeSupport.chatSend,
+      },
+    };
+  });
 
   register('relay.peer.status', async (params) => {
     const accountId = getAccountIdParam(params);
@@ -1261,9 +1410,9 @@ export function createRelayAgentBridge(api: OpenClawPluginApi): RelayAgentBridge
     },
 
     dialPeerInvite: async (inviteToken, gatewayPublicKey, options = {}) => {
-      const { clientId, ...startOptions } = options;
+      const { clientId, onClosed, ...startOptions } = options;
       const { record } = await ensureRelayAgentRecord(api, startOptions);
-      return record.adapter.dialPeerInvite(inviteToken, gatewayPublicKey, clientId);
+      return record.adapter.dialPeerInvite(inviteToken, gatewayPublicKey, clientId, onClosed);
     },
 
     drainPeerSignals: (accountId = DEFAULT_ACCOUNT_ID) => {

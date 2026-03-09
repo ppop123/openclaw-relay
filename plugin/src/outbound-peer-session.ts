@@ -42,6 +42,7 @@ export interface RelayPeerSessionOptions {
   webSocketFactory?: WebSocketFactory;
   clientId?: string;
   capabilities?: string[];
+  onClosed?: (error?: Error) => void;
 }
 
 export class RelayPeerSession {
@@ -127,6 +128,7 @@ export class RelayPeerSession {
     this.closed = true;
     this.connected = false;
     this.clearHeartbeat();
+    this.options.onClosed?.();
     this.rejectHandshakeWaiters(new Error('peer session closed'));
     this.rejectPendingRequests(new Error('peer session closed'));
     if (this.ws) {
@@ -451,6 +453,7 @@ export class RelayPeerSession {
     this.connected = false;
     this.cipher = undefined;
     this.clearHeartbeat();
+    this.options.onClosed?.(error);
     this.rejectHandshakeWaiters(error);
     this.rejectPendingRequests(error);
     if (this.ws) {

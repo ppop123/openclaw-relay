@@ -201,6 +201,12 @@ export class RelayPeerAgentService {
     const session = await this.options.bridge.dialPeerInvite(body.invite_token, signal.source, {
       ...asSignalOptions(this.accountId),
       ...options,
+      onClosed: () => {
+        const current = this.activeSessions.get(signal.source);
+        if (current === session) {
+          this.activeSessions.delete(signal.source);
+        }
+      },
     });
     this.activeSessions.set(signal.source, session);
     return session;
