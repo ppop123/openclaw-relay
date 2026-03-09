@@ -196,6 +196,70 @@ describe('RelayPeerAgentService', () => {
     ]);
   });
 
+  it('shares a single dial attempt across concurrent peer requests', async () => {
+    const bridge = createBridge();
+    (bridge.drainPeerSignals as any)
+      .mockReturnValueOnce([
+        signal('peer-key', 'invite_offer', {
+          invite_token: 'invite-token',
+          expires_at: '2026-03-09T00:05:00.000Z',
+          peer_authorized_until: '2026-03-09T00:05:00.000Z',
+        }),
+      ])
+      .mockReturnValue([]);
+    const requestSpy = vi.fn(async () => ({ ok: true, version: 'shared-session' }));
+    (bridge.dialPeerInvite as any).mockResolvedValueOnce({
+      isConnected: true,
+      request: requestSpy,
+      requestStream: vi.fn(async () => ({ done: true })),
+      close: vi.fn(async () => undefined),
+    } as any);
+    const service = createRelayPeerAgentService({ bridge, accountId: 'default' });
+
+    await expect(Promise.all([
+      service.requestPeer('peer-key', 'system.status', {}, { clientId: 'peer-client-concurrent' }),
+      service.requestPeer('peer-key', 'system.status', {}, { clientId: 'peer-client-concurrent' }),
+    ])).resolves.toEqual([
+      { ok: true, version: 'shared-session' },
+      { ok: true, version: 'shared-session' },
+    ]);
+
+    expect(bridge.sendPeerSignal).toHaveBeenCalledTimes(1);
+    expect(bridge.dialPeerInvite).toHaveBeenCalledTimes(1);
+    expect(requestSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not redial a stream after chunks were already delivered', async () => {
+    const bridge = createBridge();
+    const session = {
+      isConnected: true,
+      request: vi.fn(async () => ({ ok: true })),
+      requestStream: vi.fn(async (_method, _params, onChunk) => {
+        await onChunk({ delta: 'partial' });
+        throw new Error('peer relay websocket closed');
+      }),
+      close: vi.fn(async () => undefined),
+    } as any;
+    (bridge.dialPeerInvite as any).mockResolvedValueOnce(session);
+    const service = createRelayPeerAgentService({ bridge, accountId: 'default' });
+    const offerSignal = signal('peer-key', 'invite_offer', {
+      invite_token: 'invite-token',
+      expires_at: '2026-03-09T00:05:00.000Z',
+      peer_authorized_until: '2026-03-09T00:05:00.000Z',
+    });
+
+    await service.connectFromInviteOffer(offerSignal, { clientId: 'peer-client-stream' });
+    const chunks: Array<Record<string, unknown>> = [];
+
+    await expect(service.requestPeerStream('peer-key', 'chat.send', { stream: true }, (chunk) => {
+      chunks.push(chunk);
+    })).rejects.toThrow('peer relay websocket closed');
+
+    expect(chunks).toEqual([{ delta: 'partial' }]);
+    expect(bridge.sendPeerSignal).not.toHaveBeenCalled();
+    expect(bridge.dialPeerInvite).toHaveBeenCalledTimes(1);
+  });
+
   it('removes a connected peer immediately when the session closes later', async () => {
     const bridge = createBridge();
     let onClosed: ((error?: Error) => void) | undefined;

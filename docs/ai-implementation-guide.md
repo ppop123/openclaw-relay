@@ -22,6 +22,33 @@ This document states the facts an AI needs to correctly understand, implement ag
 
 When a Markdown document and a JSON source disagree, the JSON source is authoritative.
 
+## Mandatory OpenClaw Source-First Rule
+
+When changing any code that depends on **OpenClaw runtime behavior**, do **not** guess from prose docs alone.
+
+This is mandatory for work involving any of the following:
+
+- gateway method shapes and request / response payloads
+- plugin SDK behavior and runtime hooks
+- session storage, transcript files, cron store, or agent routing
+- local gateway process lifecycle, readiness, or restart behavior
+- any `plugin/` implementation that adapts to OpenClaw internals
+
+Required workflow:
+
+1. Read the relevant local OpenClaw source first.
+2. Use OpenClaw docs only as secondary guidance.
+3. If OpenClaw docs and source disagree, treat the source as authoritative for implementation behavior.
+4. If this repository's code or docs disagree with observed OpenClaw source behavior, update this repository to match the verified source behavior or explicitly document the compatibility boundary.
+
+On this machine, one validated local OpenClaw source root is:
+
+- `/opt/homebrew/lib/node_modules/openclaw/dist`
+
+Do not hardcode that path into automation or docs for other machines. Verify the actual local install root first (for example by inspecting the installed `openclaw` package location or using the machine's package-manager metadata), then inspect that local source tree.
+
+Do not implement OpenClaw-facing behavior from memory or assumption when the local source is available.
+
 ## Officially Supported Components
 
 These are implemented, tested in CI, and covered by stability guarantees:
@@ -129,8 +156,9 @@ There is no gateway SDK. Implementing a gateway requires directly handling the L
 
 ## Common Mistakes to Avoid
 
-1. Do not claim forward secrecy — v1 does not have it.
-2. Do not persist `channelToken` on the client — it is a bearer secret.
-3. Do not use `--allow-origin` with full URLs — it takes host patterns only.
-4. Do not fall back to plaintext after session key is established — this breaks E2E integrity.
-5. Do not treat `docs/technical-design.md` code examples for the JS SDK as real — `sdk/js/` is still not implemented.
+1. Do not guess OpenClaw-facing behavior from this repo's docs alone — inspect the local OpenClaw source first.
+2. Do not claim forward secrecy — v1 does not have it.
+3. Do not persist `channelToken` on the client — it is a bearer secret.
+4. Do not use `--allow-origin` with full URLs — it takes host patterns only.
+5. Do not fall back to plaintext after session key is established — this breaks E2E integrity.
+6. Do not treat `docs/technical-design.md` code examples for the JS SDK as real — `sdk/js/` is still not implemented.

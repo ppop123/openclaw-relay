@@ -991,6 +991,26 @@ function handleRelayGatewayMethodError(
   });
 }
 
+function normalizeGatewayClientString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  return normalized || undefined;
+}
+
+function isAgentOnlyGatewayCaller(params: {
+  client: Record<string, unknown> | null;
+  isWebchatConnect: (params: Record<string, unknown> | null | undefined) => boolean;
+}): boolean {
+  if (!params.client) return true;
+  const connect = isObject(params.client.connect) ? params.client.connect : undefined;
+  if (!connect) return false;
+  if (params.isWebchatConnect(connect)) return false;
+  const clientInfo = isObject(connect.client) ? connect.client : {};
+  const clientMode = normalizeGatewayClientString(clientInfo.mode);
+  const clientId = normalizeGatewayClientString(clientInfo.id);
+  return clientMode === 'cli' || (clientMode === 'backend' && clientId === 'gateway-client');
+}
+
 function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
   if (typeof api.registerGatewayMethod !== 'function') {
     api.logger.warn('[relay] local gateway peer methods unavailable: OpenClaw runtime does not expose registerGatewayMethod');
@@ -1002,8 +1022,15 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
     method: string,
     handler: (params: Record<string, unknown>) => Promise<Record<string, unknown>>,
   ) => {
-    api.registerGatewayMethod(method, async ({ params, respond }) => {
+    api.registerGatewayMethod(method, async ({ params, respond, client, isWebchatConnect }) => {
       try {
+        if (!isAgentOnlyGatewayCaller({ client, isWebchatConnect })) {
+          respond(false, undefined, {
+            code: 'forbidden',
+            message: `${method} is only available to local operator and agent runtimes`,
+          });
+          return;
+        }
         const payload = await handler(params ?? {});
         respond(true, payload);
       } catch (error) {
@@ -1026,11 +1053,12 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
     }
     const connectedPeers = service.listConnectedPeers();
     const channelRuntime = activeChannelRuntimeByAccount.get(accountId);
+    const runtimeAdapter = createRuntimeAdapter(api, () => ({}));
     const runtimeSupport = {
       chatSend: Boolean(channelRuntime?.reply?.dispatchReplyWithBufferedBlockDispatcher && channelRuntime?.reply?.finalizeInboundContext),
-      sessionsHistory: true,
-      sessionsList: true,
-      systemStatus: true,
+      sessionsHistory: typeof runtimeAdapter.sessionsHistory === 'function',
+      sessionsList: typeof runtimeAdapter.sessionsList === 'function',
+      systemStatus: typeof runtimeAdapter.systemStatus === 'function',
     };
     return {
       accountId,
@@ -1120,7 +1148,8 @@ function registerRelayGatewayMethods(api: OpenClawPluginApi): void {
     return {
       accountId,
       targetPublicKey,
-      requested: true,
+      signalQueued: true,
+      delivery: 'relay_queued',
       body,
     };
   });
@@ -1240,9 +1269,11 @@ async function maybeAutoAcceptPeerSignals(params: {
   const service = getRelayPeerService(params.api, params.accountId);
   const signals = service.drainSignals();
   if (signals.length > 0) {
+    const deferred: ReceivedPeerSignal[] = [];
     for (const signal of signals) {
       if (!isInviteRequestSignal(signal)) {
         params.log?.debug?.(`[relay:${params.accountId}] leaving non-request peer signal unhandled (${signal.envelope.kind})`);
+        deferred.push(signal);
         continue;
       }
       try {
@@ -1255,6 +1286,7 @@ async function maybeAutoAcceptPeerSignals(params: {
         params.log?.warn(`[relay:${params.accountId}] auto-accept failed for ${signal.source}: ${String(error)}`);
       }
     }
+    service.restoreSignals(deferred);
   }
   const signalErrors = service.drainSignalErrors();
   if (signalErrors.length > 0) {

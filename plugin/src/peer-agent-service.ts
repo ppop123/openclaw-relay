@@ -7,6 +7,7 @@ const INVITE_OFFER_KIND = 'invite_offer';
 const INVITE_REJECT_KIND = 'invite_reject';
 const DEFAULT_SIGNAL_WAIT_TIMEOUT_MS = 15000;
 const DEFAULT_SIGNAL_POLL_INTERVAL_MS = 250;
+const REDIAL_BACKOFF_MS = 1000;
 
 export interface RelayPeerAgentServiceOptions {
   bridge: RelayAgentBridge;
@@ -57,6 +58,7 @@ export interface RelayPeerSessionStatus {
 
 interface RelayPeerRecord {
   session: RelayPeerSession | undefined;
+  dialPromise: Promise<RelayPeerDialResult> | undefined;
   lastClientId: string | undefined;
   lastDialStartedAt: string | undefined;
   lastConnectedAt: string | undefined;
@@ -183,7 +185,7 @@ export class RelayPeerAgentService {
   private getOrCreatePeerRecord(peerPublicKey: string): RelayPeerRecord {
     const existing = this.peerRecords.get(peerPublicKey);
     if (existing) return existing;
-    const created: RelayPeerRecord = { session: undefined, lastClientId: undefined, lastDialStartedAt: undefined, lastConnectedAt: undefined, lastDisconnectedAt: undefined, lastError: undefined, offer: undefined };
+    const created: RelayPeerRecord = { session: undefined, dialPromise: undefined, lastClientId: undefined, lastDialStartedAt: undefined, lastConnectedAt: undefined, lastDisconnectedAt: undefined, lastError: undefined, offer: undefined };
     this.peerRecords.set(peerPublicKey, created);
     return created;
   }
@@ -231,6 +233,10 @@ export class RelayPeerAgentService {
   private deferSignals(signals: ReceivedPeerSignal[]): void {
     if (signals.length === 0) return;
     this.deferredSignals.push(...signals);
+  }
+
+  restoreSignals(signals: ReceivedPeerSignal[]): void {
+    this.deferSignals(signals);
   }
 
   private async waitForPeerSignal(
@@ -315,39 +321,57 @@ export class RelayPeerAgentService {
     return redialed;
   }
 
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   async requestPeerConnection(peerPublicKey: string, options: RelayPeerDialOptions = {}): Promise<RelayPeerDialResult> {
     if (this.getUsableSession(peerPublicKey)) {
       return {
         peerPublicKey,
-        connected: true,
+        connected: true as const,
         reusedSession: true,
       };
     }
-    this.markPeerDialStarted(peerPublicKey, options.clientId);
-    await this.ensureStarted();
-    await this.requestPeerInvite(peerPublicKey, options.body ?? {});
-    const signal = await this.waitForPeerSignal(
-      peerPublicKey,
-      (candidate) => isInviteOfferSignal(candidate) || isInviteRejectSignal(candidate),
-      options,
-    );
-    if (isInviteRejectSignal(signal)) {
-      const rejected = RelayPeerAgentService.parseInviteReject(signal);
-      const error = new Error(rejected.reason ? `peer rejected invite request: ${rejected.reason}` : 'peer rejected invite request');
-      this.markPeerDisconnected(peerPublicKey, error);
-      throw error;
+    const record = this.getOrCreatePeerRecord(peerPublicKey);
+    if (record.dialPromise) {
+      return record.dialPromise;
     }
-    const offer = RelayPeerAgentService.parseInviteOffer(signal);
-    await this.connectFromInviteOffer(signal, {
-      ...asSignalOptions(this.accountId),
-      ...(options.clientId ? { clientId: options.clientId } : {}),
-    });
-    return {
-      peerPublicKey,
-      connected: true,
-      reusedSession: false,
-      offer,
-    };
+    const dialPromise: Promise<RelayPeerDialResult> = (async (): Promise<RelayPeerDialResult> => {
+      this.markPeerDialStarted(peerPublicKey, options.clientId);
+      await this.ensureStarted();
+      await this.requestPeerInvite(peerPublicKey, options.body ?? {});
+      const signal = await this.waitForPeerSignal(
+        peerPublicKey,
+        (candidate) => isInviteOfferSignal(candidate) || isInviteRejectSignal(candidate),
+        options,
+      );
+      if (isInviteRejectSignal(signal)) {
+        const rejected = RelayPeerAgentService.parseInviteReject(signal);
+        const error = new Error(rejected.reason ? `peer rejected invite request: ${rejected.reason}` : 'peer rejected invite request');
+        this.markPeerDisconnected(peerPublicKey, error);
+        throw error;
+      }
+      const offer = RelayPeerAgentService.parseInviteOffer(signal);
+      await this.connectFromInviteOffer(signal, {
+        ...asSignalOptions(this.accountId),
+        ...(options.clientId ? { clientId: options.clientId } : {}),
+      });
+      return {
+        peerPublicKey,
+        connected: true as const,
+        reusedSession: false,
+        offer,
+      };
+    })();
+    record.dialPromise = dialPromise;
+    try {
+      return await dialPromise;
+    } finally {
+      if (record.dialPromise === dialPromise) {
+        record.dialPromise = undefined;
+      }
+    }
   }
 
   getPeerSession(peerPublicKey: string): RelayPeerSession | undefined {
@@ -408,6 +432,7 @@ export class RelayPeerAgentService {
         throw error;
       }
       await this.closePeerSession(peerPublicKey).catch(() => undefined);
+      await this.delay(REDIAL_BACKOFF_MS);
       session = await this.ensurePeerSession(peerPublicKey, options);
       return session.request(method, params, options.requestTimeoutMs);
     }
@@ -420,17 +445,23 @@ export class RelayPeerAgentService {
     onChunk: (chunk: Record<string, unknown>) => Promise<void> | void,
     options: RelayPeerRequestOptions = {},
   ): Promise<Record<string, unknown>> {
+    let deliveredChunks = 0;
+    const observedOnChunk = async (chunk: Record<string, unknown>) => {
+      deliveredChunks += 1;
+      await onChunk(chunk);
+    };
     let session = await this.ensurePeerSession(peerPublicKey, options);
     try {
-      return await session.requestStream(peerPublicKey ? method : method, params, onChunk, options.requestTimeoutMs);
+      return await session.requestStream(method, params, observedOnChunk, options.requestTimeoutMs);
     } catch (error) {
-      if (!shouldRetryWithRedial(error) || options.autoDial === false) {
+      if (deliveredChunks > 0 || !shouldRetryWithRedial(error) || options.autoDial === false) {
         this.markPeerDisconnected(peerPublicKey, error instanceof Error ? error : new Error(String(error)));
         throw error;
       }
       await this.closePeerSession(peerPublicKey).catch(() => undefined);
+      await this.delay(REDIAL_BACKOFF_MS);
       session = await this.ensurePeerSession(peerPublicKey, options);
-      return session.requestStream(method, params, onChunk, options.requestTimeoutMs);
+      return session.requestStream(method, params, observedOnChunk, options.requestTimeoutMs);
     }
   }
 

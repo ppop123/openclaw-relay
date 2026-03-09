@@ -88,6 +88,10 @@ async function callGatewayMethod(
   api: ReturnType<typeof buildApi>,
   method: string,
   params: Record<string, unknown> = {},
+  options: {
+    client?: Record<string, unknown> | null;
+    isWebchatConnect?: (params: Record<string, unknown> | null | undefined) => boolean;
+  } = {},
 ): Promise<{ ok: boolean; payload?: unknown; error?: { code: string; message: string }; meta?: Record<string, unknown> }> {
   const handler = api.registeredGatewayMethods.get(method);
   if (!handler) {
@@ -98,8 +102,14 @@ async function callGatewayMethod(
     Promise.resolve(handler({
       req: { id: 'req-1', type: 'request', method, params },
       params,
-      client: { kind: 'local' },
-      isWebchatConnect: () => false,
+      client: options.client ?? {
+        connect: {
+          client: { id: 'cli', mode: 'cli', version: 'test', platform: 'node' },
+          role: 'operator',
+          scopes: ['operator.admin'],
+        },
+      },
+      isWebchatConnect: options.isWebchatConnect ?? (() => false),
       respond: (ok, payload, error, meta) => {
         responded = true;
         resolve({ ok, payload, error, meta });
@@ -339,6 +349,126 @@ describe('openclaw host bridge', () => {
       authorizePeerSpy.mockRestore();
       createInviteSpy.mockRestore();
       dialPeerSpy.mockRestore();
+      drainSignalsSpy.mockRestore();
+      drainSignalErrorsSpy.mockRestore();
+    }
+  });
+
+  it('rejects relay.peer methods from webchat clients', async () => {
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey: 'pub',
+              },
+              approvedClients: {},
+              peerDiscovery: { enabled: true },
+            },
+          },
+        },
+      },
+    };
+
+    const api = buildApi(config);
+    const preview = createRelayChannelDefinition();
+    createOpenClawRelayPlugin(api, preview);
+
+    const result = await callGatewayMethod(api, 'relay.peer.selfcheck', {}, {
+      client: {
+        connect: {
+          client: { id: 'webchat', mode: 'webchat', version: 'test', platform: 'browser' },
+          role: 'operator',
+          scopes: ['operator.admin'],
+        },
+      },
+      isWebchatConnect: () => true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatchObject({ code: 'forbidden' });
+  });
+
+  it('preserves non-request signals while auto-accept is enabled', async () => {
+    const config: OpenClawConfig = {
+      channels: {
+        relay: {
+          accounts: {
+            default: {
+              enabled: true,
+              server: 'ws://relay.example/ws',
+              channelToken: 'token-123',
+              gatewayKeyPair: {
+                privateKey: 'priv',
+                publicKey: 'pub',
+              },
+              approvedClients: {},
+              peerDiscovery: {
+                enabled: true,
+                autoAcceptRequests: { enabled: true, ttlSeconds: 60, maxUses: 1 },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const offerSignal = {
+      source: 'peer-key',
+      envelope: {
+        version: 1 as const,
+        kind: 'invite_offer',
+        body: {
+          invite_token: 'invite-token',
+          expires_at: '2026-03-09T00:05:00.000Z',
+          peer_authorized_until: '2026-03-09T00:05:00.000Z',
+        },
+      },
+      receivedAt: '2026-03-09T00:01:00.000Z',
+      raw: { type: 'signal' as const, source: 'peer-key', ephemeral_key: 'ephemeral', payload: 'payload-2' },
+    };
+
+    const startSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'start').mockResolvedValue(undefined);
+    const stopSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'stop').mockResolvedValue(undefined);
+    const statusSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'getStatus').mockResolvedValue({
+      state: 'registered',
+      health: 'healthy',
+      approvedClients: 0,
+      activeSessions: 0,
+      peerDiscovery: { enabled: true, publicKey: 'pub', pendingSignals: 1, pendingSignalErrors: 0 },
+    });
+    const drainSignalsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignals')
+      .mockReturnValueOnce([offerSignal] as any)
+      .mockReturnValue([] as any);
+    const drainSignalErrorsSpy = vi.spyOn(RelayGatewayAdapter.prototype, 'drainPeerSignalErrors').mockReturnValue([] as any);
+
+    const api = buildApi(config);
+    const preview = createRelayChannelDefinition();
+    createOpenClawRelayPlugin(api, preview);
+    const bridge = createRelayAgentBridge(api);
+
+    try {
+      await bridge.ensureStarted();
+      const pollResult = await callGatewayMethod(api, 'relay.peer.poll');
+      expect(pollResult.ok).toBe(true);
+      expect(pollResult.payload).toMatchObject({
+        signals: [
+          {
+            source: 'peer-key',
+            kind: 'invite_offer',
+          },
+        ],
+      });
+    } finally {
+      await bridge.stopAccount();
+      startSpy.mockRestore();
+      stopSpy.mockRestore();
+      statusSpy.mockRestore();
       drainSignalsSpy.mockRestore();
       drainSignalErrorsSpy.mockRestore();
     }

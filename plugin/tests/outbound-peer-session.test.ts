@@ -16,6 +16,7 @@ class MockPeerWebSocket implements WebSocketLike {
     private readonly expectedInviteHash: string,
     private readonly helloAckPublicKey: string = gatewayIdentity.serialized.publicKey,
     private readonly respondToPing = true,
+    private readonly sendTrailingResponse = true,
   ) {
     queueMicrotask(() => this.emit('open', {}));
   }
@@ -111,13 +112,16 @@ class MockPeerWebSocket implements WebSocketLike {
     }
 
     if (message.method === 'chat.send') {
-      for (const inner of [
+      const frames: Record<string, unknown>[] = [
         { id: message.id, type: 'stream_start', method: 'chat.send' },
         { id: message.id, type: 'stream_chunk', seq: 1, data: { delta: 'hello ' } },
         { id: message.id, type: 'stream_chunk', seq: 2, data: { delta: 'world' } },
         { id: message.id, type: 'stream_end', seq: 3 },
-        { id: message.id, type: 'response', result: { session_id: 'peer-session', agent: 'remote-agent' } },
-      ]) {
+      ];
+      if (this.sendTrailingResponse) {
+        frames.push({ id: message.id, type: 'response', result: { session_id: 'peer-session', agent: 'remote-agent' } });
+      }
+      for (const inner of frames) {
         const payload = await this.serverCipher.encryptJson(inner as Record<string, unknown>);
         this.emit('message', { data: JSON.stringify({ type: 'data', from: 'gateway', to: frame.to, payload }) });
       }
@@ -169,6 +173,34 @@ describe('RelayPeerSession', () => {
     await session.close();
     expect(socket?.sentFrames[0]).toMatchObject({ type: 'join', client_id: 'peer-client-1' });
     expect(socket?.joinedChannels).toEqual([inviteHash]);
+  });
+
+  it('resolves a streaming request on stream_end when no trailing response arrives', async () => {
+    const localIdentity = await generateGatewayIdentity();
+    const remoteIdentity = await generateGatewayIdentity();
+    const inviteToken = 'peer-invite-token-no-response';
+    const inviteHash = await sha256Hex(inviteToken);
+
+    const session = new RelayPeerSession({
+      relayUrl: 'ws://relay.example.test/ws',
+      inviteToken,
+      gatewayPublicKey: remoteIdentity.serialized.publicKey,
+      identity: localIdentity,
+      webSocketFactory: () => new MockPeerWebSocket(remoteIdentity, inviteHash, remoteIdentity.serialized.publicKey, true, false),
+    });
+
+    await session.connect();
+    const chunks: Array<Record<string, unknown>> = [];
+    const resultPromise = session.requestStream('chat.send', { message: 'hi', stream: true }, (chunk) => {
+      chunks.push(chunk);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    await expect(resultPromise).resolves.toEqual({});
+    expect(chunks).toEqual([{ delta: 'hello ' }, { delta: 'world' }]);
+
+    await session.close();
   });
 
   it('rejects invite dial when hello_ack gateway key mismatches the expected peer key', async () => {

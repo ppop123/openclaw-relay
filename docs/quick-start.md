@@ -51,9 +51,16 @@ Enable relay access for your local OpenClaw gateway:
 
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws
-openclaw relay pair --wait 30
 openclaw relay status
 ```
+
+When you are ready to connect from the browser, start pairing in one terminal:
+
+```bash
+openclaw relay pair --wait 30
+```
+
+`openclaw relay pair --wait 30` prints the pairing details immediately and then keeps the pairing window open for 30 seconds. While that command is waiting, open the browser client and use the printed relay URL, channel token, and gateway public key.
 
 Useful day-2 commands:
 

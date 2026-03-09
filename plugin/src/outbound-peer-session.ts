@@ -22,6 +22,7 @@ const WS_OPEN = 1;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const DEFAULT_STREAM_TIMEOUT_MS = 300_000;
+const STREAM_END_RESPONSE_GRACE_MS = 250;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
 const GATEWAY_PEER_ID = 'gateway';
@@ -32,6 +33,7 @@ interface PendingRequest {
   timeout: ReturnType<typeof setTimeout>;
   streaming?: boolean;
   onChunk?: (chunk: Record<string, unknown>) => Promise<void> | void;
+  streamEndTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface RelayPeerSessionOptions {
@@ -368,6 +370,9 @@ export class RelayPeerSession {
         const pending = this.pendingRequests.get(id);
         if (!pending) return;
         clearTimeout(pending.timeout);
+        if (pending.streamEndTimer) {
+          clearTimeout(pending.streamEndTimer);
+        }
         this.pendingRequests.delete(id);
         const response = message as ResponseMessage;
         if (response.error) {
@@ -386,8 +391,18 @@ export class RelayPeerSession {
         }
         return;
       }
-      case 'stream_end':
+      case 'stream_end': {
+        const pending = this.pendingRequests.get(id);
+        if (!pending?.streaming) return;
+        if (pending.streamEndTimer) return;
+        pending.streamEndTimer = setTimeout(() => {
+          if (this.pendingRequests.get(id) !== pending) return;
+          clearTimeout(pending.timeout);
+          this.pendingRequests.delete(id);
+          pending.resolve({});
+        }, STREAM_END_RESPONSE_GRACE_MS);
         return;
+      }
       case 'notify':
         return;
       default:
@@ -444,6 +459,9 @@ export class RelayPeerSession {
   private rejectPendingRequests(error: Error): void {
     for (const pending of this.pendingRequests.values()) {
       clearTimeout(pending.timeout);
+      if (pending.streamEndTimer) {
+        clearTimeout(pending.streamEndTimer);
+      }
       pending.reject(error);
     }
     this.pendingRequests.clear();

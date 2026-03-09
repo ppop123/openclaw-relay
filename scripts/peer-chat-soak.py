@@ -55,7 +55,7 @@ def call_peer(runtime: PeerRuntime, peer_public_key: str, method: str, params: d
         'autoDial': True,
         'clientId': f'{runtime.label}-peer-soak',
         'body': {'purpose': 'peer-chat-soak'},
-        'timeoutMs': min(args.timeout_ms, 20000),
+        'timeoutMs': args.timeout_ms,
         'requestTimeoutMs': args.timeout_ms,
     })
 
@@ -133,7 +133,7 @@ parser = argparse.ArgumentParser(description='Run a bidirectional peer-chat soak
 parser.add_argument('--minutes', type=float, default=15.0, help='How long to run the conversation.')
 parser.add_argument('--topic', default='', help='Run an autonomous topic conversation instead of a soak-only exchange.')
 parser.add_argument('--turn-limit', type=int, default=0, help='Optional max turns before stopping.')
-parser.add_argument('--remote', default='wangyan@192.168.50.8', help='SSH target for the second OpenClaw host.')
+parser.add_argument('--remote', required=True, help='SSH target for the second OpenClaw host.')
 parser.add_argument('--remote-profile', default='relaypeer', help='OpenClaw profile on the remote host.')
 parser.add_argument('--timeout-ms', type=int, default=45000, help='Gateway call timeout in ms.')
 parser.add_argument('--retries', type=int, default=2, help='Retries for a timed-out chat turn.')
@@ -159,12 +159,6 @@ remote = PeerRuntime(
     public_key=remote_selfcheck['account']['publicKey'],
     call_cmd_prefix=[],
 )
-
-# establish both directions
-local_dial = dial(local, remote.public_key, 'local-peer-soak')
-remote_dial = dial(remote, local.public_key, 'remote-peer-soak')
-write_json(RUN_ROOT / 'local-dial.json', local_dial)
-write_json(RUN_ROOT / 'remote-dial.json', remote_dial)
 
 status_sample = {
     'local_to_remote': send_status(local, remote.public_key),
@@ -204,13 +198,16 @@ while time.time() < end_time:
     last_remote = remote_text
     append_jsonl(transcript_path, {'turn': turn, 'speaker': 'remote', 'latencySeconds': round(elapsed, 3), 'content': remote_text, 'sessionId': remote_session_id, 'ts': datetime.now().isoformat()})
 
+with transcript_path.open('r', encoding='utf-8') as handle:
+    transcript_entries = [json.loads(line) for line in handle if line.strip()]
+
 final = {
     'durationMinutes': args.minutes,
     'topic': args.topic or None,
     'turnLimit': args.turn_limit or None,
     'turnCount': turn,
-    'localTurns': sum(1 for _ in open(transcript_path, 'r', encoding='utf-8') if '"speaker": "local"' in _),
-    'remoteTurns': sum(1 for _ in open(transcript_path, 'r', encoding='utf-8') if '"speaker": "remote"' in _),
+    'localTurns': sum(1 for entry in transcript_entries if entry.get('speaker') == 'local'),
+    'remoteTurns': sum(1 for entry in transcript_entries if entry.get('speaker') == 'remote'),
     'avgLatencySeconds': round(sum(latencies) / len(latencies), 3) if latencies else None,
     'maxLatencySeconds': round(max(latencies), 3) if latencies else None,
     'localSessionId': local_session_id,

@@ -65,6 +65,8 @@ When Markdown and machine-readable files disagree, the machine-readable files wi
 
 Recommended order for most engineers:
 
+Before changing anything that depends on OpenClaw runtime behavior, inspect the local OpenClaw source first. On this machine one validated install root is `/opt/homebrew/lib/node_modules/openclaw/dist`, but on other machines you must verify the real local install path before reading the source. Do not rely on prose docs alone for request shapes, session storage, transcript layout, or gateway/runtime semantics.
+
 1. `README.md`
 2. `docs/architecture-overview.md`
 3. `docs/security.md`
