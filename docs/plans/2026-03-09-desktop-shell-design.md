@@ -5,23 +5,29 @@ Scope: `desktop/` (new directory), Tauri v2
 
 ## Product Boundary
 
-`desktop/` is the **official optional desktop shell** for OpenClaw Relay. It is not a new client, not a new protocol implementation, and not a fork of the web client.
+`desktop/` is the **official桌面客户端** for OpenClaw Relay。它不是新协议实现，也不是 web client 的 fork。
 
-It wraps the existing `client/` web client in a native window using Tauri v2's system WebView, providing:
-- A native window (no browser chrome)
-- System tray integration (hide to tray, show/quit)
-- A "Check for updates" menu item (opens GitHub Releases page)
+它把 `client/` 下的 web client 封装在原生窗口中（通过 Tauri v2 的系统 WebView），面向**没有技术背景的普通用户**，提供：
 
-The web client code in `client/` is **shared** — the desktop shell loads it directly via Tauri's asset protocol. No modifications to `client/` are needed or allowed for desktop shell functionality.
+- 原生窗口（无浏览器地址栏和标签页）
+- 系统托盘（关闭窗口 → 最小化到托盘，不退出）
+- 托盘连接状态指示（已连接 / 已断开）
+- 窗口隐藏时收到消息弹出系统通知
+- 启动时自动检查更新，有新版本时弹窗提示下载
+- 双平台安装包：macOS dmg + Windows NSIS 安装程序
+
+`client/` 代码**共享**——桌面壳通过 Tauri asset protocol 直接加载。`client/` 只需增加几行 Tauri 感知代码（检测 `window.__TAURI__`，存在时调用原生通知和状态同步，不存在时无副作用，浏览器行为不受影响）。
 
 ## Architecture
 
 ```
 openclaw-relay/
-├── client/              ← shared web client (unchanged)
+├── client/              ← shared web client
 │   ├── index.html
 │   └── js/
-├── desktop/             ← new: Tauri v2 desktop shell
+│       ├── app.js       ← +几行 Tauri bridge（渐进增强，浏览器无影响）
+│       └── ...
+├── desktop/             ← Tauri v2 desktop shell
 │   ├── src-tauri/
 │   │   ├── Cargo.toml
 │   │   ├── tauri.conf.json
@@ -34,21 +40,32 @@ openclaw-relay/
 │   └── README.md
 ```
 
-### How It Works
+## User Experience（面向非技术用户）
 
-Tauri v2 loads `client/index.html` via the asset protocol (`tauri://localhost/`). The web client runs identically to the browser — same JS modules, same crypto, same transport. The Tauri shell adds:
+### 安装
 
-1. **Native window**: No URL bar, no browser tabs. Just the app.
-2. **System tray**: Window close hides to tray instead of quitting. Right-click menu: Show / Check for updates / Quit.
-3. **Manual update check**: "Check for updates" opens `https://github.com/nicepkg/openclaw-relay/releases` in the default browser via the Tauri opener plugin.
+- **macOS**: 下载 `.dmg`，拖入 Applications，完成
+- **Windows**: 下载 `.exe` 安装程序，双击安装。如果系统没有 WebView2（Win10 早期版本），安装程序会自动下载安装
 
-### What the Shell Does NOT Do
+### 首次启动
 
-- Does not modify `client/` code
-- Does not implement any relay protocol logic
-- Does not manage connections, crypto, or identity (the web client handles all of that)
-- Does not have automatic update checking or background polling
-- Does not show OS notifications (deferred to v1.1)
+打开应用 → 看到连接界面（和浏览器版完全一样）→ 输入 Relay 地址和配对信息 → 连接 → 开始聊天
+
+### 日常使用
+
+| 操作 | 行为 |
+|------|------|
+| 关闭窗口（×） | 窗口隐藏，应用缩到系统托盘 |
+| 点击托盘图标 | 显示窗口 |
+| 右键托盘 | 菜单：显示 / 检查更新 / 退出 |
+| 收到消息（窗口隐藏时） | 弹出系统通知，点击通知打开窗口 |
+| 托盘图标 | 已连接 = 彩色图标，已断开 = 灰色图标 |
+| 启动时 | 自动检查 GitHub Releases 是否有新版本 |
+| 有新版本 | 弹出对话框："发现新版本 vX.Y.Z，是否前往下载？" → 点击打开下载页 |
+
+### 退出
+
+右键托盘 → 退出。这是唯一的退出方式。关闭窗口只是隐藏。
 
 ## Tauri Configuration
 
@@ -56,7 +73,7 @@ Tauri v2 loads `client/index.html` via the asset protocol (`tauri://localhost/`)
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/nicepkg/tauri-apps/tauri-v2/crates/tauri-cli/schema.json",
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2/crates/tauri-cli/schema.json",
   "productName": "OpenClaw Relay",
   "version": "0.5.0",
   "identifier": "com.openclaw.relay",
@@ -77,7 +94,7 @@ Tauri v2 loads `client/index.html` via the asset protocol (`tauri://localhost/`)
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src wss: ws:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src wss: ws: https://api.github.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",
@@ -102,20 +119,22 @@ Tauri v2 loads `client/index.html` via the asset protocol (`tauri://localhost/`)
     }
   },
   "plugins": {
-    "opener": {}
+    "opener": {},
+    "notification": {
+      "permissionState": "granted"
+    }
   }
 }
 ```
 
-Key points:
-- **`withGlobalTauri: true`**: Exposes `window.__TAURI__` so the vanilla JS client can access Tauri APIs without a bundler.
-- **`frontendDist: "../../client"`**: Points to the shared web client directory.
-- **`webviewInstallMode`**: On Windows, if WebView2 is not installed, the NSIS installer downloads and installs it. `silent: false` so the user sees progress.
-- **`trayIcon.iconPath`**: Relative to `src-tauri/`, pointing to `icons/icon.png` which must exist.
+关键配置说明：
+- **`withGlobalTauri: true`**: 让 `window.__TAURI__` 在 vanilla JS 中可用，无需打包工具
+- **`frontendDist: "../../client"`**: 指向共享的 web client 目录
+- **`webviewInstallMode: downloadBootstrapper`**: Windows 上 WebView2 缺失时自动下载安装
+- **CSP 增加 `https://api.github.com`**: 允许检查更新 API 调用
+- **`notification.permissionState: granted`**: 桌面应用默认允许通知，无需用户手动授权
 
 ### `desktop/src-tauri/capabilities/default.json`
-
-Tauri v2 uses a capability-based permission system. Plugins must be explicitly allowed:
 
 ```json
 {
@@ -125,59 +144,69 @@ Tauri v2 uses a capability-based permission system. Plugins must be explicitly a
   "permissions": [
     "core:default",
     "opener:default",
-    "tray:default"
+    "notification:default",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+    "notification:allow-notify"
   ]
 }
 ```
 
-Only three capabilities needed for v1:
-- `core:default`: Window management
-- `opener:default`: Opening URLs in default browser (for "Check for updates")
-- `tray:default`: System tray icon and menu
+四类能力：
+- `core:default`: 窗口管理
+- `opener:default`: 打开浏览器链接（检查更新跳转下载页）
+- `notification:*`: 系统通知（收到消息时）
 
 ## Rust Backend (`lib.rs`)
 
-Minimal — just tray setup and window lifecycle:
-
 ```rust
 use tauri::{
-    Manager,
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager,
+    image::Image,
     menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
+
+const RELEASES_URL: &str = "https://github.com/nicepkg/openclaw-relay/releases";
+const RELEASES_API: &str =
+    "https://api.github.com/repos/nicepkg/openclaw-relay/releases/latest";
+
+#[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![get_app_version])
         .setup(|app| {
-            // Build tray menu
-            let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-            let check = MenuItem::with_id(app, "check_update", "Check for updates", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &check, &quit])?;
+            // --- Tray menu ---
+            let show_i = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
+            let update_i =
+                MenuItem::with_id(app, "check_update", "检查更新", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_i, &update_i, &quit_i])?;
 
-            // Build tray icon
-            TrayIconBuilder::new()
+            // --- Tray icon ---
+            let tray = TrayIconBuilder::new()
                 .menu(&menu)
                 .icon(app.default_window_icon().unwrap().clone())
-                .on_menu_event(move |app, event| {
-                    match event.id.as_ref() {
-                        "show" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                .tooltip("OpenClaw Relay")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
-                        "check_update" => {
-                            let _ = tauri_plugin_opener::open_url(
-                                "https://github.com/nicepkg/openclaw-relay/releases",
-                                None::<&str>,
-                            );
-                        }
-                        "quit" => app.exit(0),
-                        _ => {}
                     }
+                    "check_update" => {
+                        let _ = tauri_plugin_opener::open_url(RELEASES_URL, None::<&str>);
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
@@ -194,15 +223,7 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Hide to tray on close instead of quitting
-            let window = app.get_webview_window("main").unwrap();
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    // Window will be hidden; tray icon remains
-                    // The window variable is moved into the closure
-                }
-            });
+            // --- Hide to tray on close ---
             if let Some(w) = app.get_webview_window("main") {
                 let w2 = w.clone();
                 w.on_window_event(move |event| {
@@ -213,6 +234,42 @@ pub fn run() {
                 });
             }
 
+            // --- Listen for connection state from web client ---
+            let tray_handle = tray.clone();
+            let app_handle = app.handle().clone();
+            app.listen("relay-connection-state", move |event| {
+                let connected = event.payload() == "\"connected\"";
+                // Switch tray icon between color / gray
+                let icon_bytes = if connected {
+                    include_bytes!("../icons/icon.png").to_vec()
+                } else {
+                    include_bytes!("../icons/icon-gray.png").to_vec()
+                };
+                if let Ok(img) = Image::from_bytes(&icon_bytes) {
+                    let _ = tray_handle.set_icon(Some(img));
+                }
+                let tooltip = if connected {
+                    "OpenClaw Relay — 已连接"
+                } else {
+                    "OpenClaw Relay — 已断开"
+                };
+                let _ = tray_handle.set_tooltip(Some(tooltip));
+            });
+
+            // --- Listen for notification requests from web client ---
+            let app_handle2 = app.handle().clone();
+            app.listen("relay-notify", move |event| {
+                if let Ok(msg) = serde_json::from_str::<serde_json::Value>(event.payload()) {
+                    let title = msg["title"].as_str().unwrap_or("OpenClaw Relay");
+                    let body = msg["body"].as_str().unwrap_or("");
+                    let _ = tauri_plugin_notification::NotificationBuilder::new(
+                        &app_handle2, title,
+                    )
+                    .body(body)
+                    .show();
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -220,11 +277,75 @@ pub fn run() {
 }
 ```
 
+## Web Client Bridge（`client/js/app.js` 增量）
+
+在 `client/js/app.js` 中添加渐进增强桥接。浏览器中 `window.__TAURI__` 不存在，这些代码完全不执行，零副作用。
+
+```javascript
+// --- Tauri desktop bridge (progressive enhancement) ---
+const _tauri = window.__TAURI__;
+
+function notifyDesktop(title, body) {
+  // Only fires in Tauri desktop shell; no-op in browser
+  if (!_tauri) return;
+  _tauri.event.emit('relay-notify', { title, body });
+}
+
+function syncConnectionState(state) {
+  // state: 'connected' | 'disconnected'
+  if (!_tauri) return;
+  _tauri.event.emit('relay-connection-state', state);
+}
+
+async function checkForUpdates() {
+  if (!_tauri) return;
+  try {
+    const currentVersion = await _tauri.core.invoke('get_app_version');
+    const resp = await fetch(
+      'https://api.github.com/repos/nicepkg/openclaw-relay/releases/latest',
+      { headers: { Accept: 'application/vnd.github.v3+json' } }
+    );
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const latest = data.tag_name?.replace(/^desktop-v/, '');
+    if (latest && latest !== currentVersion) {
+      const yes = confirm(`发现新版本 v${latest}，是否前往下载？`);
+      if (yes) {
+        _tauri.opener.openUrl(data.html_url);
+      }
+    }
+  } catch { /* silent — update check is best-effort */ }
+}
+```
+
+集成点（在现有代码中添加调用）：
+
+1. **连接成功时**: `syncConnectionState('connected')`
+2. **断开时**: `syncConnectionState('disconnected')`
+3. **收到助手消息且窗口不可见时**: `notifyDesktop('OpenClaw', '收到新消息')`
+4. **应用启动时**: `checkForUpdates()`
+
+窗口可见性检测用标准 `document.hidden` API。
+
+## Icons
+
+需要准备两套图标：
+
+| 文件 | 用途 |
+|------|------|
+| `icons/icon.png` | 托盘图标（彩色，已连接） |
+| `icons/icon-gray.png` | 托盘图标（灰色，已断开） |
+| `icons/32x32.png` | 小尺寸图标 |
+| `icons/128x128.png` | 标准图标 |
+| `icons/128x128@2x.png` | Retina 图标 |
+| `icons/icon.icns` | macOS 应用图标 |
+| `icons/icon.ico` | Windows 应用图标 |
+
+可使用 `cargo tauri icon <source.png>` 从一张 1024×1024 源图自动生成全部尺寸。灰色版需手动制作。
+
 ## CI / Release
 
-### GitHub Actions workflow: `.github/workflows/desktop.yml`
-
-Triggered on git tags matching `desktop-v*`:
+### `.github/workflows/desktop.yml`
 
 ```yaml
 name: Desktop Release
@@ -285,37 +406,47 @@ jobs:
           prerelease: false
 ```
 
-Key decisions:
-- **Separate tag namespace** (`desktop-v*`): Desktop releases are independent of the relay server releases.
-- **`draft: false`**: Published releases so `releases/latest` API works and users can find them.
-- **No automatic update mechanism**: The "Check for updates" menu item just opens the releases page in the browser.
+- **独立 tag 空间** (`desktop-v*`)：桌面版发布独立于 Relay 服务端
+- **`draft: false`**：正式发布，`releases/latest` API 可用于启动时检查更新
 
-## v1 Scope
+## Feature List（全部一个版本完成）
 
-| Feature | v1 | v1.1 |
-|---------|-----|------|
-| Native window (no browser chrome) | Yes | |
-| System tray icon | Yes | |
-| Hide to tray on close | Yes | |
-| Tray menu: Show / Check for updates / Quit | Yes | |
-| Manual "Check for updates" (opens browser) | Yes | |
-| macOS dmg + Windows NSIS installer | Yes | |
-| macOS x64 + arm64 | Yes | |
-| OS notifications on new messages | | Yes |
-| Automatic update check on startup | | Yes |
-| Tray icon disconnect/reconnect | | Yes |
-| Linux AppImage | | Yes |
+| 功能 | 说明 |
+|------|------|
+| 原生窗口 | 无浏览器地址栏，干净的应用体验 |
+| 系统托盘 | 关闭窗口 → 缩到托盘，不退出应用 |
+| 托盘状态指示 | 彩色 = 已连接，灰色 = 已断开 |
+| 托盘右键菜单 | 显示 / 检查更新 / 退出 |
+| 系统通知 | 窗口隐藏时收到消息弹出 OS 通知，点击打开窗口 |
+| 启动更新检查 | 启动时查询 GitHub Releases API，有新版提示下载 |
+| macOS 安装包 | `.dmg`，arm64 + x64 |
+| Windows 安装包 | NSIS `.exe`，自动处理 WebView2 |
+| GitHub Actions CI | 打 tag 自动构建发布 |
+
+## Cargo Dependencies
+
+```toml
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+```
 
 ## Verification
 
-After building, verify:
+构建后验证清单：
 
-1. `npx tauri build` completes without errors on macOS and Windows
-2. The app loads `client/index.html` correctly — all UI works identically to browser
-3. WebSocket connections work (CSP allows `wss:` and `ws:`)
-4. Close button hides window to tray (does not quit)
-5. Left-click tray icon shows window
-6. Right-click tray shows menu with Show / Check for updates / Quit
-7. "Check for updates" opens the GitHub releases page in default browser
-8. "Quit" exits the app
-9. On Windows, if WebView2 is not installed, installer prompts to download it
+1. `npx tauri build` macOS + Windows 均成功
+2. 应用加载 `client/index.html`，所有 UI 功能与浏览器一致
+3. WebSocket 连接正常（CSP 允许 `wss:` / `ws:`）
+4. 关闭窗口 → 窗口隐藏，托盘图标仍在
+5. 左键点击托盘 → 显示窗口
+6. 右键托盘 → 菜单：显示 / 检查更新 / 退出
+7. 连接后托盘图标变为彩色，断开后变灰
+8. 窗口隐藏时收到消息 → 弹出系统通知
+9. 点击通知 → 打开窗口
+10. 启动时如有新版本 → 弹出提示对话框
+11. "退出" → 应用完全退出
+12. Windows 上 WebView2 缺失时安装程序自动处理
