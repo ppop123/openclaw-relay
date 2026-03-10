@@ -1,15 +1,28 @@
 import { PairingManager, buildPairingInfo } from '../pairing.js';
 import { PairingSessionInfo, RelayConfigStore } from '../types.js';
 
-export function buildPairingWebUrl(pairing: PairingSessionInfo, base: string): string {
+type PairingWebUrlOptions = {
+  autoConnect?: boolean;
+};
+
+export function buildPairingWebUrl(pairing: PairingSessionInfo, base: string, options: PairingWebUrlOptions = {}): string {
   const url = new URL(base);
   const params = new URLSearchParams({
     relay: pairing.relayUrl,
     token: pairing.channelToken,
     key: pairing.gatewayPublicKey,
   });
+  if (options.autoConnect === true) {
+    params.set('auto', '1');
+  }
   url.hash = params.toString();
   return url.toString();
+}
+
+export function buildDefaultPairingWebBase(pairing: PairingSessionInfo): string {
+  const relay = new URL(pairing.relayUrl);
+  const scheme = relay.protocol === 'ws:' ? 'http:' : 'https:';
+  return `${scheme}//${relay.host}/client/`;
 }
 
 export async function handleRelayPair(store: RelayConfigStore, pairing: PairingManager, accountId = 'default') {

@@ -71,7 +71,7 @@ openclaw relay pair
 如果浏览器客户端部署在固定地址，还可以直接生成一键连接链接：
 
 ```bash
-openclaw relay pair --print-web-url http://localhost:8080/client/
+openclaw relay pair --print-web-url --auto
 ```
 
 终端会额外打印一个 Web client URL。浏览器打开这个链接后，会自动填入三个配对参数，并立即清理地址栏里的敏感 fragment。

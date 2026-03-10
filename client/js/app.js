@@ -205,10 +205,13 @@ export const app = {
     return true;
   },
 
-  _applyPairingFields({ relayUrl, channelToken, gatewayPubKey }, { clearProfile = true } = {}) {
+  _applyPairingFields({ relayUrl, channelToken, gatewayPubKey, autoConnect }, { clearProfile = true } = {}) {
     if (relayUrl) document.getElementById('relayUrl').value = relayUrl;
     if (channelToken) document.getElementById('channelToken').value = channelToken;
     if (gatewayPubKey) document.getElementById('gatewayPubKey').value = gatewayPubKey;
+    if (autoConnect === true) {
+      this._pendingDesktopAutoConnect = true;
+    }
     if (clearProfile) {
       document.getElementById('profileName').value = '';
       this._setProfileSelection('');
@@ -223,13 +226,19 @@ export const app = {
     const relayUrl = params.get('relay')?.trim() || '';
     const channelToken = params.get('token')?.trim() || '';
     const gatewayPubKey = params.get('key')?.trim() || '';
+    const autoConnect = params.get('auto')?.trim() || '';
 
     if (!relayUrl && !channelToken && !gatewayPubKey) return null;
     if (!relayUrl || !channelToken || !gatewayPubKey) {
       throw new Error('Pairing link is incomplete. It must include the server address, access token, and verification key.');
     }
 
-    return { relayUrl, channelToken, gatewayPubKey };
+    return {
+      relayUrl,
+      channelToken,
+      gatewayPubKey,
+      autoConnect: autoConnect === '1' || autoConnect.toLowerCase() === 'true',
+    };
   },
 
   _parsePairingLink(value) {

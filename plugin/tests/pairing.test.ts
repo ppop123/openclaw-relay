@@ -23,11 +23,12 @@ describe('pairing and config commands', () => {
     expect(info.relayUrl).toBe('wss://relay.example.com');
     expect(info.channelToken).toBe(account.channelToken);
     expect(info.uri.startsWith('openclaw-relay://relay.example.com/')).toBe(true);
-    const handoffUrl = buildPairingWebUrl(info, 'http://localhost:8080/client/');
+    const handoffUrl = buildPairingWebUrl(info, 'http://localhost:8080/client/', { autoConnect: true });
     const handoffParams = new URLSearchParams(new URL(handoffUrl).hash.slice(1));
     expect(handoffParams.get('relay')).toBe(info.relayUrl);
     expect(handoffParams.get('token')).toBe(info.channelToken);
     expect(handoffParams.get('key')).toBe(info.gatewayPublicKey);
+    expect(handoffParams.get('auto')).toBe('1');
 
     const inspect = await store.inspectAccount('default');
     expect(inspect?.gatewayPublicKey).toBe(account.gatewayKeyPair.publicKey);

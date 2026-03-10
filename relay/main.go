@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -36,6 +37,7 @@ func main() {
 		public             bool
 		logFormat          string
 		allowOrigins       string
+		clientDir          string
 	)
 
 	flag.IntVar(&port, "port", 8443, "Listen port")
@@ -50,6 +52,7 @@ func main() {
 	flag.BoolVar(&public, "public", false, "Advertise as public relay")
 	flag.StringVar(&logFormat, "log-format", "text", "Log format: text or json")
 	flag.StringVar(&allowOrigins, "allow-origin", "", "Comma-separated allowed origin hosts (e.g. myapp.com,*.example.com)")
+	flag.StringVar(&clientDir, "client-dir", "", "Directory containing the web client assets to serve at /client/")
 	flag.Parse()
 
 	// Parse --allow-origin into origin patterns for WebSocket handshake.
@@ -85,6 +88,28 @@ func main() {
 	startTime := time.Now()
 
 	mux := http.NewServeMux()
+
+	// Optional: serve the web client assets (for non-technical users).
+	// This keeps onboarding to a single clickable link: open it and connect.
+	if clientDir == "" {
+		clientDir = detectClientDir()
+	}
+	if clientDir != "" {
+		clientDir = filepath.Clean(clientDir)
+		logger.Info("webclient.enabled", "client_dir", clientDir)
+		fileServer := http.FileServer(http.Dir(clientDir))
+		mux.Handle("/client/", http.StripPrefix("/client/", fileServer))
+		mux.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
+		})
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/" {
+				http.NotFound(w, r)
+				return
+			}
+			http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
+		})
+	}
 
 	// WebSocket endpoint.
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -188,4 +213,22 @@ func main() {
 		logger.Error("server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+func detectClientDir() string {
+	// Try common layouts:
+	// - Running from repo root: ./client
+	// - Running from ./relay directory: ../client
+	// - Deployed alongside assets: ./client
+	candidates := []string{
+		"client",
+		filepath.Join("..", "client"),
+	}
+	for _, candidate := range candidates {
+		indexPath := filepath.Join(candidate, "index.html")
+		if stat, err := os.Stat(indexPath); err == nil && !stat.IsDir() {
+			return candidate
+		}
+	}
+	return ""
 }

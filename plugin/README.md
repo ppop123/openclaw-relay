@@ -48,11 +48,11 @@ openclaw relay enable --server wss://relay.example.com/ws --discoverable \
   --discover-label "Shanghai Lab" \
   --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["peer-discovery"]}'
 openclaw relay pair
-openclaw relay pair --print-web-url http://localhost:8080/client/
+openclaw relay pair --print-web-url
 openclaw relay status
 ```
 
-`openclaw relay pair --print-web-url <base>` 会输出一个浏览器可直接打开的配对链接。链接中的敏感参数放在 URL fragment 中，浏览器读取后会立即清除，不会发给服务器。`--open-web <base>` 还会尝试直接打开默认浏览器。
+`openclaw relay pair --print-web-url` 会输出一个浏览器可直接打开的配对链接（默认指向 relay 自带的 `/client/` 页面）。链接中的敏感参数放在 URL fragment 中，浏览器读取后会立即清除，不会发给服务器。`--open-web` 会尝试自动打开默认浏览器。你也可以显式指定一个 base URL：`--print-web-url http://localhost:8080/client/`。
 
 `--discoverable` 仅在操作员明确希望此网关加入 agent 间 discovery 层时使用。它**不会**开启任何面向人类用户的 peer 浏览界面。Discovery metadata 是可选的、由操作员控制的，且仅对同一 Relay 上的其他 discoverable 网关可见。
 
@@ -213,11 +213,11 @@ openclaw relay enable --server wss://relay.example.com/ws --discoverable \
   --discover-label "Shanghai Lab" \
   --discover-metadata-json '{"region":"cn-sha","tier":"prod","capabilities":["peer-discovery"]}'
 openclaw relay pair
-openclaw relay pair --print-web-url http://localhost:8080/client/
+openclaw relay pair --print-web-url
 openclaw relay status
 ```
 
-`openclaw relay pair --print-web-url <base>` prints a browser-ready pairing handoff link. Sensitive pairing parameters live in the URL fragment, so the browser reads them locally and then clears them without sending them to the server. `--open-web <base>` also attempts to open the default browser automatically.
+`openclaw relay pair --print-web-url` prints a browser-ready pairing handoff link (by default it points at the relay's built-in `/client/` page). Sensitive pairing parameters live in the URL fragment, so the browser reads them locally and then clears them without sending them to the server. `--open-web` also attempts to open the default browser automatically. You can still override the base URL via `--print-web-url http://localhost:8080/client/`.
 
 Use `--discoverable` only when the operator explicitly wants this gateway to participate in the agent-only discovery layer. It does **not** enable any human-facing peer browsing UX. Discovery metadata is optional, operator-controlled, and only advertised to other discoverable gateways on the same relay.
 

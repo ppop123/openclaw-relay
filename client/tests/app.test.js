@@ -529,6 +529,17 @@ describe('pairing link parsing', () => {
     });
   });
 
+  it('parses auto-connect hint from pairing fragments', () => {
+    const parsed = app._extractPairingFragment('#relay=wss%3A%2F%2Frelay.example.com%2Fws&token=test-token&key=BASE64PUBKEY&auto=1');
+
+    expect(parsed).toEqual({
+      relayUrl: 'wss://relay.example.com/ws',
+      channelToken: 'test-token',
+      gatewayPubKey: 'BASE64PUBKEY',
+      autoConnect: true,
+    });
+  });
+
   it('parses a canonical openclaw-relay pairing link for a local relay', () => {
     const parsed = app._parsePairingLink('openclaw-relay://192.168.50.5:8443/test-token#BASE64PUBKEY');
 

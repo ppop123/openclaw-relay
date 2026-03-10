@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:pa
 import { handleRelayClients, handleRelayRevoke } from './commands/clients.js';
 import { handleRelayDisable, handleRelayRotateToken } from './commands/disable.js';
 import { handleRelayEnable } from './commands/enable.js';
-import { buildPairingWebUrl, handleRelayPair } from './commands/pair.js';
+import { buildDefaultPairingWebBase, buildPairingWebUrl, handleRelayPair } from './commands/pair.js';
 import { deriveChannelHash, inspectAccount, validateAccountConfig } from './config.js';
 import { RelayGatewayAdapter } from './gateway-adapter.js';
 import { PairingManager } from './pairing.js';
@@ -1664,9 +1664,10 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
         .command('pair')
         .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
         .option('--wait <seconds>', 'How long to keep pairing mode open', String(PAIR_WAIT_SECONDS))
-        .option('--print-web-url <base>', 'Print a ready-to-open browser client URL with pairing parameters in the fragment')
-        .option('--open-web <base>', 'Open a browser client URL with pairing parameters in the fragment')
-        .action(async (options: { account?: string; wait?: string; printWebUrl?: string; openWeb?: string }) => {
+        .option('--print-web-url [base]', 'Print a ready-to-open browser client URL with pairing parameters in the fragment (default: the relay\'s /client/ page)')
+        .option('--open-web [base]', 'Open a browser client URL with pairing parameters in the fragment (default: the relay\'s /client/ page)')
+        .option('--auto', 'Add auto-connect hint to the pairing link')
+        .action(async (options: { account?: string; wait?: string; printWebUrl?: string | true; openWeb?: string | true; auto?: boolean }) => {
           const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
           const waitSecondsRaw = Number(options.wait ?? PAIR_WAIT_SECONDS);
           const waitSeconds = Number.isFinite(waitSecondsRaw) && waitSecondsRaw > 0 ? waitSecondsRaw : PAIR_WAIT_SECONDS;
@@ -1676,8 +1677,13 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
           const startedHere = !activeAccounts.has(accountId);
           const record = await ensureStartedAccount({ api, accountId, log: logger });
           const info = await handleRelayPair(store, record.pairing, accountId);
-          const webBase = options.openWeb ?? options.printWebUrl;
-          const webClientUrl = webBase ? buildPairingWebUrl(info, webBase) : undefined;
+          const webBaseOption = options.openWeb ?? options.printWebUrl;
+          const webBase = (webBaseOption === true || webBaseOption === undefined)
+            ? buildDefaultPairingWebBase(info)
+            : webBaseOption;
+          const webClientUrl = webBase
+            ? buildPairingWebUrl(info, webBase, { autoConnect: options.auto === true })
+            : undefined;
           console.log(JSON.stringify({
             ok: true,
             pairing: webClientUrl ? { ...info, webClientUrl } : info,
