@@ -566,6 +566,16 @@ export class RelayConnection {
       return;
     }
 
+    if (payload.type === 'hello_reject' && this._dataWaiters.has('hello_ack')) {
+      const waiter = this._dataWaiters.get('hello_ack');
+      this._dataWaiters.delete('hello_ack');
+      clearTimeout(waiter.timeout);
+      const code = payload.code || 'pairing_rejected';
+      const message = payload.message || 'Pairing was rejected. Please request a new pairing link.';
+      waiter.reject(new Error(`${message} (${code})`));
+      return;
+    }
+
     // Layer 2 message types
     this._handleL2Message(payload);
   }

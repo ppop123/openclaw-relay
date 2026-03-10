@@ -126,21 +126,30 @@ export class GatewayTransport {
   }
 
   private async processHello(clientId: string, payload: string): Promise<void> {
-    const hello = JSON.parse(payload) as HelloMessage;
+    let hello: HelloMessage;
+    try {
+      hello = JSON.parse(payload) as HelloMessage;
+    } catch {
+      await this.sendHelloReject(clientId, 'invalid_frame', 'Invalid hello payload');
+      return;
+    }
     if (hello.type !== 'hello') {
       return;
     }
     const protocolVersion = hello.protocol_version ?? 0;
     if (protocolVersion > 1) {
+      await this.sendHelloReject(clientId, 'unsupported_protocol', 'Client protocol version is not supported');
       return;
     }
 
     const clientPublicKeyBytes = b64Decode(hello.client_public_key);
     if (clientPublicKeyBytes.length !== 32) {
+      await this.sendHelloReject(clientId, 'invalid_client_key', 'Client public key is invalid');
       return;
     }
     const clientNonce = b64Decode(hello.session_nonce);
     if (clientNonce.length !== 32) {
+      await this.sendHelloReject(clientId, 'invalid_nonce', 'Client session nonce is invalid');
       return;
     }
 
@@ -151,6 +160,11 @@ export class GatewayTransport {
     const previouslySeen = this.findApprovedClientByClientId(clientId);
 
     if (previouslySeen && previouslySeen[0] !== fingerprint && !this.options.pairingActive()) {
+      await this.sendHelloReject(
+        clientId,
+        'pairing_required',
+        'This client identity changed. Ask OpenClaw for a new pairing link and open it within the pairing window.',
+      );
       return;
     }
 
@@ -158,16 +172,29 @@ export class GatewayTransport {
       peerAuthorized = await this.options.authorizePeerClient?.(hello.client_public_key, clientId, fingerprint) === true;
       if (!peerAuthorized) {
         if (!this.tryClaimPairingWindow()) {
+          await this.sendHelloReject(
+            clientId,
+            'pairing_required',
+            'Pairing is required. Ask OpenClaw for a new pairing link and open it within the pairing window.',
+          );
           return;
         }
         try {
-          const savedFingerprint = await this.options.approveUnknownClient?.(hello.client_public_key, clientId);
+          let savedFingerprint: string | undefined;
+          try {
+            savedFingerprint = await this.options.approveUnknownClient?.(hello.client_public_key, clientId);
+          } catch {
+            await this.sendHelloReject(clientId, 'pairing_failed', 'Pairing failed. Please try again.');
+            return;
+          }
           if (!savedFingerprint) {
+            await this.sendHelloReject(clientId, 'pairing_rejected', 'Pairing was not approved.');
             return;
           }
           this.options.endPairing();
           approved = this.options.accountConfig().approvedClients[savedFingerprint];
           if (!approved) {
+            await this.sendHelloReject(clientId, 'pairing_failed', 'Pairing succeeded but could not be loaded. Please try again.');
             return;
           }
         } finally {
@@ -207,12 +234,29 @@ export class GatewayTransport {
       capabilities: this.options.capabilities(),
     };
 
-    await this.options.sendFrame({
-      type: 'data',
-      from: 'gateway',
-      to: clientId,
-      payload: JSON.stringify(ack),
-    });
+    try {
+      await this.options.sendFrame({
+        type: 'data',
+        from: 'gateway',
+        to: clientId,
+        payload: JSON.stringify(ack),
+      });
+    } catch {
+      await this.endSessionByClientId(clientId, 'send_failed');
+    }
+  }
+
+  private async sendHelloReject(clientId: string, code: string, message: string): Promise<void> {
+    try {
+      await this.options.sendFrame({
+        type: 'data',
+        from: 'gateway',
+        to: clientId,
+        payload: JSON.stringify({ type: 'hello_reject', code, message }),
+      });
+    } catch {
+      // Ignore - the client will time out.
+    }
   }
 
   private async dispatchLayer2(session: GatewaySession, message: Layer2Message): Promise<void> {

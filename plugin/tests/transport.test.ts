@@ -142,7 +142,8 @@ describe('GatewayTransport', () => {
       payload: helloPayload(client),
     });
 
-    expect(sentFrames).toHaveLength(0);
+    expect(sentFrames).toHaveLength(1);
+    expect(JSON.parse(sentFrames[0].payload)).toMatchObject({ type: 'hello_reject', code: 'pairing_required' });
     expect(transport.sessionCount).toBe(0);
   });
 
@@ -282,14 +283,17 @@ describe('GatewayTransport', () => {
     await vi.waitFor(() => {
       expect(approveUnknownClient).toHaveBeenCalledTimes(1);
     });
-    expect(sentFrames).toHaveLength(0);
+    expect(sentFrames).toHaveLength(1);
+    expect(JSON.parse(sentFrames[0].payload)).toMatchObject({ type: 'hello_reject', code: 'pairing_required' });
 
     releaseApproval();
     await Promise.all([first, second]);
 
     expect(pairingActive).toBe(false);
     expect(transport.sessionCount).toBe(1);
-    expect(sentFrames).toHaveLength(1);
-    expect(sentFrames[0]).toMatchObject({ type: 'data', from: 'gateway', to: 'client-1' });
+    expect(sentFrames).toHaveLength(2);
+    expect(sentFrames[0]).toMatchObject({ type: 'data', from: 'gateway', to: 'client-2' });
+    expect(JSON.parse(sentFrames[0].payload)).toMatchObject({ type: 'hello_reject', code: 'pairing_required' });
+    expect(sentFrames[1]).toMatchObject({ type: 'data', from: 'gateway', to: 'client-1' });
   });
 });
