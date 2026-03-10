@@ -120,6 +120,7 @@ export interface ChannelAccountSnapshot extends JsonObject {
   lastError?: string | null;
   publicKey?: string | null;
   peerDiscoveryAutoAcceptEnabled?: boolean;
+  webClientBaseUrl?: string;
 }
 
 export interface ChannelMeta extends JsonObject {

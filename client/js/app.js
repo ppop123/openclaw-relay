@@ -733,30 +733,7 @@ export const app = {
       return;
     }
 
-    const rows = sessions.map((session) => {
-      const preview = (session.preview || '').trim();
-      const agent = session.agent || '';
-      const started = session.started_at || session.startedAt || '';
-      const last = session.last_message_at || session.lastMessageAt || '';
-      const metaParts = [];
-      if (agent) metaParts.push(agent);
-      if (last) metaParts.push(`last: ${last}`);
-      else if (started) metaParts.push(`started: ${started}`);
-      if (typeof session.message_count === 'number') metaParts.push(`${session.message_count} msgs`);
-
-      return `
-        <div class="session-row">
-          <div class="session-main">
-            <div class="session-id">${this._escapeHtml(session.id || '')}</div>
-            <div class="session-meta">${this._escapeHtml(metaParts.join(' · '))}</div>
-            ${preview ? `<div class="session-preview">${this._escapeHtml(preview)}</div>` : ''}
-          </div>
-          <div class="session-actions">
-            <button type="button" class="secondary-btn" onclick="app.resumeSession('${this._escapeHtml((session.id || '').replace(/'/g, "\\'"))}')">${this._escapeHtml(this.t('sessions.resume'))}</button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    const rows = sessions.map((session) => this._renderSessionRow(session)).join('');
 
     const canLoadMore = typeof total === 'number' ? (offset + sessions.length < total) : false;
     const loadMoreButton = canLoadMore
@@ -785,31 +762,7 @@ export const app = {
       const loadMoreBtn = list.querySelector?.('button.load-more');
       if (loadMoreBtn) loadMoreBtn.remove();
 
-      const append = sessions.map((session) => {
-        const preview = (session.preview || '').trim();
-        const agentName = session.agent || '';
-        const started = session.started_at || session.startedAt || '';
-        const last = session.last_message_at || session.lastMessageAt || '';
-        const metaParts = [];
-        if (agentName) metaParts.push(agentName);
-        if (last) metaParts.push(`last: ${last}`);
-        else if (started) metaParts.push(`started: ${started}`);
-        if (typeof session.message_count === 'number') metaParts.push(`${session.message_count} msgs`);
-
-        const safeId = this._escapeHtml((session.id || '').replace(/'/g, "\\'"));
-        return `
-          <div class="session-row">
-            <div class="session-main">
-              <div class="session-id">${this._escapeHtml(session.id || '')}</div>
-              <div class="session-meta">${this._escapeHtml(metaParts.join(' · '))}</div>
-              ${preview ? `<div class="session-preview">${this._escapeHtml(preview)}</div>` : ''}
-            </div>
-            <div class="session-actions">
-              <button type="button" class="secondary-btn" onclick="app.resumeSession('${safeId}')">${this._escapeHtml(this.t('sessions.resume'))}</button>
-            </div>
-          </div>
-        `;
-      }).join('');
+      const append = sessions.map((session) => this._renderSessionRow(session)).join('');
 
       const temp = document.createElement('div');
       temp.innerHTML = append;
@@ -1002,7 +955,7 @@ export const app = {
             <div class="dashboard-row-sub">${this._escapeHtml([agent, schedule].filter(Boolean).join(' · '))}</div>
           </div>
           <label class="toggle-pill">
-            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="app.toggleCronTask('${this._escapeHtml(id).replace(/'/g, "\'")}', this.checked)">
+            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="app.toggleCronTask('${this._escapeHtml(id)}', this.checked)">
             <span>${enabled ? 'ON' : 'OFF'}</span>
           </label>
         </div>
@@ -2001,9 +1954,38 @@ export const app = {
   },
 
   _escapeHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
+    if (typeof str !== 'string') return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  _renderSessionRow(session) {
+    const preview = (session.preview || '').trim();
+    const agent = session.agent || '';
+    const started = session.started_at || session.startedAt || '';
+    const last = session.last_message_at || session.lastMessageAt || '';
+    const metaParts = [];
+    if (agent) metaParts.push(agent);
+    if (last) metaParts.push(`last: ${last}`);
+    else if (started) metaParts.push(`started: ${started}`);
+    if (typeof session.message_count === 'number') metaParts.push(`${session.message_count} msgs`);
+
+    return `
+      <div class="session-row">
+        <div class="session-main">
+          <div class="session-id">${this._escapeHtml(session.id || '')}</div>
+          <div class="session-meta">${this._escapeHtml(metaParts.join(' · '))}</div>
+          ${preview ? `<div class="session-preview">${this._escapeHtml(preview)}</div>` : ''}
+        </div>
+        <div class="session-actions">
+          <button type="button" class="secondary-btn" onclick="app.resumeSession('${this._escapeHtml(session.id || '')}')">${this._escapeHtml(this.t('sessions.resume'))}</button>
+        </div>
+      </div>
+    `;
   },
 
   _shortFingerprint(fingerprint) {

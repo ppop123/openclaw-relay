@@ -94,11 +94,13 @@ func main() {
 	if clientDir == "" {
 		clientDir = detectClientDir()
 	}
-	if clientDir != "" {
+	if clientDir == "" {
+		logger.Info("webclient.disabled", "reason", "client directory not found; use --client-dir to specify")
+	} else {
 		clientDir = filepath.Clean(clientDir)
 		logger.Info("webclient.enabled", "client_dir", clientDir)
 		fileServer := http.FileServer(http.Dir(clientDir))
-		mux.Handle("/client/", http.StripPrefix("/client/", fileServer))
+		mux.Handle("/client/", http.StripPrefix("/client/", noDirectoryListing(fileServer)))
 		mux.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
 		})
@@ -213,6 +215,19 @@ func main() {
 		logger.Error("server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// noDirectoryListing wraps a file server handler to return 404 for subdirectory
+// paths (e.g. /js/, /css/) instead of rendering a browsable file listing.
+// The root path ("/") is allowed through so index.html is served.
+func noDirectoryListing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func detectClientDir() string {

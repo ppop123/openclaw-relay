@@ -16,7 +16,12 @@ fn build_menu(app: &App) -> tauri::Result<Menu<tauri::Wry>> {
         None::<&str>,
     )?;
     let help = Submenu::with_items(app, "Help", true, &[&open_docs, &check_updates])?;
-    Menu::with_items(app, &[&help])
+
+    // Start from the default menu (includes macOS app menu with About/Quit/Cmd+Q)
+    // and append our Help submenu.
+    let menu = Menu::default(app.handle())?;
+    menu.append(&help)?;
+    Ok(menu)
 }
 
 fn open_external(url: &str) {
@@ -42,11 +47,12 @@ fn forward_launch_args(app: &tauri::AppHandle, args: &[String]) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
-        let _ = window.eval(launch_args_script_for(args));
+        if let Err(e) = window.eval(&launch_args_script_for(args)) {
+            eprintln!("failed to forward launch args: {e}");
+        }
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {

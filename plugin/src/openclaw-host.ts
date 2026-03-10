@@ -1796,6 +1796,7 @@ function registerRelayCommands(api: OpenClawPluginApi): void {
   api.registerCommand({
     name: 'relay_pair',
     description: 'Generate a one-click pairing link for the Relay web client',
+    requireAuth: true,
     acceptsArgs: true,
     handler: async (ctx) => {
       const args = (ctx.args ?? '').trim();

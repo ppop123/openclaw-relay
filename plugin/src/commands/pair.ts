@@ -8,6 +8,9 @@ type PairingWebUrlOptions = {
 
 export function buildPairingWebUrl(pairing: PairingSessionInfo, base: string, options: PairingWebUrlOptions = {}): string {
   const url = new URL(base);
+  if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && !url.hostname.endsWith('.local')) {
+    console.warn(`[relay] WARNING: pairing URL base uses ${url.protocol} — channelToken may be exposed in transit. Use HTTPS for production.`);
+  }
   const params = new URLSearchParams({
     relay: pairing.relayUrl,
     token: pairing.channelToken,
