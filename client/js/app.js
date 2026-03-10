@@ -781,17 +781,50 @@ export const app = {
       const sessions = result?.sessions || result?.result?.sessions || [];
       const total = result?.total ?? result?.result?.total ?? (nextOffset + sessions.length);
 
-      const existing = list.querySelectorAll?.('.session-row')?.length || 0;
-      // Re-render from scratch for simplicity (list is small).
-      const prevResult = await this.connection.sendRequest('sessions.list', {
-        agent: agent || undefined,
-        limit: nextOffset + 20,
-        offset: 0,
-      });
-      const merged = prevResult?.sessions || prevResult?.result?.sessions || [];
-      this._renderSessionsList(merged, total, 0);
-      if (existing && list.scrollTop) {
-        // keep rough position
+      // Append rows (keep it simple; list is small).
+      const loadMoreBtn = list.querySelector?.('button.load-more');
+      if (loadMoreBtn) loadMoreBtn.remove();
+
+      const append = sessions.map((session) => {
+        const preview = (session.preview || '').trim();
+        const agentName = session.agent || '';
+        const started = session.started_at || session.startedAt || '';
+        const last = session.last_message_at || session.lastMessageAt || '';
+        const metaParts = [];
+        if (agentName) metaParts.push(agentName);
+        if (last) metaParts.push(`last: ${last}`);
+        else if (started) metaParts.push(`started: ${started}`);
+        if (typeof session.message_count === 'number') metaParts.push(`${session.message_count} msgs`);
+
+        const safeId = this._escapeHtml((session.id || '').replace(/'/g, "\\'"));
+        return `
+          <div class="session-row">
+            <div class="session-main">
+              <div class="session-id">${this._escapeHtml(session.id || '')}</div>
+              <div class="session-meta">${this._escapeHtml(metaParts.join(' · '))}</div>
+              ${preview ? `<div class="session-preview">${this._escapeHtml(preview)}</div>` : ''}
+            </div>
+            <div class="session-actions">
+              <button type="button" class="secondary-btn" onclick="app.resumeSession('${safeId}')">${this._escapeHtml(this.t('sessions.resume'))}</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const temp = document.createElement('div');
+      temp.innerHTML = append;
+      for (const row of Array.from(temp.children)) {
+        list.appendChild(row);
+      }
+
+      const canLoadMore = typeof total === 'number' ? (nextOffset + sessions.length < total) : false;
+      if (canLoadMore) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'secondary-btn load-more';
+        btn.textContent = this.t('sessions.load_more');
+        btn.onclick = () => this.loadMoreSessions(nextOffset + sessions.length);
+        list.appendChild(btn);
       }
     } catch (err) {
       showToast(err.message || String(err), 'error');
