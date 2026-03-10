@@ -1,5 +1,6 @@
 import { PairingManager, buildPairingInfo } from '../pairing.js';
 import { PairingSessionInfo, RelayConfigStore } from '../types.js';
+import { randomHex } from '../utils.js';
 
 type PairingWebUrlOptions = {
   autoConnect?: boolean;
@@ -15,6 +16,13 @@ export function buildPairingWebUrl(pairing: PairingSessionInfo, base: string, op
   if (options.autoConnect === true) {
     params.set('auto', '1');
   }
+
+  // Always include a nonce so that repeated pairing calls produce a fresh URL.
+  // This avoids "same link" confusion and ensures clients re-run onboarding
+  // even if a browser tab is already open.
+  params.set('t', String(Date.now()));
+  params.set('nonce', randomHex(4));
+
   url.hash = params.toString();
   return url.toString();
 }
