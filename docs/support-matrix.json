@@ -30,6 +30,15 @@
       "test_framework": "vitest"
     },
     {
+      "name": "Desktop shell (Windows/macOS)",
+      "path": "desktop/",
+      "status": "in_progress",
+      "release_scope": "planned_official",
+      "description": "Thin Tauri shell around the shared browser client for Windows and macOS",
+      "test_command": "cd desktop && npm ci && npm run build:app",
+      "test_framework": "tauri + cargo"
+    },
+    {
       "name": "Protocol specification",
       "path": "protocol/",
       "status": "supported",

@@ -816,29 +816,42 @@ main {
   <div class="connect-panel" id="connectPanel">
     <form class="connect-form" id="connectForm" onsubmit="return app.handleConnect(event)">
       <h2>Connect to your OpenClaw</h2>
-      <p class="subtitle">Use the three values from OpenClaw pairing to connect this browser.</p>
+      <p class="subtitle">Paste the pairing link from OpenClaw pairing. If you need it, open Manual setup.</p>
 
       <div class="form-group">
-        <label for="relayUrl">Server address</label>
-        <span class="field-subtitle">Relay URL</span>
-        <input type="text" id="relayUrl" placeholder="wss://relay.example.com/ws" autocomplete="off" required>
+        <label for="pairingLink">Pairing link</label>
+        <span class="field-subtitle">Recommended for first-time setup</span>
+        <input type="text" id="pairingLink" placeholder="openclaw-relay://relay.example.com/..." autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
 
-      <div class="form-group">
-        <label for="channelToken">Access token</label>
-        <span class="field-subtitle">Channel token</span>
-        <div class="input-with-toggle">
-          <input type="password" id="channelToken" placeholder="kx8f-a3mv-9pqz" autocomplete="off" required>
-          <button type="button" class="toggle-visibility-btn" id="tokenVisibilityBtn" onclick="app.toggleTokenVisibility()" title="Show or hide access token" aria-label="Toggle token visibility">
-            <span id="tokenEyeIcon">&#x1F441;</span>
-          </button>
+      <div class="collapsible-section" id="manualSetupSection">
+        <button type="button" class="section-toggle" id="manualSetupToggle" onclick="app.toggleSection('manualSetup')" aria-expanded="false" aria-controls="manualSetupContent">
+          <span class="toggle-arrow">&#x25B8;</span> Manual setup
+        </button>
+        <div class="section-content" id="manualSetupContent" hidden>
+          <div class="form-group">
+            <label for="relayUrl">Server address</label>
+            <span class="field-subtitle">Relay URL</span>
+            <input type="text" id="relayUrl" placeholder="wss://relay.example.com/ws" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="channelToken">Access token</label>
+            <span class="field-subtitle">Channel token</span>
+            <div class="input-with-toggle">
+              <input type="password" id="channelToken" placeholder="kx8f-a3mv-9pqz" autocomplete="off">
+              <button type="button" class="toggle-visibility-btn" id="tokenVisibilityBtn" onclick="app.toggleTokenVisibility()" title="Show access token" aria-label="Show access token">
+                <span id="tokenEyeIcon">&#x1F441;</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="gatewayPubKey">Gateway verification key</label>
+            <span class="field-subtitle">Your OpenClaw operator provides this key</span>
+            <input type="text" id="gatewayPubKey" placeholder="base64-encoded 32-byte X25519 public key" autocomplete="off">
+          </div>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label for="gatewayPubKey">Gateway verification key</label>
-        <span class="field-subtitle">Your OpenClaw operator provides this key</span>
-        <input type="text" id="gatewayPubKey" placeholder="base64-encoded 32-byte X25519 public key" autocomplete="off" required>
       </div>
 
       <button type="submit" class="connect-btn" id="connectBtn">Connect</button>

@@ -13,8 +13,8 @@ The browser client uses `vitest`.
 | `client/tests/identity-store.test.js` | IndexedDB identity persistence layout and CRUD behavior |
 | `client/tests/identity-bundle.test.js` | Passphrase-protected identity-file encryption and decryption |
 | `client/tests/transport.test.js` | Real `RelayConnection` frame handling, identity lifecycle, pending request lifecycle, relay error propagation, stream semantics |
-| `client/tests/app.test.js` | Settings migration, pairing-handoff fragment handling, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
-| `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering pinned-key mismatch refusal, connect, agents.list, streamed chat, reload persistence, protected identity export/reset/import, preferred-agent restore, transcript export, and `channelToken` staying out of persisted settings |
+| `client/tests/app.test.js` | Settings migration, pairing-handoff fragment handling, pasted pairing-link parsing, storage safety, identity UI status, recovery hints, clipboard actions, agent preference restore, `channelToken` stripping |
+| `scripts/web-client-browser-e2e.mjs` | Real Chrome flow covering pairing-link connect, pinned-key mismatch refusal, agents.list, streamed chat, reload persistence, protected identity export/reset/import, preferred-agent restore, transcript export, and `channelToken` staying out of persisted settings |
 | `scripts/web-client-live-e2e.mjs` | Real relay + gateway Chrome flow covering approved-identity import, connect, encrypted `system.status`, and reload/reconnect with the same persisted identity |
 
 Run the unit suite with:
@@ -78,12 +78,13 @@ Current automated tests do **not** fully cover:
 
 When validating the web client manually, check the following:
 
-1. page loads and the quick-connect fields render correctly
-2. a pairing handoff URL fragment auto-fills the connect form and then clears itself from the address bar
-3. saved `relayUrl` and `gatewayPubKey` restore correctly when no pairing handoff is present
-4. saving a relay profile persists only profile name, relay URL, and gateway public key
-5. selecting a saved profile repopulates the form without restoring `channelToken`
-6. `channelToken` does not restore after refresh
+1. page loads and the primary `Pairing link` path renders correctly
+2. pasting a canonical pairing link fills the underlying connection values without persisting `channelToken`
+3. a pairing handoff URL fragment auto-fills the connect form and then clears itself from the address bar
+4. saved `relayUrl` and `gatewayPubKey` restore correctly when no pairing handoff is present
+5. saving a relay profile persists only profile name, relay URL, and gateway public key
+6. selecting a saved profile repopulates the form without restoring `channelToken`
+7. `channelToken` does not restore after refresh
 7. the browser-identity summary shows whether a persistent identity is already available
 8. connect succeeds against a live gateway
 9. the status bar and connection-details panel reflect session/client/profile/gateway context after connect

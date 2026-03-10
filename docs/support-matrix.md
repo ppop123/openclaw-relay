@@ -22,6 +22,12 @@
 
 以上组件均在积极维护中，有 CI 测试覆盖，受 `v0.5.0` 稳定性保证约束。
 
+### main 分支中开发中
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| Windows/macOS 桌面壳 | `desktop/` | 围绕共享浏览器前端的 Tauri 桌面壳。目标是让非技术用户通过一条 pairing link 完成安装和连接。当前在 `main` 上开发，尚未包含在 `v0.5.0` 已发布资产中。 |
+
 ### 尚未实现
 
 | 组件 | 路径 | 状态 |
@@ -43,6 +49,7 @@
 | Go Relay 服务端 | `go test` 套件 | `go test` |
 | Python SDK | `pytest` 套件 | `pytest` |
 | 浏览器参考客户端 | `vitest` 套件 | `vitest` |
+| Windows/macOS 桌面壳（main） | `npm run build:app` | `tauri` + `cargo` |
 | OpenClaw Gateway 插件 | `vitest` 套件 + 类型检查 + 本地冒烟脚本 | `vitest` + `tsc` + `bash`（插件测试需要 `PATH` 中有 `go`） |
 
 ## CI 流水线
@@ -83,6 +90,12 @@ CI 流水线执行以下检查：
 
 These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.5.0`.
 
+### In Progress on `main`
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| Windows/macOS desktop shell | `desktop/` | Thin Tauri shell around the shared browser client. It is being built on `main` for non-technical users who want a normal desktop app and a pairing-link-first connect flow. It is not part of the already released `v0.5.0` assets yet. |
+
 ### Not Yet Implemented
 
 | Component | Path | Status |
@@ -104,6 +117,7 @@ The current and only protocol version is **v1**.
 | Go relay server | `go test` suite | `go test` |
 | Python SDK | `pytest` suite | `pytest` |
 | Web reference client | `vitest` suite | `vitest` |
+| Windows/macOS desktop shell (`main`) | `npm run build:app` | `tauri` + `cargo` |
 | OpenClaw gateway plugin | `vitest` suite + typecheck + local smoke script | `vitest` + `tsc` + `bash` (plugin tests require `go` on `PATH`) |
 
 ## CI Pipeline

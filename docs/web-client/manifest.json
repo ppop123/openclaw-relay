@@ -44,7 +44,8 @@
         "chat ui flow",
         "current transcript tracking and export",
         "pairing fragment auto-fill and cleanup",
-        "connect-panel L0/L1/L2 section management",
+        "pasted pairing-link parsing and field fill",
+        "connect-panel L0/L1/L2/L3 section management",
         "token visibility toggle",
         "identity summary rendering",
         "inline profile-save banner rendering",
@@ -212,7 +213,7 @@
       "script": "scripts/web-client-browser-e2e.mjs",
       "coverage": [
         "pinned gateway-key mismatch refusal",
-        "connect and agents.list",
+        "pairing-link connect and agents.list",
         "streamed chat.send",
         "reload identity persistence",
         "channelToken absent from persisted settings",

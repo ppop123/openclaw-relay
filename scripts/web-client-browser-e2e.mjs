@@ -48,6 +48,15 @@ function makeMismatchedPinnedKey(value) {
   const replacement = last === 'A' ? 'B' : 'A';
   return `${value.slice(0, -1)}${replacement}`;
 }
+function makePairingLink(runtime, gatewayPubKey = runtime.gatewayPubKey) {
+  const relayHost = new URL(runtime.relayUrl).host;
+  return `openclaw-relay://${relayHost}/${CHANNEL_TOKEN}#${gatewayPubKey}`;
+}
+
+async function fillPairingLink(page, value) {
+  await page.fill('#pairingLink', value);
+  await page.press('#pairingLink', 'Tab');
+}
 
 async function fileExists(path) {
   try {
@@ -359,7 +368,7 @@ async function run() {
     const response = await page.goto(`${runtime.origin}/index.html`, { waitUntil: 'domcontentloaded' });
     assert.equal(response?.status(), 200, 'browser should load the client page');
     try {
-      await page.waitForSelector('#relayUrl', { timeout: 10_000 });
+      await page.waitForSelector('#pairingLink', { timeout: 10_000 });
     } catch (error) {
       console.error('[web-client-e2e] page url:', page.url());
       console.error('[web-client-e2e] page content snippet:', (await page.content()).slice(0, 500));
@@ -367,9 +376,7 @@ async function run() {
     }
 
     log('rejecting a mismatched pinned gateway key');
-    await page.fill('#relayUrl', runtime.relayUrl);
-    await page.fill('#channelToken', CHANNEL_TOKEN);
-    await page.fill('#gatewayPubKey', makeMismatchedPinnedKey(runtime.gatewayPubKey));
+    await fillPairingLink(page, makePairingLink(runtime, makeMismatchedPinnedKey(runtime.gatewayPubKey)));
     await page.click('#connectBtn');
     await page.waitForFunction(() => {
       const errorEl = document.getElementById('connectError');
@@ -380,11 +387,10 @@ async function run() {
       true,
       'mismatched pinned gateway key should keep the connect panel visible',
     );
+    await page.waitForFunction(() => !document.getElementById('connectBtn').disabled && window.app?.connection?._connectPromise === null && window.app?.connection?.state === 'disconnected');
 
     log('connecting the browser client');
-    await page.fill('#relayUrl', runtime.relayUrl);
-    await page.fill('#channelToken', CHANNEL_TOKEN);
-    await page.fill('#gatewayPubKey', runtime.gatewayPubKey);
+    await fillPairingLink(page, makePairingLink(runtime));
     await page.click('#connectBtn');
     await page.waitForFunction(() => document.getElementById('chatPanel').classList.contains('active'));
     await page.waitForFunction(() => document.getElementById('agentSelect').options.length >= 2);
@@ -447,7 +453,7 @@ async function run() {
     log('resetting the identity and verifying rotation');
     await captureConfirm(page, () => page.click('#resetIdentityBtn'), /Reset/i);
     await page.waitForFunction(() => document.getElementById('identityMode').textContent === 'Not created yet');
-    await page.fill('#channelToken', CHANNEL_TOKEN);
+    await fillPairingLink(page, makePairingLink(runtime));
     await page.click('#connectBtn');
     await page.waitForFunction(() => document.getElementById('chatPanel').classList.contains('active'));
     const rotatedFingerprint = await getIdentityFingerprint(page);
@@ -467,7 +473,7 @@ async function run() {
     assert.equal(await page.inputValue('#identityPassphrase'), '', 'identity import clears the passphrase field');
 
     log('reconnecting and restoring the preferred agent');
-    await page.fill('#channelToken', CHANNEL_TOKEN);
+    await fillPairingLink(page, makePairingLink(runtime));
     await page.click('#connectBtn');
     await page.waitForFunction(() => document.getElementById('chatPanel').classList.contains('active'));
     await page.waitForFunction(() => document.getElementById('agentSelect').options.length >= 2);

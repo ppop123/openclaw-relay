@@ -10,6 +10,8 @@
 
 如果你刚接触这个项目，建议从这里开始，不要直接跳进具体的设计文档。
 
+当前官方一方用户端聚焦桌面：桌面浏览器继续支持，Windows/macOS 的共享桌面壳位于 `desktop/`。手机和平板不属于官方支持面。
+
 ### 从这里开始
 
 | 文档 | 用途 |
@@ -55,6 +57,7 @@
 | `docs/web-client/transport.md` | 浏览器握手、加密、请求/响应、重连行为 |
 | `docs/web-client/ui-and-state.md` | 浏览器 UI 结构、应用状态、用户流程 |
 | `docs/web-client/testing-and-troubleshooting.md` | 浏览器测试覆盖、手动检查、故障模式 |
+| `desktop/README.md` | Windows/macOS 桌面壳、安装与本地构建 |
 | `plugin/README.md` | OpenClaw Gateway 插件安装、运行时、冒烟验证 |
 | `docs/self-host-relay.md` | 自托管说明 |
 | `docs/technical-design.md` | 详细设计背景与系统整体理念 |
@@ -87,6 +90,8 @@
 This directory is the current technical documentation hub for OpenClaw Relay.
 
 If you are new to the project, start here instead of jumping straight into detailed design documents.
+
+Official first-party user clients stay desktop-focused: the browser client remains supported on desktop, and the shared Windows/macOS desktop shell lives in `desktop/`. Phones and tablets are not official support targets.
 
 ### Start Here
 
@@ -133,6 +138,7 @@ When Markdown and machine-readable files disagree, the machine-readable files wi
 | `docs/web-client/transport.md` | Browser handshake, encryption, request/response, reconnect behavior |
 | `docs/web-client/ui-and-state.md` | Browser UI structure, app state, user flows |
 | `docs/web-client/testing-and-troubleshooting.md` | Browser test coverage, manual checks, failure patterns |
+| `desktop/README.md` | Windows/macOS desktop shell, install, and local build |
 | `plugin/README.md` | OpenClaw gateway plugin install, runtime, smoke validation |
 | `docs/self-host-relay.md` | Self-hosting notes |
 | `docs/technical-design.md` | Detailed design background and broader system rationale |

@@ -8,7 +8,7 @@
 
 本文档是 `client/` 下浏览器端 OpenClaw Relay 客户端的入口文档。
 
-浏览器客户端是随项目发布的**浏览器参考客户端**。它不是独立的 JavaScript SDK，也不提供嵌入式 API。它的作用是在真实浏览器环境中演示和实现 Relay 协议的客户端部分。
+浏览器客户端是随项目发布的**浏览器参考客户端**。它不是独立的 JavaScript SDK，也不提供嵌入式 API。它的作用是在真实浏览器环境中演示和实现 Relay 协议的客户端部分。Windows/macOS 官方桌面壳也直接复用这份前端，所以这里的连接逻辑和 UI 规则同样约束 `desktop/`。
 
 ## 这个客户端是什么
 
@@ -22,6 +22,7 @@
 - 渲染一个最小化的聊天界面
 - 持久化浏览器安全设置
 - 在 IndexedDB 可用时持久化浏览器身份密钥对（Identity Keypair）
+- 为共享桌面壳提供同样的连接和状态体验
 
 ## 这个客户端不是什么
 
@@ -43,6 +44,7 @@
 - 通过用户提供的固定公钥实现网关公钥锁定（Gateway Public-Key Pinning）
 - 同一浏览器配置下，跨页面刷新保持稳定的加密身份
 - 为非敏感连接设置提供命名的已保存 Relay 配置
+- 首选的 `Pairing link` 接入路径，以及只在需要时展开的手动连接信息
 - 连接界面中的身份指纹（Fingerprint）显示、复制，以及受保护的导出/导入操作
 - 流式 `chat.send`
 - 通过 `agents.list` 加载 Agent 列表
@@ -127,7 +129,7 @@
 
 This document is the entry point for the browser-side OpenClaw Relay client under `client/`.
 
-The web client is the shipped **browser reference client**. It is not a standalone JavaScript SDK and it does not expose a supported embedding API. Its job is to demonstrate and implement the client side of the relay protocol in a real browser environment.
+The web client is the shipped **browser reference client**. It is not a standalone JavaScript SDK and it does not expose a supported embedding API. Its job is to demonstrate and implement the client side of the relay protocol in a real browser environment. The official Windows/macOS desktop shell also reuses this same frontend, so the connection model and UI rules here apply to `desktop/` as well.
 
 ## What This Client Is
 
@@ -141,6 +143,7 @@ The current web client is responsible for:
 - rendering a minimal chat-oriented UI
 - persisting safe browser settings
 - persisting the browser identity keypair in IndexedDB when available
+- serving as the shared frontend for the official Windows/macOS desktop shell
 
 ## What This Client Is Not
 
@@ -162,6 +165,7 @@ It currently provides:
 - gateway public-key pinning via user-supplied pinned key
 - stable browser cryptographic identity across reloads in the same browser profile
 - named saved relay profiles for non-secret connection settings
+- a primary `Pairing link` onboarding path with manual connection fields kept as an advanced fallback
 - identity fingerprint plus copy, protected export / import, and reset actions in the connect UI
 - streaming `chat.send`
 - agent list loading via `agents.list`

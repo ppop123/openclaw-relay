@@ -1,0 +1,17 @@
+[package]
+name = "openclaw-relay-desktop"
+version = "0.5.0"
+description = "Official Windows/macOS desktop shell for OpenClaw Relay"
+authors = ["OpenClaw Relay contributors"]
+edition = "2021"
+
+[lib]
+name = "openclaw_relay_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+open = "5"

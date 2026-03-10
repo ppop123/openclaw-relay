@@ -1,0 +1,46 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-desktop:
+    name: Desktop assets (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            bundle_args: --bundles dmg
+          - name: Windows
+            os: windows-latest
+            bundle_args: --bundles nsis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Build and upload desktop assets
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: OpenClaw Relay ${{ github.ref_name }}
+          releaseBody: Desktop installers for OpenClaw Relay.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.bundle_args }}

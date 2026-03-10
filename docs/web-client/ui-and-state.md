@@ -20,13 +20,14 @@ The header contains:
 
 ### Connect Panel
 
-The connect form is split into three layers:
+The connect form is split into four layers:
 
-- **L0 Quick Connect**: relay URL, channel token, gateway public key, connect button, connect error, and a one-line browser-identity summary
-- **L1 Saved Profiles**: a collapsible section for saved relay profiles, with an empty state when no profiles exist yet
-- **L2 Browser Identity**: a collapsible identity-management section with copy, export, import, reset, and passphrase controls
+- **L0 Pairing Link**: a primary pairing-link input, connect button, connect error, and a one-line browser-identity summary
+- **L1 Manual Setup**: a collapsible fallback section for relay URL, channel token, and gateway public key
+- **L2 Saved Profiles**: a collapsible section for saved relay profiles, with an empty state when no profiles exist yet
+- **L3 Browser Identity**: a collapsible identity-management section with copy, export, import, reset, and passphrase controls
 
-The browser can also pre-fill the L0 fields from a pairing fragment in the page URL. After reading those values, it immediately clears the fragment from the address bar.
+The browser can also pre-fill the connect fields from a pairing fragment in the page URL. After reading those values, it immediately clears the fragment from the address bar. Users may also paste a full pairing link into the visible `Pairing link` field; the app expands nothing by default and fills the underlying manual fields on demand.
 
 The browser-identity section shows:
 
@@ -80,6 +81,7 @@ On `DOMContentLoaded`:
 1. the app checks the browser URL fragment for pairing handoff values and, when present, fills the connect form then clears the fragment from the address bar
 2. the app cleans any historical `channelToken` from persisted settings
 3. the app restores the selected saved profile or the last safe custom settings unless pairing handoff already supplied the connect values
+4. if the user pastes a full pairing link into the visible field, the app derives the underlying connection values without persisting the bearer secret
 4. the app wires transport callbacks
 5. the send button becomes input-driven and connection-aware
 6. the app hydrates any persisted browser identity
@@ -120,12 +122,13 @@ On `DOMContentLoaded`:
 
 When the user submits the connect form:
 
-1. required fields are validated for non-empty input
-2. the relay URL is normalized to end with `/ws` if needed
-3. safe settings are saved
-4. the button moves to a `Connecting…` state
-5. `RelayConnection.connect()` runs
-6. on success:
+1. if a pairing link is present, the app parses it into the underlying connection fields first
+2. required fields are validated for non-empty input
+3. the relay URL is normalized to end with `/ws` if needed
+4. safe settings are saved
+5. the button moves to a `Connecting…` state
+6. `RelayConnection.connect()` runs
+7. on success:
    - connect panel is hidden
    - chat panel is shown
    - agent list is fetched

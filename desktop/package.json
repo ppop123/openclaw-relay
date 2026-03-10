@@ -1,0 +1,16 @@
+{
+  "name": "openclaw-relay-desktop",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "scripts": {
+    "prepare:web": "node ./scripts/prepare-web-assets.mjs",
+    "tauri": "tauri",
+    "dev": "npm run prepare:web && tauri dev",
+    "build:app": "npm run prepare:web && tauri build --bundles app",
+    "build": "npm run prepare:web && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

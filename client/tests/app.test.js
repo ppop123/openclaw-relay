@@ -514,6 +514,80 @@ describe('agent preference', () => {
   });
 });
 
+describe('pairing link parsing', () => {
+  it('parses a canonical openclaw-relay pairing link for a public relay', () => {
+    const parsed = app._parsePairingLink('openclaw-relay://relay.example.com/test-token#BASE64PUBKEY');
+
+    expect(parsed).toEqual({
+      relayUrl: 'wss://relay.example.com/ws',
+      channelToken: 'test-token',
+      gatewayPubKey: 'BASE64PUBKEY',
+    });
+  });
+
+  it('parses a canonical openclaw-relay pairing link for a local relay', () => {
+    const parsed = app._parsePairingLink('openclaw-relay://192.168.50.5:8443/test-token#BASE64PUBKEY');
+
+    expect(parsed).toEqual({
+      relayUrl: 'ws://192.168.50.5:8443/ws',
+      channelToken: 'test-token',
+      gatewayPubKey: 'BASE64PUBKEY',
+    });
+  });
+
+  it('applies a pasted pairing link to the manual connection fields', () => {
+    getElement('pairingLink').value = 'openclaw-relay://relay.example.com/test-token#BASE64PUBKEY';
+    getElement('profileSelect').value = 'saved_profile';
+    getElement('profileName').value = 'Saved relay';
+
+    const used = app._applyPairingLinkInput();
+
+    expect(used).toBe(true);
+    expect(getElement('relayUrl').value).toBe('wss://relay.example.com/ws');
+    expect(getElement('channelToken').value).toBe('test-token');
+    expect(getElement('gatewayPubKey').value).toBe('BASE64PUBKEY');
+    expect(getElement('profileSelect').value).toBe('');
+    expect(getElement('profileName').value).toBe('');
+  });
+
+  it('connects successfully from a pasted pairing link without manual field entry', async () => {
+    const connectSpy = vi.fn(async () => undefined);
+    const fetchAgentsSpy = vi.spyOn(app, '_fetchAgents').mockResolvedValue(undefined);
+    const addSystemSpy = vi.spyOn(app, '_addSystemMessage').mockImplementation(() => {});
+    const showPromptSpy = vi.spyOn(app, '_showProfileSavePrompt').mockImplementation(() => {});
+    const updateIdentitySpy = vi.spyOn(app, '_updateIdentityStatus').mockImplementation(() => {});
+    const updateDiagnosticsSpy = vi.spyOn(app, '_updateDiagnostics').mockImplementation(() => {});
+    app.connection.connect = connectSpy;
+
+    getElement('pairingLink').value = 'openclaw-relay://relay.example.com/test-token#BASE64PUBKEY';
+
+    const result = await app.handleConnect({ preventDefault() {} });
+
+    expect(result).toBe(false);
+    expect(connectSpy).toHaveBeenCalledWith('wss://relay.example.com/ws', 'test-token', 'BASE64PUBKEY');
+    expect(getElement('pairingLink').value).toBe('');
+
+    fetchAgentsSpy.mockRestore();
+    addSystemSpy.mockRestore();
+    showPromptSpy.mockRestore();
+    updateIdentitySpy.mockRestore();
+    updateDiagnosticsSpy.mockRestore();
+  });
+
+  it('shows a friendly error when the pairing link is invalid', async () => {
+    const connectSpy = vi.fn(async () => undefined);
+    app.connection.connect = connectSpy;
+    getElement('pairingLink').value = 'not-a-valid-link';
+
+    const result = await app.handleConnect({ preventDefault() {} });
+
+    expect(result).toBe(false);
+    expect(connectSpy).not.toHaveBeenCalled();
+    expect(getElement('connectError').style.display).toBe('block');
+    expect(getElement('connectError').textContent).toMatch(/pairing link is invalid/i);
+  });
+});
+
 describe('pairing handoff via URL fragment', () => {
   it('auto-fills form fields from URL fragment and clears fragment', () => {
     globalThis.location.hash = '#relay=wss%3A%2F%2Frelay.example.com%2Fws&token=test-token-123&key=BASE64PUBKEY';
@@ -578,6 +652,18 @@ describe('token visibility toggle', () => {
 });
 
 describe('collapsible sections', () => {
+  it('toggles manual setup via aria-expanded and hidden', () => {
+    const toggle = getElement('manualSetupToggle');
+    const content = getElement('manualSetupContent');
+    toggle['aria-expanded'] = 'false';
+    content.hidden = true;
+
+    app.toggleSection('manualSetup');
+
+    expect(toggle.setAttribute).toHaveBeenCalledWith('aria-expanded', 'true');
+    expect(content.hidden).toBe(false);
+  });
+
   it('toggles profiles section via aria-expanded and hidden', () => {
     const toggle = getElement('profilesToggle');
     const content = getElement('profilesContent');

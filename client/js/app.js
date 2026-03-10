@@ -101,6 +101,18 @@ export const app = {
     document.getElementById('agentSelect').addEventListener('change', () => {
       this.handleAgentSelectChange();
     });
+    document.getElementById('pairingLink')?.addEventListener('change', () => {
+      if (!document.getElementById('pairingLink').value.trim()) return;
+      try {
+        this._applyPairingLinkInput();
+      } catch (error) {
+        const errorEl = document.getElementById('connectError');
+        if (errorEl) {
+          errorEl.textContent = error.message;
+          errorEl.style.display = 'block';
+        }
+      }
+    });
 
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
@@ -111,20 +123,114 @@ export const app = {
     const hash = globalThis.location?.hash;
     if (!hash || hash.length < 2) return false;
 
-    const params = new URLSearchParams(hash.slice(1));
-    const relay = params.get('relay');
-    const token = params.get('token');
-    const key = params.get('key');
+    const fields = this._extractPairingFragment(hash);
+    if (!fields) return false;
 
-    if (!relay && !token && !key) return false;
-
-    if (relay) document.getElementById('relayUrl').value = relay;
-    if (token) document.getElementById('channelToken').value = token;
-    if (key) document.getElementById('gatewayPubKey').value = key;
+    this._applyPairingFields(fields);
 
     const cleanUrl = `${globalThis.location.origin}${globalThis.location.pathname}`;
     globalThis.history?.replaceState?.(null, '', cleanUrl);
     return true;
+  },
+
+  _applyPairingLinkInput() {
+    const value = document.getElementById('pairingLink')?.value.trim();
+    if (!value) return false;
+
+    const fields = this._parsePairingLink(value);
+    this._applyPairingFields(fields);
+
+    const errorEl = document.getElementById('connectError');
+    if (errorEl) errorEl.style.display = 'none';
+    return true;
+  },
+
+  _applyPairingFields({ relayUrl, channelToken, gatewayPubKey }, { clearProfile = true } = {}) {
+    if (relayUrl) document.getElementById('relayUrl').value = relayUrl;
+    if (channelToken) document.getElementById('channelToken').value = channelToken;
+    if (gatewayPubKey) document.getElementById('gatewayPubKey').value = gatewayPubKey;
+    if (clearProfile) {
+      document.getElementById('profileName').value = '';
+      this._setProfileSelection('');
+    }
+    return true;
+  },
+
+  _extractPairingFragment(hash) {
+    if (!hash) return null;
+    const raw = hash.startsWith('#') ? hash.slice(1) : hash;
+    const params = new URLSearchParams(raw);
+    const relayUrl = params.get('relay')?.trim() || '';
+    const channelToken = params.get('token')?.trim() || '';
+    const gatewayPubKey = params.get('key')?.trim() || '';
+
+    if (!relayUrl && !channelToken && !gatewayPubKey) return null;
+    if (!relayUrl || !channelToken || !gatewayPubKey) {
+      throw new Error('Pairing link is incomplete. It must include the server address, access token, and verification key.');
+    }
+
+    return { relayUrl, channelToken, gatewayPubKey };
+  },
+
+  _parsePairingLink(value) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error('Paste the pairing link from OpenClaw pairing.');
+    }
+
+    if (trimmed.startsWith('#')) {
+      const fields = this._extractPairingFragment(trimmed);
+      if (fields) return fields;
+      throw new Error('Pairing link is invalid. Paste the full link from OpenClaw pairing.');
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new Error('Pairing link is invalid. Paste the full link from OpenClaw pairing.');
+    }
+
+    if (parsed.protocol === 'openclaw-relay:') {
+      const channelToken = parsed.pathname.replace(/^\/+/, '').trim();
+      const gatewayPubKey = parsed.hash.replace(/^#/, '').trim();
+      if (!parsed.host || !channelToken || !gatewayPubKey) {
+        throw new Error('Pairing link is incomplete. Paste the full link from OpenClaw pairing.');
+      }
+      return {
+        relayUrl: this._buildRelayUrlFromPairingHost(parsed.host),
+        channelToken,
+        gatewayPubKey,
+      };
+    }
+
+    const fragmentFields = this._extractPairingFragment(parsed.hash);
+    if (fragmentFields) return fragmentFields;
+
+    throw new Error('Pairing link is invalid. Paste the full link from OpenClaw pairing.');
+  },
+
+  _buildRelayUrlFromPairingHost(host) {
+    const normalizedHost = host.trim();
+    if (!normalizedHost) {
+      throw new Error('Pairing link is missing the relay host.');
+    }
+
+    let hostname = normalizedHost;
+    try {
+      hostname = new URL(`http://${normalizedHost}`).hostname;
+    } catch {}
+
+    const scheme = this._isLikelyLocalRelayHost(hostname) ? 'ws' : 'wss';
+    return `${scheme}://${normalizedHost}/ws`;
+  },
+
+  _isLikelyLocalRelayHost(hostname) {
+    const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (!normalized) return false;
+    if (normalized === 'localhost' || normalized === '::1' || normalized.endsWith('.local')) return true;
+    if (/^127\./.test(normalized) || /^10\./.test(normalized) || /^192\.168\./.test(normalized)) return true;
+    return /^172\.(1[6-9]|2\d|3[01])\./.test(normalized);
   },
 
   // ── Connection ──
@@ -140,12 +246,28 @@ export const app = {
     btn.textContent = 'Connecting...';
     errorEl.style.display = 'none';
 
+    let usedPairingLink = false;
+    const pairingLink = document.getElementById('pairingLink')?.value.trim() || '';
+    if (pairingLink) {
+      try {
+        usedPairingLink = this._applyPairingLinkInput();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Connect';
+        return false;
+      }
+    }
+
     const relayUrl = document.getElementById('relayUrl').value.trim();
     const channelToken = document.getElementById('channelToken').value.trim();
     const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim();
 
     // Validate
     if (!relayUrl || !channelToken || !gatewayPubKey) {
+      errorEl.textContent = 'Paste a pairing link, or open Manual setup and enter the connection details.';
+      errorEl.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Connect';
       return false;
@@ -170,6 +292,9 @@ export const app = {
       document.getElementById('connectPanel').style.display = 'none';
       document.getElementById('chatPanel').classList.add('active');
       document.getElementById('disconnectBtn').style.display = '';
+      if (usedPairingLink) {
+        document.getElementById('pairingLink').value = '';
+      }
 
       // Fetch agent list
       await this._fetchAgents();
@@ -742,6 +867,7 @@ export const app = {
 
   toggleSection(section) {
     const config = {
+      manualSetup: { toggle: 'manualSetupToggle', content: 'manualSetupContent' },
       profiles: { toggle: 'profilesToggle', content: 'profilesContent' },
       identity: { toggle: 'identityToggle', content: 'identityContent' },
       connectionDetails: { toggle: 'connDetailsToggle', content: 'connectionDetailsContent' },

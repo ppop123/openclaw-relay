@@ -1,452 +1,333 @@
 # Desktop Shell Design
 
-Status: approved design
-Scope: `desktop/` (new directory), Tauri v2
+Status: revised design
+Scope: `desktop/` (new directory), Tauri v2, Windows + macOS
+
+## Core Decision
+
+`desktop/` 不是第二条客户端产品线，也不是新的协议实现。
+
+它是 **OpenClaw Relay 官方桌面壳**：把现有 `client/` 里的 web client 直接装进一个原生应用窗口，降低普通用户的安装和使用门槛。
+
+这个设计只追求一件事：
+
+> 让没有技术背景的用户也能在 Windows 和 macOS 上，下载应用、打开应用、连接自己的 OpenClaw，然后继续使用。
+
+因此这版设计坚持三条原则：
+
+- **单版本完成**：不靠“v1 先凑合，v1.1 再补关键体验”。第一次发出来就要能完整使用。
+- **降低技术复杂度**：用户不该理解 relay、channel、gateway 这些内部术语，也不该手抄三段参数。
+- **不分裂客户端行为**：桌面壳和浏览器版共享同一份前端代码、同一套安全边界、同一套连接模型。
 
 ## Product Boundary
 
-`desktop/` is the **official桌面客户端** for OpenClaw Relay。它不是新协议实现，也不是 web client 的 fork。
+### 官方支持面
 
-它把 `client/` 下的 web client 封装在原生窗口中（通过 Tauri v2 的系统 WebView），面向**没有技术背景的普通用户**，提供：
+- 官方支持的用户端包括：
+  - 桌面浏览器中的 web client
+  - Windows 和 macOS 上的官方桌面壳
+- 官方 **不** 把手机和平板列为支持面。
+  - 原因不是“暂时没做”，而是移动端后台保活和在线状态太不稳定，不适合我们要承诺的产品体验。
+- Linux 用户继续使用浏览器版，不把桌面打包列为 v1 支持目标。
 
-- 原生窗口（无浏览器地址栏和标签页）
-- 系统托盘（关闭窗口 → 最小化到托盘，不退出）
-- 托盘连接状态指示（已连接 / 已断开）
-- 窗口隐藏时收到消息弹出系统通知
-- 启动时自动检查更新，有新版本时弹窗提示下载
-- 双平台安装包：macOS dmg + Windows NSIS 安装程序
+### 不变的安全和产品边界
 
-`client/` 代码**共享**——桌面壳通过 Tauri asset protocol 直接加载。`client/` 只需增加几行 Tauri 感知代码（检测 `window.__TAURI__`，存在时调用原生通知和状态同步，不存在时无副作用，浏览器行为不受影响）。
+桌面壳必须和现有 web client 保持同样的边界：
 
-## Architecture
+- 它只能连接用户自己的 OpenClaw。
+- 它不能发现、联系、浏览别人的 OpenClaw。
+- 它不会获得任何 peer discovery / agent-to-agent 管理能力。
+- `channelToken` 仍然不持久化。
+- gateway 验证仍然是 user-supplied pinned key。
+- 桌面壳不新增第二套身份模型，不新增原生密钥保管逻辑，继续沿用共享前端当前的 IndexedDB / memory 行为。
 
-```
-openclaw-relay/
-├── client/              ← shared web client
-│   ├── index.html
-│   └── js/
-│       ├── app.js       ← +几行 Tauri bridge（渐进增强，浏览器无影响）
-│       └── ...
-├── desktop/             ← Tauri v2 desktop shell
-│   ├── src-tauri/
-│   │   ├── Cargo.toml
-│   │   ├── tauri.conf.json
-│   │   ├── capabilities/
-│   │   │   └── default.json
-│   │   ├── icons/
-│   │   └── src/
-│   │       └── lib.rs
-│   ├── package.json     ← build scripts only
-│   └── README.md
-```
+## What "One-Version Complete" Means
 
-## User Experience（面向非技术用户）
+这次不是做“技术上能跑”的桌面 demo，而是做一个可以正式交付给普通用户的桌面入口。
 
-### 安装
+它完成的标志是：
 
-- **macOS**: 下载 `.dmg`，拖入 Applications，完成
-- **Windows**: 下载 `.exe` 安装程序，双击安装。如果系统没有 WebView2（Win10 早期版本），安装程序会自动下载安装
+1. 用户可以下载安装包。
+2. 用户第一次打开时，不需要理解三个底层参数怎么填。
+3. 用户可以用 **一条 pairing link** 完成接入。
+4. 连接成功后，应用能像现有 web client 一样保留安全的本地状态。
+5. 用户下次只需要打开应用就能继续使用。
 
-### 首次启动
+如果做不到这 5 点，就不算“单版本完成”。
 
-打开应用 → 看到连接界面（和浏览器版完全一样）→ 输入 Relay 地址和配对信息 → 连接 → 开始聊天
+## Primary User Flow
+
+### 首次使用
+
+1. 用户在自己的 OpenClaw 上运行配对命令。
+2. OpenClaw 输出一条 pairing link。
+3. 用户在桌面客户端中：
+   - 粘贴这条 pairing link，或者
+   - 由系统把 pairing link 直接带进应用（如果后续实现了 launch-arg handoff）
+4. 客户端自动解析 pairing link，填好连接所需信息。
+5. 用户点击 `Connect`。
+6. 连接成功后，页面只显示简单状态：
+   - 未连接
+   - 正在连接
+   - 已安全连接
 
 ### 日常使用
 
-| 操作 | 行为 |
-|------|------|
-| 关闭窗口（×） | 窗口隐藏，应用缩到系统托盘 |
-| 点击托盘图标 | 显示窗口 |
-| 右键托盘 | 菜单：显示 / 检查更新 / 退出 |
-| 收到消息（窗口隐藏时） | 弹出系统通知，点击通知打开窗口 |
-| 托盘图标 | 已连接 = 彩色图标，已断开 = 灰色图标 |
-| 启动时 | 自动检查 GitHub Releases 是否有新版本 |
-| 有新版本 | 弹出对话框："发现新版本 vX.Y.Z，是否前往下载？" → 点击打开下载页 |
+1. 用户打开应用。
+2. 应用恢复之前保存的安全设置。
+3. 用户继续和自己的 OpenClaw 聊天。
 
-### 退出
+这条路径里，普通用户不应该被要求手动理解：
 
-右键托盘 → 退出。这是唯一的退出方式。关闭窗口只是隐藏。
+- Relay URL
+- Channel Token
+- Gateway Public Key
 
-## Tauri Configuration
+这些信息仍然存在，但应该被折叠为“高级信息”或由 pairing link 自动带入。
 
-### `desktop/src-tauri/tauri.conf.json`
+## Scope for the First Official Desktop Release
 
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2/crates/tauri-cli/schema.json",
-  "productName": "OpenClaw Relay",
-  "version": "0.5.0",
-  "identifier": "com.openclaw.relay",
-  "build": {
-    "frontendDist": "../../client",
-    "withGlobalTauri": true
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "OpenClaw Relay",
-        "width": 480,
-        "height": 720,
-        "minWidth": 380,
-        "minHeight": 500,
-        "resizable": true,
-        "center": true
-      }
-    ],
-    "security": {
-      "csp": "default-src 'self'; connect-src wss: ws: https://api.github.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
-    },
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": ["nsis", "dmg"],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "windows": {
-      "webviewInstallMode": {
-        "type": "downloadBootstrapper",
-        "silent": false
-      }
-    }
-  },
-  "plugins": {
-    "opener": {},
-    "notification": {
-      "permissionState": "granted"
-    }
-  }
-}
+### In Scope
+
+这版桌面壳只做下面这些：
+
+- 一个原生应用窗口
+- 复用 `client/` 现有前端
+- 安装包：
+  - macOS `.dmg`
+  - Windows NSIS installer
+- 桌面端推荐的首次连接路径：
+  - **pairing link**
+- 明确、简单的连接状态显示
+- 一个最小的帮助/更新入口
+- 与浏览器版一致的安全模型
+
+### Out of Scope
+
+这版明确 **不做**：
+
+- 手机 / 平板官方客户端
+- Linux 桌面包
+- 自动更新
+- 启动时自动检查更新
+- 系统托盘
+- 关闭窗口后继续在后台常驻
+- 桌面专属通知系统
+- deep link 注册（`openclaw-relay://` 系统协议处理）
+- Native secret storage / Keychain / Credential Manager 集成
+- 任何 peer discovery / peer contact 用户入口
+
+这些不是“先不做，以后肯定补”，而是为了把第一版桌面产品收得足够简单、足够稳。
+
+## Architecture
+
+```text
+openclaw-relay/
+├── client/                  # shared web client
+│   ├── index.html
+│   └── js/
+│       └── app.js
+├── desktop/                 # Tauri desktop shell
+│   ├── package.json
+│   ├── README.md
+│   └── src-tauri/
+│       ├── Cargo.toml
+│       ├── build.rs
+│       ├── tauri.conf.json
+│       ├── icons/
+│       └── src/
+│           ├── main.rs
+│           └── lib.rs
+└── ...
 ```
 
-关键配置说明：
-- **`withGlobalTauri: true`**: 让 `window.__TAURI__` 在 vanilla JS 中可用，无需打包工具
-- **`frontendDist: "../../client"`**: 指向共享的 web client 目录
-- **`webviewInstallMode: downloadBootstrapper`**: Windows 上 WebView2 缺失时自动下载安装
-- **CSP 增加 `https://api.github.com`**: 允许检查更新 API 调用
-- **`notification.permissionState: granted`**: 桌面应用默认允许通知，无需用户手动授权
+关键决策：
 
-### `desktop/src-tauri/capabilities/default.json`
+- `client/` 是唯一前端真相源。
+- `desktop/` 只负责原生窗口、打包和少量桌面集成。
+- 不 fork `client/`，也不做第二份桌面前端。
+- 允许对 `client/` 做**浏览器也安全**的共享改动，例如：
+  - pairing link 解析
+  - 更通俗的连接文案
+  - 更简单的状态条
 
-```json
-{
-  "identifier": "default",
-  "description": "Default capability for the main window",
-  "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "notification:default",
-    "notification:allow-is-permission-granted",
-    "notification:allow-request-permission",
-    "notification:allow-notify"
-  ]
-}
-```
+## UX Rules for Non-Technical Users
 
-四类能力：
-- `core:default`: 窗口管理
-- `opener:default`: 打开浏览器链接（检查更新跳转下载页）
-- `notification:*`: 系统通知（收到消息时）
+### Rule 1: 一个用户只该面对一条主路径
 
-## Rust Backend (`lib.rs`)
+桌面版首页的主路径应当是：
 
-```rust
-use tauri::{
-    Emitter, Manager,
-    image::Image,
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-};
+- `Paste pairing link`
+- `Connect`
 
-const RELEASES_URL: &str = "https://github.com/nicepkg/openclaw-relay/releases";
-const RELEASES_API: &str =
-    "https://api.github.com/repos/nicepkg/openclaw-relay/releases/latest";
+而不是同时看到：
 
-#[tauri::command]
-fn get_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
+- Relay URL
+- Channel Token
+- Gateway Key
+- Identity export/import
+- Profiles
+- 诊断信息
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![get_app_version])
-        .setup(|app| {
-            // --- Tray menu ---
-            let show_i = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
-            let update_i =
-                MenuItem::with_id(app, "check_update", "检查更新", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &update_i, &quit_i])?;
+### Rule 2: 技术词保留，但不能挡在第一层
 
-            // --- Tray icon ---
-            let tray = TrayIconBuilder::new()
-                .menu(&menu)
-                .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("OpenClaw Relay")
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                    "check_update" => {
-                        let _ = tauri_plugin_opener::open_url(RELEASES_URL, None::<&str>);
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        if let Some(w) = tray.app_handle().get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                })
-                .build(app)?;
+对于普通用户：
 
-            // --- Hide to tray on close ---
-            if let Some(w) = app.get_webview_window("main") {
-                let w2 = w.clone();
-                w.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = w2.hide();
-                    }
-                });
-            }
+- 第一层应该是人话
+- 第二层才是技术映射
 
-            // --- Listen for connection state from web client ---
-            let tray_handle = tray.clone();
-            let app_handle = app.handle().clone();
-            app.listen("relay-connection-state", move |event| {
-                let connected = event.payload() == "\"connected\"";
-                // Switch tray icon between color / gray
-                let icon_bytes = if connected {
-                    include_bytes!("../icons/icon.png").to_vec()
-                } else {
-                    include_bytes!("../icons/icon-gray.png").to_vec()
-                };
-                if let Ok(img) = Image::from_bytes(&icon_bytes) {
-                    let _ = tray_handle.set_icon(Some(img));
-                }
-                let tooltip = if connected {
-                    "OpenClaw Relay — 已连接"
-                } else {
-                    "OpenClaw Relay — 已断开"
-                };
-                let _ = tray_handle.set_tooltip(Some(tooltip));
-            });
+例如：
 
-            // --- Listen for notification requests from web client ---
-            let app_handle2 = app.handle().clone();
-            app.listen("relay-notify", move |event| {
-                if let Ok(msg) = serde_json::from_str::<serde_json::Value>(event.payload()) {
-                    let title = msg["title"].as_str().unwrap_or("OpenClaw Relay");
-                    let body = msg["body"].as_str().unwrap_or("");
-                    let _ = tauri_plugin_notification::NotificationBuilder::new(
-                        &app_handle2, title,
-                    )
-                    .body(body)
-                    .show();
-                }
-            });
+- `Pairing link`
+- `Server address`（小字再写 `Relay URL`）
+- `Access token`（小字再写 `Channel token`）
+- `Verification key`（小字再写 `Gateway key`）
 
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
-```
+### Rule 3: 不要让“关闭”变成魔法行为
 
-## Web Client Bridge（`client/js/app.js` 增量）
+这版桌面壳 **不做系统托盘常驻**。
 
-在 `client/js/app.js` 中添加渐进增强桥接。浏览器中 `window.__TAURI__` 不存在，这些代码完全不执行，零副作用。
+理由很简单：
 
-```javascript
-// --- Tauri desktop bridge (progressive enhancement) ---
-const _tauri = window.__TAURI__;
+- 对非技术用户来说，“点了关闭却没退出”很容易造成困惑。
+- 本项目当前也没有把桌面壳定义成一个后台常驻代理。
+- 我们追求的是更容易打开和使用，不是更隐蔽的后台进程。
 
-function notifyDesktop(title, body) {
-  // Only fires in Tauri desktop shell; no-op in browser
-  if (!_tauri) return;
-  _tauri.event.emit('relay-notify', { title, body });
-}
+所以这版行为应当简单明确：
 
-function syncConnectionState(state) {
-  // state: 'connected' | 'disconnected'
-  if (!_tauri) return;
-  _tauri.event.emit('relay-connection-state', state);
-}
+- 点击关闭 = 退出应用
+- 需要时重新打开
 
-async function checkForUpdates() {
-  if (!_tauri) return;
-  try {
-    const currentVersion = await _tauri.core.invoke('get_app_version');
-    const resp = await fetch(
-      'https://api.github.com/repos/nicepkg/openclaw-relay/releases/latest',
-      { headers: { Accept: 'application/vnd.github.v3+json' } }
-    );
-    if (!resp.ok) return;
-    const data = await resp.json();
-    const latest = data.tag_name?.replace(/^desktop-v/, '');
-    if (latest && latest !== currentVersion) {
-      const yes = confirm(`发现新版本 v${latest}，是否前往下载？`);
-      if (yes) {
-        _tauri.opener.openUrl(data.html_url);
-      }
-    }
-  } catch { /* silent — update check is best-effort */ }
-}
-```
+### Rule 4: 更新也要低复杂度
 
-集成点（在现有代码中添加调用）：
+这版不做自动更新，也不做启动时自动弹“有新版本”。
 
-1. **连接成功时**: `syncConnectionState('connected')`
-2. **断开时**: `syncConnectionState('disconnected')`
-3. **收到助手消息且窗口不可见时**: `notifyDesktop('OpenClaw', '收到新消息')`
-4. **应用启动时**: `checkForUpdates()`
+只保留一个**手动**更新入口：
 
-窗口可见性检测用标准 `document.hidden` API。
+- Help → Check for updates
+- 打开 GitHub Release 页面
 
-## Icons
+原因：
 
-需要准备两套图标：
+- 普通用户需要的是“知道去哪里更新”，不是理解版本探测逻辑。
+- 自动探测会引入更多联网、发布流、错误处理和 UI 复杂度。
+- 对一个刚起步的桌面壳来说，手动检查更新已经足够。
 
-| 文件 | 用途 |
-|------|------|
-| `icons/icon.png` | 托盘图标（彩色，已连接） |
-| `icons/icon-gray.png` | 托盘图标（灰色，已断开） |
-| `icons/32x32.png` | 小尺寸图标 |
-| `icons/128x128.png` | 标准图标 |
-| `icons/128x128@2x.png` | Retina 图标 |
-| `icons/icon.icns` | macOS 应用图标 |
-| `icons/icon.ico` | Windows 应用图标 |
+## Pairing Link as the Primary Onboarding Primitive
 
-可使用 `cargo tauri icon <source.png>` 从一张 1024×1024 源图自动生成全部尺寸。灰色版需手动制作。
+桌面壳如果继续要求用户理解三段手填参数，就不算真正降低复杂度。
 
-## CI / Release
+所以 v1 的核心交互不是“高级连接表单”，而是 **pairing link**。
 
-### `.github/workflows/desktop.yml`
+这条 pairing link 可以来自：
 
-```yaml
-name: Desktop Release
-on:
-  push:
-    tags: ['desktop-v*']
+- `openclaw relay pair --print-web-url`
+- 后续可能新增的 `--print-pairing-link`
+- 任何由 OpenClaw 输出、且能被共享前端解析的 canonical pairing payload
 
-jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            label: macOS-arm64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            label: macOS-x64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            label: Windows-x64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      - name: Install dependencies
-        working-directory: desktop
-        run: npm ci
-      - name: Build
-        working-directory: desktop
-        run: npx tauri build --target ${{ matrix.target }}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.label }}
-          path: |
-            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+桌面端最推荐的做法不是系统 deep link，而是：
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            desktop-*/**/*.dmg
-            desktop-*/**/*.exe
-          draft: false
-          prerelease: false
-```
+- 应用首页提供一个 `Pairing link` 输入框
+- 用户粘贴整条 link
+- 前端解析后自动填入底层字段
 
-- **独立 tag 空间** (`desktop-v*`)：桌面版发布独立于 Relay 服务端
-- **`draft: false`**：正式发布，`releases/latest` API 可用于启动时检查更新
+这样做的好处：
 
-## Feature List（全部一个版本完成）
+- 浏览器版和桌面版可以共享同一套 pairing UX
+- 不依赖系统协议注册
+- 不引入平台差异
+- 更容易测试
 
-| 功能 | 说明 |
-|------|------|
-| 原生窗口 | 无浏览器地址栏，干净的应用体验 |
-| 系统托盘 | 关闭窗口 → 缩到托盘，不退出应用 |
-| 托盘状态指示 | 彩色 = 已连接，灰色 = 已断开 |
-| 托盘右键菜单 | 显示 / 检查更新 / 退出 |
-| 系统通知 | 窗口隐藏时收到消息弹出 OS 通知，点击打开窗口 |
-| 启动更新检查 | 启动时查询 GitHub Releases API，有新版提示下载 |
-| macOS 安装包 | `.dmg`，arm64 + x64 |
-| Windows 安装包 | NSIS `.exe`，自动处理 WebView2 |
-| GitHub Actions CI | 打 tag 自动构建发布 |
+## Minimal Desktop Integration
 
-## Cargo Dependencies
+这版桌面壳只需要最少的原生能力：
 
-```toml
-[dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-opener = "2"
-tauri-plugin-notification = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-```
+- 原生窗口
+- 打包
+- 菜单里打开外部链接（更新页 / 文档）
 
-## Verification
+不需要：
 
-构建后验证清单：
+- `window.__TAURI__` 作为前端主路径
+- 桌面端专属通知插件
+- Tray 事件桥接
+- Updater runtime
 
-1. `npx tauri build` macOS + Windows 均成功
-2. 应用加载 `client/index.html`，所有 UI 功能与浏览器一致
-3. WebSocket 连接正常（CSP 允许 `wss:` / `ws:`）
-4. 关闭窗口 → 窗口隐藏，托盘图标仍在
-5. 左键点击托盘 → 显示窗口
-6. 右键托盘 → 菜单：显示 / 检查更新 / 退出
-7. 连接后托盘图标变为彩色，断开后变灰
-8. 窗口隐藏时收到消息 → 弹出系统通知
-9. 点击通知 → 打开窗口
-10. 启动时如有新版本 → 弹出提示对话框
-11. "退出" → 应用完全退出
-12. Windows 上 WebView2 缺失时安装程序自动处理
+如果后续确实要加这些能力，再单独评估。但第一版不以这些集成为前提。
+
+## Tauri Configuration Direction
+
+`desktop/src-tauri/tauri.conf.json` 应收敛成最小配置：
+
+- `frontendDist` 指向共享的 `../../client`
+- 单窗口应用
+- 打包目标仅 `dmg` 和 `nsis`
+- CSP 只放行现有 web client 需要的资源类型和 WebSocket 连接
+- 不预设 notification / updater plugin
+
+窗口默认建议：
+
+- `width`: `480`
+- `height`: `720`
+- `minWidth`: `380`
+- `minHeight`: `500`
+
+理由：
+
+- 更像一个专注的通信工具
+- 和我们当前 web client 的单栏布局更匹配
+- 对普通用户更直观
+
+## Release Model
+
+桌面客户端不应该有第二套版本线。
+
+因此发布模型应当是：
+
+- **和主项目同版本号**
+- **和主项目同一个 GitHub Release 页面**
+- 桌面产物只是该版本 release 的附加资产
+
+不采用：
+
+- `desktop-v*` 单独 tag
+- 单独 desktop release 页面
+
+理由：
+
+- 减少对外复杂度
+- 减少内部 release 流程分叉
+- 避免普通用户看到两个版本体系
+
+## Security Notes
+
+桌面壳不能因为“更像原生应用”就突破现有边界。
+
+必须保持：
+
+- 只连接自己的 OpenClaw
+- 不引入 peer 能力
+- 不持久化 `channelToken`
+- 不绕开 gateway pinned-key 验证
+- 不增加“自动从某个服务拉配置”的隐式入口
+
+## Acceptance Criteria
+
+只有同时满足下面这些，桌面壳才算可以发布：
+
+- macOS 和 Windows 都能产出安装包
+- 安装后能正常打开主窗口
+- 用户能通过 pairing link 完成首次接入
+- 用户不需要手动理解三段底层参数
+- 关闭应用就是退出，不产生隐藏后台状态
+- 文档能用人话解释“怎么安装、怎么连接、怎么再次打开使用”
+- 所有现有 human-facing client 边界保持不变
+
+## Summary
+
+这版桌面壳的本质不是“给极客多一个包装”，而是：
+
+> 把已经存在的 web client 变成一个更容易被普通人安装和使用的桌面入口。
+
+所以正确方向不是加更多桌面特性，
+而是把范围收小，把体验做顺，把语言说人话。

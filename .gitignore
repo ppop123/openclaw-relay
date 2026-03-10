@@ -9,3 +9,6 @@ node_modules/
 relay/relay
 autocert-cache/
 .wrangler/
+desktop/webview-dist/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

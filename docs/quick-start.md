@@ -60,13 +60,13 @@ openclaw relay enable --server wss://relay.example.com/ws
 openclaw relay status
 ```
 
-准备从浏览器连接时，在终端启动配对：
+准备从客户端连接时，在终端启动配对：
 
 ```bash
 openclaw relay pair
 ```
 
-`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。在命令等待期间，你可以手动把打印出的 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）填进浏览器客户端。
+`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。推荐做法是把输出里的 pairing link（`pairing.uri`）直接粘贴到客户端首页的 `Pairing link` 输入框。
 
 如果浏览器客户端部署在固定地址，还可以直接生成一键连接链接：
 
@@ -85,16 +85,19 @@ openclaw relay rotate-token
 openclaw relay disable
 ```
 
-## 第三步：从浏览器连接
+## 第三步：从客户端连接
 
-使用 `client/` 中的浏览器客户端：
+使用官方客户端连接：
 
-- 如果你是手动配对，就输入 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）
+- 浏览器路径：打开 `client/` 下的浏览器客户端
+- 桌面路径：在 Windows/macOS 上使用 `desktop/` 下的桌面壳（同样优先粘贴 pairing link）
+- 首选：把 `pairing.uri` 粘贴到客户端首页的 `Pairing link` 输入框
 - 如果你用了 `--print-web-url`，浏览器会自动填入这些值
+- 只有在需要时，才展开 `Manual setup` 手动输入 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）
 
 然后点击连接。
 
-浏览器客户端文档：
+客户端文档：
 
 - [`docs/web-client.md`](web-client.md)
 - [`docs/web-client/testing-and-troubleshooting.md`](web-client/testing-and-troubleshooting.md)
@@ -199,13 +202,13 @@ openclaw relay enable --server wss://relay.example.com/ws
 openclaw relay status
 ```
 
-When you are ready to connect from the browser, start pairing in one terminal:
+When you are ready to connect from the client, start pairing in one terminal:
 
 ```bash
 openclaw relay pair
 ```
 
-`openclaw relay pair` prints the pairing details and keeps the pairing window open (default 5 minutes). While the command is waiting, open the browser client and enter the printed relay URL, channel token, and gateway public key.
+`openclaw relay pair` prints the pairing details and keeps the pairing window open (default 5 minutes). The recommended path is to copy the printed pairing link (`pairing.uri`) into the client's `Pairing link` field.
 
 Useful day-2 commands:
 
@@ -216,13 +219,13 @@ openclaw relay rotate-token
 openclaw relay disable
 ```
 
-## Step 3: Connect from the browser
+## Step 3: Connect from the client
 
 Use the browser client in `client/` and enter:
 
-- relay URL
-- channel token
-- gateway public key
+- preferably: paste `pairing.uri` into the client's `Pairing link` field
+- if you used `--print-web-url`, the browser fills the values automatically
+- only if needed: expand `Manual setup` and enter the relay URL, channel token, and gateway public key
 
 Then connect.
 
