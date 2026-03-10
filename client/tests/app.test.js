@@ -128,6 +128,7 @@ beforeEach(() => {
   globalThis.location.href = 'http://localhost/';
   globalThis.location.origin = 'http://localhost';
   globalThis.location.pathname = '/';
+  globalThis.__OPENCLAW_RELAY_LAUNCH_ARGS = [];
 
   app.connection.exportIdentityBundle = defaultExportIdentityBundle;
   app.connection.importIdentityBundle = defaultImportIdentityBundle;
@@ -146,6 +147,9 @@ beforeEach(() => {
   app.connection._closed = false;
   app.connection.state = 'disconnected';
   app.streamEpoch = 0;
+  app._pendingDesktopAutoConnect = false;
+  app._lastDesktopPairingLink = '';
+  app._initComplete = false;
 });
 
 describe('channelToken migration', () => {
@@ -628,6 +632,63 @@ describe('pairing handoff via URL fragment', () => {
     expect(getElement('relayUrl').value).toBe('wss://pair.example.com/ws');
     expect(getElement('gatewayPubKey').value).toBe('PAIRKEY');
     expect(getElement('profileSelect').value).toBe('');
+  });
+});
+
+describe('desktop launch pairing handoff', () => {
+  it('auto-fills form fields from launch args, connects, and clears the transient payload', async () => {
+    const connectSpy = vi.fn(async () => undefined);
+    const fetchAgentsSpy = vi.spyOn(app, '_fetchAgents').mockResolvedValue(undefined);
+    const addSystemSpy = vi.spyOn(app, '_addSystemMessage').mockImplementation(() => {});
+    const showPromptSpy = vi.spyOn(app, '_showProfileSavePrompt').mockImplementation(() => {});
+    const updateIdentitySpy = vi.spyOn(app, '_updateIdentityStatus').mockImplementation(() => {});
+    const updateDiagnosticsSpy = vi.spyOn(app, '_updateDiagnostics').mockImplementation(() => {});
+    app.connection.connect = connectSpy;
+
+    globalThis.__OPENCLAW_RELAY_LAUNCH_ARGS = [
+      'openclaw-relay://relay.example.com/test-token#BASE64PUBKEY',
+    ];
+
+    await app.init();
+
+    expect(getElement('relayUrl').value).toBe('wss://relay.example.com/ws');
+    expect(getElement('channelToken').value).toBe('test-token');
+    expect(getElement('gatewayPubKey').value).toBe('BASE64PUBKEY');
+    expect(connectSpy).toHaveBeenCalledWith('wss://relay.example.com/ws', 'test-token', 'BASE64PUBKEY');
+    expect(globalThis.__OPENCLAW_RELAY_LAUNCH_ARGS).toEqual([]);
+
+    fetchAgentsSpy.mockRestore();
+    addSystemSpy.mockRestore();
+    showPromptSpy.mockRestore();
+    updateIdentitySpy.mockRestore();
+    updateDiagnosticsSpy.mockRestore();
+  });
+
+  it('reuses the running app when a later launch event carries a pairing link', async () => {
+    const connectSpy = vi.fn(async () => undefined);
+    const fetchAgentsSpy = vi.spyOn(app, '_fetchAgents').mockResolvedValue(undefined);
+    const addSystemSpy = vi.spyOn(app, '_addSystemMessage').mockImplementation(() => {});
+    const showPromptSpy = vi.spyOn(app, '_showProfileSavePrompt').mockImplementation(() => {});
+    const updateIdentitySpy = vi.spyOn(app, '_updateIdentityStatus').mockImplementation(() => {});
+    const updateDiagnosticsSpy = vi.spyOn(app, '_updateDiagnostics').mockImplementation(() => {});
+    app.connection.connect = connectSpy;
+
+    await app.init();
+    connectSpy.mockClear();
+
+    const used = await app._handleDesktopLaunchArgsEvent([
+      'openclaw-relay://relay.example.com/test-token#BASE64PUBKEY',
+    ]);
+
+    expect(used).toBe(true);
+    expect(getElement('relayUrl').value).toBe('wss://relay.example.com/ws');
+    expect(connectSpy).toHaveBeenCalledWith('wss://relay.example.com/ws', 'test-token', 'BASE64PUBKEY');
+
+    fetchAgentsSpy.mockRestore();
+    addSystemSpy.mockRestore();
+    showPromptSpy.mockRestore();
+    updateIdentitySpy.mockRestore();
+    updateDiagnosticsSpy.mockRestore();
   });
 });
 

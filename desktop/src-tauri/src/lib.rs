@@ -1,5 +1,7 @@
+use std::env;
+
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::App;
+use tauri::{App, Manager};
 
 const DOCS_URL: &str = "https://github.com/ppop123/openclaw-relay/blob/main/docs/quick-start.md";
 const RELEASES_URL: &str = "https://github.com/ppop123/openclaw-relay/releases";
@@ -23,9 +25,34 @@ fn open_external(url: &str) {
     }
 }
 
+fn launch_args_script_for(args: &[String]) -> String {
+    let serialized = serde_json::to_string(args).unwrap_or_else(|_| "[]".to_string());
+    format!(
+        "window.__OPENCLAW_RELAY_LAUNCH_ARGS = {serialized};window.dispatchEvent(new CustomEvent('openclaw-relay-launch-args', {{ detail: window.__OPENCLAW_RELAY_LAUNCH_ARGS }}));"
+    )
+}
+
+fn initial_launch_args_script() -> String {
+    let args: Vec<String> = env::args().skip(1).collect();
+    launch_args_script_for(&args)
+}
+
+fn forward_launch_args(app: &tauri::AppHandle, args: &[String]) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        let _ = window.eval(launch_args_script_for(args));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            forward_launch_args(app, &args);
+        }))
+        .append_invoke_initialization_script(initial_launch_args_script())
         .setup(|app| {
             let menu = build_menu(app)?;
             app.set_menu(menu)?;

@@ -41,9 +41,22 @@ export const app = {
   currentStreamText: '',
   streamEpoch: 0,
   _profileSavePromptDismissed: false,
+  _desktopLaunchListenerBound: false,
+  _pendingDesktopAutoConnect: false,
+  _lastDesktopPairingLink: '',
+  _initComplete: false,
 
   async init() {
-    const usedPairingFragment = this._applyPairingFragment();
+    this._initComplete = false;
+    if (!this._desktopLaunchListenerBound && globalThis.addEventListener) {
+      globalThis.addEventListener('openclaw-relay-launch-args', (event) => {
+        void this._handleDesktopLaunchArgsEvent(event?.detail);
+      });
+      this._desktopLaunchListenerBound = true;
+    }
+
+    const usedLaunchPairing = this._applyDesktopLaunchArgs();
+    const usedPairingFragment = usedLaunchPairing ? false : this._applyPairingFragment();
 
     // Migration: clean up any historically saved channelToken (bearer secret)
     const saved = this._loadSettings();
@@ -117,6 +130,53 @@ export const app = {
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
     this._updateDiagnostics();
+    this._initComplete = true;
+
+    if (usedLaunchPairing || this._pendingDesktopAutoConnect) {
+      this._pendingDesktopAutoConnect = false;
+      await this.handleConnect({ preventDefault() {} });
+    }
+  },
+
+  async _handleDesktopLaunchArgsEvent(rawArgs) {
+    const used = this._applyDesktopLaunchArgs(rawArgs);
+    if (!used) return false;
+
+    if (!this._initComplete) {
+      this._pendingDesktopAutoConnect = true;
+      return true;
+    }
+
+    if (this.connection.state !== 'disconnected') {
+      this.disconnect();
+    }
+    await this.handleConnect({ preventDefault() {} });
+    return true;
+  },
+
+  _applyDesktopLaunchArgs(rawArgs = globalThis.__OPENCLAW_RELAY_LAUNCH_ARGS) {
+    const args = Array.isArray(rawArgs) ? rawArgs : [];
+    if (!args.length) return false;
+
+    let pairingCandidate = '';
+    let fields = null;
+    for (const value of args) {
+      if (typeof value !== 'string' || !value.trim()) continue;
+      const candidate = value.trim();
+      try {
+        fields = this._parsePairingLink(candidate);
+        pairingCandidate = candidate;
+        break;
+      } catch {}
+    }
+
+    globalThis.__OPENCLAW_RELAY_LAUNCH_ARGS = [];
+    if (!fields || !pairingCandidate) return false;
+    if (pairingCandidate === this._lastDesktopPairingLink) return false;
+
+    this._lastDesktopPairingLink = pairingCandidate;
+    this._applyPairingFields(fields);
+    return true;
   },
 
   _applyPairingFragment() {
