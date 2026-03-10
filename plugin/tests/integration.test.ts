@@ -14,6 +14,8 @@ import { SessionCipher } from '../src/crypto.js';
 import type { RelayRuntimeAdapter } from '../src/types.js';
 import { arrayBufferFrom } from '../src/utils.js';
 
+const GO_BINARY = process.env.GO_BIN || 'go';
+
 function isLocalListenBlocked(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = 'code' in error ? String((error as { code?: unknown }).code) : '';
@@ -44,7 +46,7 @@ async function buildRelayBinary(): Promise<{ binaryPath: string; tempDir: string
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const build = spawn('go', ['build', '-o', binaryPath, '.'], {
+      const build = spawn(GO_BINARY, ['build', '-o', binaryPath, '.'], {
         cwd: relayCwd,
         stdio: 'pipe',
       });
