@@ -233,6 +233,9 @@ function resolveRelayAccount(cfg: OpenClawConfig, accountId = DEFAULT_ACCOUNT_ID
     enabled: configured ? raw.enabled : false,
     server: configured ? raw.server : '',
     channelToken: configured ? raw.channelToken : '',
+    ...(configured && typeof raw.webClientBaseUrl === 'string' && raw.webClientBaseUrl.trim()
+      ? { webClientBaseUrl: raw.webClientBaseUrl.trim() }
+      : {}),
     gatewayKeyPair: configured
       ? raw.gatewayKeyPair
       : { privateKey: '', publicKey: '' },
@@ -263,6 +266,7 @@ function summarizeAccount(account: ResolvedRelayAccount): ChannelAccountSnapshot
     enabled: account.enabled,
     configured: account.configured,
     publicKey: account.gatewayKeyPair.publicKey || null,
+    ...(account.webClientBaseUrl ? { webClientBaseUrl: account.webClientBaseUrl } : {}),
     peerDiscoveryEnabled: Boolean(account.peerDiscovery?.enabled),
     ...(account.peerDiscovery?.autoAcceptRequests ? { peerDiscoveryAutoAcceptEnabled: account.peerDiscovery.autoAcceptRequests.enabled === true } : {}),
   };
@@ -1796,10 +1800,12 @@ function registerRelayCommands(api: OpenClawPluginApi): void {
     handler: async (ctx) => {
       const args = (ctx.args ?? '').trim();
       const accountId = args || DEFAULT_ACCOUNT_ID;
+      const cfg = api.runtime.config.loadConfig();
+      const account = resolveRelayAccount(cfg, accountId);
       const store = new OpenClawRelayConfigStore(api.runtime);
       const record = await ensureStartedAccount({ api, accountId, log: api.logger });
       const info = await handleRelayPair(store, record.pairing, accountId);
-      const webBase = buildDefaultPairingWebBase(info);
+      const webBase = account.webClientBaseUrl?.trim() || buildDefaultPairingWebBase(info);
       const webClientUrl = buildPairingWebUrl(info, webBase, { autoConnect: true });
       return { text: webClientUrl };
     },
@@ -1835,14 +1841,15 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
             additionalProperties: {
               type: 'object',
               additionalProperties: false,
-              properties: {
-                enabled: { type: 'boolean' },
-                server: { type: 'string' },
-                channelToken: { type: 'string' },
-                gatewayKeyPair: {
-                  type: 'object',
-                  additionalProperties: false,
-                  properties: {
+                properties: {
+                  enabled: { type: 'boolean' },
+                  server: { type: 'string' },
+                  channelToken: { type: 'string' },
+                  webClientBaseUrl: { type: 'string' },
+                  gatewayKeyPair: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
                     privateKey: { type: 'string' },
                     publicKey: { type: 'string' },
                   },
@@ -1882,6 +1889,7 @@ export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccou
       },
       uiHints: {
         'accounts.default.server': { label: 'Relay Server', help: 'WebSocket URL of the relay.' },
+        'accounts.default.webClientBaseUrl': { label: 'Web Client URL', help: 'Base URL used for one-click pairing links (defaults to https(s)://<relay-host>/client/).' },
         'accounts.default.channelToken': { label: 'Channel Token', sensitive: true },
         'accounts.default.gatewayKeyPair.privateKey': { label: 'Gateway Private Key', sensitive: true, advanced: true },
         'accounts.default.gatewayKeyPair.publicKey': { label: 'Gateway Public Key', advanced: true },

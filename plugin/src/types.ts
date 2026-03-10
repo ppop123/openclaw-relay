@@ -30,6 +30,11 @@ export interface RelayAccountConfig {
   enabled: boolean;
   server: string;
   channelToken: string;
+  /**
+   * Optional base URL for the browser client used in pairing handoff links.
+   * Example: https://relay.example.com/client/
+   */
+  webClientBaseUrl?: string;
   gatewayKeyPair: GatewayKeyPairConfig;
   approvedClients: Record<string, ApprovedClientRecord>;
   peerDiscovery?: PeerDiscoveryConfig;
