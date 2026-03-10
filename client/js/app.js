@@ -425,6 +425,9 @@ export const app = {
       return;
     }
 
+    // Cancel any in-flight streaming request so late chunks can't corrupt the new chat.
+    this.connection.cancelInFlightStreams?.('New chat started');
+
     this.streamEpoch += 1;
     document.getElementById('messages').innerHTML = '';
     this.chatTranscript = [];

@@ -52,6 +52,9 @@ export class RelayConnection {
     // Frame waiters (populated during handshake)
     this._frameWaiters = new Map();
     this._dataWaiters = new Map();
+
+    // Keepalive (Cloudflare/NATs can drop idle WebSockets)
+    this._keepaliveTimer = null;
   }
 
   async connect(relayUrl, channelToken, gatewayPubKeyB64) {
@@ -399,6 +402,25 @@ export class RelayConnection {
 
     this.encrypted = true;
     this._setState('connected');
+    this._startKeepalive();
+  }
+
+  _startKeepalive() {
+    this._stopKeepalive();
+    this._keepaliveTimer = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      if (this.state !== 'connected') return;
+      try {
+        this._sendRaw({ type: 'ping', ts: Date.now() });
+      } catch {}
+    }, 25000);
+  }
+
+  _stopKeepalive() {
+    if (this._keepaliveTimer) {
+      clearInterval(this._keepaliveTimer);
+      this._keepaliveTimer = null;
+    }
   }
 
   _sendRaw(frame) {
@@ -665,6 +687,7 @@ export class RelayConnection {
   _handleSocketClose(error) {
     this.encrypted = false;
     this.crypto.clearSession();
+    this._stopKeepalive();
     this._rejectHandshakeWaiters(error);
     this._rejectPendingRequests(error);
     this.activeStreams.clear();
@@ -824,6 +847,7 @@ export class RelayConnection {
     this._connectPromise = null;
     this.encrypted = false;
     this.crypto.clearSession();
+    this._stopKeepalive();
     const error = new Error('Disconnected');
     this._rejectHandshakeWaiters(error);
     this._rejectPendingRequests(error);
@@ -837,5 +861,16 @@ export class RelayConnection {
       } catch {}
     }
     this._setState('disconnected');
+  }
+
+  cancelInFlightStreams(reason = 'Cancelled') {
+    const error = new Error(reason);
+    for (const [id, pending] of this.pendingRequests) {
+      if (!pending.streaming) continue;
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+      this.pendingRequests.delete(id);
+    }
+    this.activeStreams.clear();
   }
 }
