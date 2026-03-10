@@ -46,6 +46,7 @@ function buildApi(initialConfig: OpenClawConfig = {}): OpenClawPluginApi & {
       warn: vi.fn(),
       error: vi.fn(),
     },
+    registerCommand: vi.fn(),
     registerChannel(registration) {
       this.registeredChannel = registration;
     },

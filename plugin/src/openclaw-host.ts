@@ -1524,6 +1524,7 @@ export function createRelayAgentBridge(api: OpenClawPluginApi): RelayAgentBridge
 
 export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin: ChannelPlugin<ResolvedRelayAccount>): { channelPlugin: ChannelPlugin<ResolvedRelayAccount>; registerCli: () => void } {
   registerRelayGatewayMethods(api);
+  registerRelayCommands(api);
 
   const channelPlugin: ChannelPlugin<ResolvedRelayAccount> = {
     ...previewPlugin,
@@ -1780,6 +1781,29 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
   };
 
   return { channelPlugin, registerCli };
+}
+
+function registerRelayCommands(api: OpenClawPluginApi): void {
+  if (typeof api.registerCommand !== 'function') {
+    api.logger.warn('[relay] OpenClaw runtime does not expose registerCommand; skipping /relay_pair');
+    return;
+  }
+
+  api.registerCommand({
+    name: 'relay_pair',
+    description: 'Generate a one-click pairing link for the Relay web client',
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      const args = (ctx.args ?? '').trim();
+      const accountId = args || DEFAULT_ACCOUNT_ID;
+      const store = new OpenClawRelayConfigStore(api.runtime);
+      const record = await ensureStartedAccount({ api, accountId, log: api.logger });
+      const info = await handleRelayPair(store, record.pairing, accountId);
+      const webBase = buildDefaultPairingWebBase(info);
+      const webClientUrl = buildPairingWebUrl(info, webBase, { autoConnect: true });
+      return { text: webClientUrl };
+    },
+  });
 }
 
 export function createRelayChannelDefinition(): ChannelPlugin<ResolvedRelayAccount> {

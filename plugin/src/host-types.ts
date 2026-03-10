@@ -75,6 +75,26 @@ export interface OpenClawPluginApi {
   runtime: OpenClawRuntime;
   logger: PluginLogger;
   registerChannel: (registration: { plugin: ChannelPlugin<any> } | ChannelPlugin<any>) => void;
+  registerCommand: (command: {
+    name: string;
+    description: string;
+    acceptsArgs?: boolean;
+    requireAuth?: boolean;
+    nativeNames?: Record<string, string>;
+    handler: (ctx: {
+      senderId?: string;
+      channel: string;
+      channelId?: string;
+      isAuthorizedSender: boolean;
+      args?: string;
+      commandBody: string;
+      config: OpenClawConfig;
+      from?: unknown;
+      to?: unknown;
+      accountId?: string;
+      messageThreadId?: string;
+    }) => Promise<{ text?: string; body?: string } | string | null | undefined> | ({ text?: string; body?: string } | string | null | undefined);
+  }) => void;
   registerGatewayMethod: (
     method: string,
     handler: (ctx: {
