@@ -327,7 +327,7 @@ export class RelayConnection {
       socket.onerror = () => {
         if (this.ws !== socket) return;
         clearTimeout(timeout);
-        if (this.state === 'connecting' && !this._reconnecting) {
+        if ((this.state === 'connecting' || this.state === 'reconnecting') && !this._reconnecting) {
           this._setState('disconnected');
           reject(new Error('WebSocket connection failed'));
         }
@@ -522,11 +522,14 @@ export class RelayConnection {
         return;
       }
       if (type === 'presence') {
-        if (frame.role === 'gateway') {
-          if (frame.status === 'offline') {
-            this.onToast?.('Gateway went offline', 'warning');
-          } else if (frame.status === 'online') {
-            this.onToast?.('Gateway is back online', 'info');
+        // Keep gateway presence changes quiet. If the gateway drops offline
+        // while we're connected, proactively close so we can re-handshake
+        // when it comes back, instead of letting requests hang until timeout.
+        if (frame.role === 'gateway' && frame.status === 'offline') {
+          if (this.ws && this.state === 'connected' && !this._closed) {
+            try {
+              this.ws.close();
+            } catch {}
           }
         }
       }
@@ -819,23 +822,42 @@ export class RelayConnection {
     if (this._closed || this._reconnecting) return;
     this._reconnecting = true;
 
+    const startedAt = Date.now();
+    let notified = false;
+    let attempt = 0;
+
     while (!this._closed) {
+      attempt += 1;
       const jitter = Math.random() * 0.25 * this._backoff;
       const delay = this._backoff + jitter;
-      this.onToast?.(`Reconnecting in ${(delay / 1000).toFixed(1)}s...`, 'warning');
-      this._setState('connecting');
+
+      // Keep reconnection quiet for quick hiccups.
+      // Only notify the user if we've been offline for a while.
+      const offlineForMs = Date.now() - startedAt;
+      if (!notified && offlineForMs >= 15000) {
+        notified = true;
+        this.onToast?.('Connection is unstable. Reconnecting…', 'warning');
+      }
+
+      this._setState('reconnecting');
 
       await new Promise(r => setTimeout(r, delay));
       if (this._closed) break;
 
       try {
         await this._doConnect();
-        this.onToast?.('Reconnected', 'info');
+        if (notified) {
+          this.onToast?.('Reconnected', 'info');
+        }
         this._reconnecting = false;
         return;
       } catch (e) {
         console.warn('Reconnect failed:', e.message);
         this._backoff = Math.min(this._backoff * 2, this._maxBackoff);
+
+        if (notified && attempt % 5 === 0) {
+          this.onToast?.('Still reconnecting…', 'warning');
+        }
       }
     }
 

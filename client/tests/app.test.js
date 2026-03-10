@@ -116,6 +116,9 @@ const defaultSendRequest = app.connection.sendRequest.bind(app.connection);
 
 beforeEach(() => {
   store.clear();
+  // Unit tests assert against English strings.
+  // The product default is Chinese, so we explicitly set language here.
+  store.set(STORAGE_KEY, JSON.stringify({ language: 'en' }));
   elements.clear();
   createdElements.length = 0;
   confirmMock.mockReset();
@@ -172,7 +175,7 @@ describe('channelToken migration', () => {
   });
 
   it('leaves settings unchanged when no channelToken exists', async () => {
-    const original = { relayUrl: 'wss://relay.test', gatewayPubKey: 'abc123' };
+    const original = { relayUrl: 'wss://relay.test', gatewayPubKey: 'abc123', language: 'en' };
     store.set(STORAGE_KEY, JSON.stringify(original));
 
     await app.init();

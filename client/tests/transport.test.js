@@ -568,15 +568,10 @@ describe('_handleFrame', () => {
     }
   });
 
-  it('calls onToast for gateway offline presence event (no waiter)', async () => {
-    // No waiter registered — should fall through to toast logic
+  it('keeps gateway presence changes quiet (no toast)', async () => {
     await conn._handleFrame({ type: 'presence', role: 'gateway', status: 'offline' });
-    expect(conn.onToast).toHaveBeenCalledWith('Gateway went offline', 'warning');
-  });
-
-  it('calls onToast for gateway online presence event (no waiter)', async () => {
     await conn._handleFrame({ type: 'presence', role: 'gateway', status: 'online' });
-    expect(conn.onToast).toHaveBeenCalledWith('Gateway is back online', 'info');
+    expect(conn.onToast).not.toHaveBeenCalled();
   });
 
   it('ignores pong frames silently', async () => {

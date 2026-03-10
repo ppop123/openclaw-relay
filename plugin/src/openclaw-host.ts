@@ -39,7 +39,7 @@ import type {
 const RELAY_CHANNEL_ID = 'relay';
 const DEFAULT_ACCOUNT_ID = 'default';
 const PAIR_WAIT_POLL_MS = 1000;
-const PAIR_WAIT_SECONDS = 300;
+const PAIR_WAIT_SECONDS = 600;
 
 let spawnExternalProcess: typeof childProcess.spawn = childProcess.spawn;
 

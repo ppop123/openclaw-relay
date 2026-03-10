@@ -13,6 +13,194 @@ import { RelayConnection } from './transport.js';
 const STORAGE_KEY_SETTINGS = 'openclaw-relay-settings';
 const STORAGE_KEY_PROFILES = 'openclaw-relay-profiles';
 
+// ── UI strings (minimal i18n) ──
+
+const UI_STRINGS = {
+  zh: {
+    'status.not_connected': '未连接',
+    'status.connecting': '连接中…',
+    'status.connected': '已连接',
+    'status.reconnecting': '连接中…',
+    'statusbar.not_connected': '未连接',
+    'statusbar.connecting': '连接中…',
+    'statusbar.reconnecting': '连接中…',
+    'statusbar.connected_secure': '已安全连接',
+    'statusbar.connected_to': '已连接到 {host}',
+
+    'token.show': '显示访问令牌',
+    'token.hide': '隐藏访问令牌',
+
+    'chat.new_thread': '已开始新的对话。',
+    'chat.connect_first': '请先连接，再开始新的对话。',
+
+    'identity.summary.loading': '浏览器身份：加载中…',
+    'identity.summary.load_failed': '浏览器身份：加载失败',
+    'identity.summary.persist_unavailable': '浏览器身份：无法持久化',
+    'identity.summary.not_created': '浏览器身份：尚未创建',
+
+    'identity.mode.persistent': '浏览器身份（已持久化）',
+    'identity.mode.memory': '临时身份（仅本页）',
+    'identity.mode.unsupported': '无法持久化',
+    'identity.mode.not_created': '尚未创建',
+    'identity.title': '浏览器身份',
+
+    'sessions.button': '会话',
+    'sessions.title': '会话',
+    'sessions.close': '关闭',
+    'sessions.note': '继续之前的对话，或开始新的对话。',
+    'sessions.loading': '加载中…',
+    'sessions.empty': '暂无历史会话。',
+    'sessions.resume': '继续',
+    'sessions.load_more': '加载更多',
+
+    'connect.connected_secure': '已安全连接到你的 OpenClaw。',
+
+    'connect.title': '连接你的 OpenClaw',
+    'connect.subtitle': '粘贴 OpenClaw 发给你的配对链接即可。需要手动填写时再展开“手动设置”。',
+    'connect.pairing_label': '配对链接',
+    'connect.pairing_recommended': '首次使用推荐',
+    'connect.pairing_placeholder': 'openclaw-relay://relay.example.com/...',
+    'connect.manual_setup': '手动设置',
+    'connect.server_address': '服务器地址',
+    'connect.server_address_hint': 'Relay URL',
+    'connect.access_token': '访问令牌',
+    'connect.access_token_hint': 'Channel token',
+    'connect.gateway_key': '验证密钥',
+    'connect.gateway_key_hint': '由 OpenClaw 管理员提供',
+    'connect.connect_btn': '连接',
+    'connect.disconnect_btn': '断开连接',
+
+    'profiles.title': '已保存的连接',
+    'profiles.empty': '还没有保存的连接。先连接一次，然后保存，方便下次一键使用。',
+    'profiles.save_current': '保存当前连接',
+    'profiles.save': '保存',
+    'profiles.delete': '删除',
+    'profiles.name': '名称',
+
+
+    'chat.new_button': '新对话',
+    'chat.export_button': '保存对话',
+    'chat.send_button': '发送',
+    'chat.input_placeholder': '输入消息…',
+
+    'agent.label': 'Agent',
+
+    'dashboard.button': '概览',
+    'dashboard.title': '概览',
+    'dashboard.refresh': '刷新',
+    'dashboard.close': '关闭',
+    'dashboard.system': '系统状态',
+    'dashboard.agents': 'Agents',
+    'dashboard.cron': '定时任务',
+    'dashboard.loading': '加载中…',
+    'dashboard.not_available': '当前网关不支持此功能。',
+
+    'profiles.saved': '连接已保存。',
+    'profiles.updated': '连接已更新。',
+    'profiles.deleted': '连接已删除。',
+
+    'agents.fetch_failed': '获取 agent 列表失败：{error}',
+    'agents.select_required': '请先选择一个 agent。',
+
+  },
+  en: {
+    'status.not_connected': 'Not connected',
+    'status.connecting': 'Connecting…',
+    'status.connected': 'Connected',
+    'status.reconnecting': 'Connecting…',
+    'statusbar.not_connected': 'Not connected',
+    'statusbar.connecting': 'Connecting…',
+    'statusbar.reconnecting': 'Connecting…',
+    'statusbar.connected_secure': 'Connected securely',
+    'statusbar.connected_to': 'Connected to {host}',
+
+    'token.show': 'Show access token',
+    'token.hide': 'Hide access token',
+
+    'chat.new_thread': 'Started a new chat thread.',
+    'chat.connect_first': 'Connect before starting a new chat.',
+
+    'identity.summary.loading': 'Browser identity: loading…',
+    'identity.summary.load_failed': 'Browser identity: load failed',
+    'identity.summary.persist_unavailable': 'Browser identity: persistence unavailable',
+    'identity.summary.not_created': 'Browser identity: not created yet',
+
+    'identity.mode.persistent': 'Persistent browser identity',
+    'identity.mode.memory': 'Temporary page identity',
+    'identity.mode.unsupported': 'Persistence unavailable',
+    'identity.mode.not_created': 'Not created yet',
+    'identity.title': 'Browser identity',
+
+    'sessions.button': 'Sessions',
+    'sessions.title': 'Sessions',
+    'sessions.close': 'Close',
+    'sessions.note': 'Resume a previous conversation, or start a fresh one.',
+    'sessions.loading': 'Loading…',
+    'sessions.empty': 'No previous sessions yet.',
+    'sessions.resume': 'Resume',
+    'sessions.load_more': 'Load more',
+
+    'connect.connected_secure': 'Connected securely to your OpenClaw.',
+
+    'connect.title': 'Connect to your OpenClaw',
+    'connect.subtitle': 'Paste the pairing link from OpenClaw. Open Manual setup only if you need to enter details yourself.',
+    'connect.pairing_label': 'Pairing link',
+    'connect.pairing_recommended': 'Recommended for first-time setup',
+    'connect.pairing_placeholder': 'openclaw-relay://relay.example.com/...',
+    'connect.manual_setup': 'Manual setup',
+    'connect.server_address': 'Server address',
+    'connect.server_address_hint': 'Relay URL',
+    'connect.access_token': 'Access token',
+    'connect.access_token_hint': 'Channel token',
+    'connect.gateway_key': 'Verification key',
+    'connect.gateway_key_hint': 'Provided by your OpenClaw operator',
+    'connect.connect_btn': 'Connect',
+    'connect.disconnect_btn': 'Disconnect',
+
+    'profiles.title': 'Saved connections',
+    'profiles.empty': 'No saved connections yet. Connect once, then save this connection for next time.',
+    'profiles.save_current': 'Save this connection',
+    'profiles.save': 'Save',
+    'profiles.delete': 'Delete',
+    'profiles.name': 'Name',
+
+
+    'chat.new_button': 'New chat',
+    'chat.export_button': 'Save conversation',
+    'chat.send_button': 'Send',
+    'chat.input_placeholder': 'Type a message…',
+
+    'agent.label': 'Agent',
+
+    'dashboard.button': 'Dashboard',
+    'dashboard.title': 'Dashboard',
+    'dashboard.refresh': 'Refresh',
+    'dashboard.close': 'Close',
+    'dashboard.system': 'System status',
+    'dashboard.agents': 'Agents',
+    'dashboard.cron': 'Cron tasks',
+    'dashboard.loading': 'Loading…',
+    'dashboard.not_available': 'This gateway does not support this feature yet.',
+
+    'profiles.saved': 'Connection saved.',
+    'profiles.updated': 'Connection updated.',
+    'profiles.deleted': 'Connection deleted.',
+
+    'agents.fetch_failed': 'Failed to fetch agents: {error}',
+    'agents.select_required': 'Please select an agent.',
+
+  },
+};
+
+function formatUiString(template, vars) {
+  if (!vars) return template;
+  let out = template;
+  for (const [key, value] of Object.entries(vars)) {
+    out = out.replaceAll(`{${key}}`, String(value));
+  }
+  return out;
+}
+
 // ── Toast notifications ──
 
 export function showToast(message, type = 'info', duration = 4000) {
@@ -31,6 +219,7 @@ export function showToast(message, type = 'info', duration = 4000) {
 // ── Application ──
 
 export const app = {
+  language: 'zh',
   connection: new RelayConnection(),
   agents: [],
   profiles: [],
@@ -60,6 +249,12 @@ export const app = {
 
     // Migration: clean up any historically saved channelToken (bearer secret)
     const saved = this._loadSettings();
+    this.language = saved.language === 'en' ? 'en' : 'zh';
+    this._applyLanguageToStaticDom();
+    const langBtn = document.getElementById('langToggleBtn');
+    if (langBtn) langBtn.textContent = this.language === 'zh' ? 'EN' : '中文';
+    // Ensure static labels reflect saved language
+    this.setLanguage(this.language);
     if (saved.channelToken) {
       delete saved.channelToken;
       try {
@@ -135,6 +330,64 @@ export const app = {
     if (usedLaunchPairing || this._pendingDesktopAutoConnect) {
       this._pendingDesktopAutoConnect = false;
       await this.handleConnect({ preventDefault() {} });
+    }
+
+  },
+
+  t(key, vars) {
+    const lang = this.language === 'en' ? 'en' : 'zh';
+    const table = UI_STRINGS[lang] || UI_STRINGS.zh;
+    const template = table[key] || UI_STRINGS.en[key] || key;
+    return formatUiString(template, vars);
+  },
+
+  setLanguage(lang) {
+    const next = lang === 'en' ? 'en' : 'zh';
+    this.language = next;
+    this._saveSettings({ language: next });
+
+    const btn = document.getElementById('langToggleBtn');
+    if (btn) btn.textContent = next === 'zh' ? 'EN' : '中文';
+
+    this._applyLanguageToStaticDom();
+    this._updateStatus(this.connection.state);
+    this._updateIdentityStatus();
+    this._updateDiagnostics();
+  },
+
+  toggleLanguage() {
+    this.setLanguage(this.language === 'zh' ? 'en' : 'zh');
+  },
+
+  _applyLanguageToStaticDom() {
+    const lang = this.language === 'en' ? 'en' : 'zh';
+
+    const nodes = document.querySelectorAll?.('[data-i18n]') || [];
+    for (const node of nodes) {
+      const key = node.getAttribute?.('data-i18n');
+      if (!key) continue;
+      const table = UI_STRINGS[lang] || UI_STRINGS.zh;
+      const value = table[key] || UI_STRINGS.en[key];
+      if (typeof value === 'string') node.textContent = value;
+    }
+
+    const placeholders = document.querySelectorAll?.('[data-i18n-placeholder]') || [];
+    for (const node of placeholders) {
+      const key = node.getAttribute?.('data-i18n-placeholder');
+      if (!key) continue;
+      const table = UI_STRINGS[lang] || UI_STRINGS.zh;
+      const value = table[key] || UI_STRINGS.en[key];
+      if (typeof value === 'string') node.setAttribute?.('placeholder', value);
+    }
+
+    const connectBtn = document.getElementById('connectBtn');
+    if (connectBtn) {
+      connectBtn.textContent = this.t('connect.connect_btn');
+    }
+
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    if (disconnectBtn) {
+      disconnectBtn.textContent = this.t('connect.disconnect_btn');
     }
   },
 
@@ -369,7 +622,7 @@ export const app = {
       await this._fetchAgents();
 
       // Add system message
-      this._addSystemMessage('Connected securely to your OpenClaw.');
+      this._addSystemMessage(this.t('connect.connected_secure'));
       this._showProfileSavePrompt();
 
       // Focus input
@@ -395,6 +648,8 @@ export const app = {
     this._profileSavePromptDismissed = false;
     this._hideProfileSavePrompt();
     this.connection.disconnect();
+    this.closeSessions?.();
+    this.closeDashboard?.();
 
     this._returnToConnectView();
     this._updateIdentityStatus();
@@ -421,7 +676,7 @@ export const app = {
 
   startNewChat() {
     if (this.connection.state !== 'connected') {
-      showToast('Connect before starting a new chat.', 'warning');
+      showToast(this.t('chat.connect_first'), 'warning');
       return;
     }
 
@@ -434,9 +689,312 @@ export const app = {
     this.sessionId = null;
     this.currentStreamEl = null;
     this.currentStreamText = '';
-    this._addSystemMessage('Started a new chat thread.');
+    this._addSystemMessage(this.t('chat.new_thread'));
     this._updateDiagnostics();
   },
+
+  // ── Sessions ──
+
+  async openSessions() {
+    const overlay = document.getElementById('sessionsOverlay');
+    const list = document.getElementById('sessionsList');
+    if (!overlay || !list) return;
+    overlay.hidden = false;
+
+    list.innerHTML = `<div class="sessions-loading">${this._escapeHtml(this.t('sessions.loading'))}</div>`;
+
+    try {
+      const agent = document.getElementById('agentSelect')?.value || '';
+      const result = await this.connection.sendRequest('sessions.list', {
+        agent: agent || undefined,
+        limit: 20,
+        offset: 0,
+      });
+
+      const sessions = result?.sessions || result?.result?.sessions || [];
+      const total = result?.total ?? result?.result?.total ?? sessions.length;
+      this._renderSessionsList(sessions, total, 0);
+    } catch (err) {
+      list.innerHTML = `<div class="sessions-error">${this._escapeHtml(err.message || String(err))}</div>`;
+    }
+  },
+
+  closeSessions() {
+    const overlay = document.getElementById('sessionsOverlay');
+    if (overlay) overlay.hidden = true;
+  },
+
+  _renderSessionsList(sessions, total, offset) {
+    const list = document.getElementById('sessionsList');
+    if (!list) return;
+
+    if (!Array.isArray(sessions) || sessions.length === 0) {
+      list.innerHTML = `<div class="sessions-empty">${this._escapeHtml(this.t('sessions.empty'))}</div>`;
+      return;
+    }
+
+    const rows = sessions.map((session) => {
+      const preview = (session.preview || '').trim();
+      const agent = session.agent || '';
+      const started = session.started_at || session.startedAt || '';
+      const last = session.last_message_at || session.lastMessageAt || '';
+      const metaParts = [];
+      if (agent) metaParts.push(agent);
+      if (last) metaParts.push(`last: ${last}`);
+      else if (started) metaParts.push(`started: ${started}`);
+      if (typeof session.message_count === 'number') metaParts.push(`${session.message_count} msgs`);
+
+      return `
+        <div class="session-row">
+          <div class="session-main">
+            <div class="session-id">${this._escapeHtml(session.id || '')}</div>
+            <div class="session-meta">${this._escapeHtml(metaParts.join(' · '))}</div>
+            ${preview ? `<div class="session-preview">${this._escapeHtml(preview)}</div>` : ''}
+          </div>
+          <div class="session-actions">
+            <button type="button" class="secondary-btn" onclick="app.resumeSession('${this._escapeHtml((session.id || '').replace(/'/g, "\\'"))}')">${this._escapeHtml(this.t('sessions.resume'))}</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const canLoadMore = typeof total === 'number' ? (offset + sessions.length < total) : false;
+    const loadMoreButton = canLoadMore
+      ? `<button type="button" class="secondary-btn load-more" onclick="app.loadMoreSessions(${offset + sessions.length})">${this._escapeHtml(this.t('sessions.load_more'))}</button>`
+      : '';
+
+    list.innerHTML = rows + loadMoreButton;
+  },
+
+  async loadMoreSessions(nextOffset) {
+    const list = document.getElementById('sessionsList');
+    if (!list) return;
+
+    try {
+      const agent = document.getElementById('agentSelect')?.value || '';
+      const result = await this.connection.sendRequest('sessions.list', {
+        agent: agent || undefined,
+        limit: 20,
+        offset: nextOffset,
+      });
+
+      const sessions = result?.sessions || result?.result?.sessions || [];
+      const total = result?.total ?? result?.result?.total ?? (nextOffset + sessions.length);
+
+      const existing = list.querySelectorAll?.('.session-row')?.length || 0;
+      // Re-render from scratch for simplicity (list is small).
+      const prevResult = await this.connection.sendRequest('sessions.list', {
+        agent: agent || undefined,
+        limit: nextOffset + 20,
+        offset: 0,
+      });
+      const merged = prevResult?.sessions || prevResult?.result?.sessions || [];
+      this._renderSessionsList(merged, total, 0);
+      if (existing && list.scrollTop) {
+        // keep rough position
+      }
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    }
+  },
+
+  async resumeSession(sessionId) {
+    if (!sessionId) return;
+
+    try {
+      const result = await this.connection.sendRequest('sessions.history', {
+        session_id: sessionId,
+        limit: 200,
+        before: null,
+      });
+
+      const messages = result?.messages || result?.result?.messages || [];
+      this.streamEpoch += 1;
+      document.getElementById('messages').innerHTML = '';
+      this.chatTranscript = [];
+      this.sessionId = sessionId;
+
+      for (const msg of messages) {
+        const role = msg.role === 'assistant' ? 'assistant' : msg.role === 'user' ? 'user' : 'system';
+        const content = msg.content || '';
+        this._appendTranscriptEntry(role, content, { sessionId });
+        if (role === 'system') {
+          const el = document.createElement('div');
+          el.className = 'message system';
+          el.textContent = content;
+          document.getElementById('messages').appendChild(el);
+        } else {
+          this._addMessage(role, content);
+        }
+      }
+
+      this.closeSessions();
+      showToast(`${this.t('sessions.title')}: ${sessionId}`, 'info');
+      this._updateDiagnostics();
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    }
+  },
+
+
+  // ── Dashboard (system/cron) ──
+
+  async openDashboard() {
+    const overlay = document.getElementById('dashboardOverlay');
+    if (!overlay) return;
+    overlay.hidden = false;
+    await this.refreshDashboard();
+  },
+
+  closeDashboard() {
+    const overlay = document.getElementById('dashboardOverlay');
+    if (overlay) overlay.hidden = true;
+  },
+
+  async refreshDashboard() {
+    const kv = document.getElementById('systemStatusKv');
+    const agentsList = document.getElementById('agentsList');
+    const cronList = document.getElementById('cronList');
+    if (kv) kv.innerHTML = '';
+    if (agentsList) agentsList.innerHTML = '';
+    if (cronList) cronList.innerHTML = '';
+
+    const loading = this._escapeHtml(this.t('dashboard.loading'));
+    if (kv) kv.innerHTML = `<div class="k">${loading}</div><div class="v">…</div>`;
+
+    try {
+      const status = await this.connection.sendRequest('system.status', {});
+      this._renderSystemStatus(status?.result ?? status);
+    } catch (err) {
+      this._renderSystemStatusError(err);
+    }
+
+    // agents list (already used in chat)
+    try {
+      await this._fetchAgents();
+      this._renderAgentsList();
+    } catch {}
+
+    // cron list (optional)
+    try {
+      const result = await this.connection.sendRequest('cron.list', {});
+      this._renderCronList(result?.result ?? result);
+    } catch (err) {
+      this._renderCronListError(err);
+    }
+  },
+
+  _renderSystemStatus(status) {
+    const kv = document.getElementById('systemStatusKv');
+    if (!kv) return;
+
+    if (!status || typeof status !== 'object') {
+      kv.innerHTML = `<div class="k">—</div><div class="v">${this._escapeHtml(this.t('dashboard.not_available'))}</div>`;
+      return;
+    }
+
+    const entries = [];
+    const version = status.version ?? '';
+    const uptime = status.uptime_seconds ?? status.uptimeSeconds;
+    const agentsActive = status.agents_active ?? status.agentsActive;
+    const cronTasks = status.cron_tasks ?? status.cronTasks;
+
+    if (version) entries.push(['Version', String(version)]);
+    if (typeof uptime === 'number') entries.push(['Uptime', `${Math.floor(uptime)}s`]);
+    if (typeof agentsActive === 'number') entries.push(['Active agents', String(agentsActive)]);
+    if (typeof cronTasks === 'number') entries.push(['Cron tasks', String(cronTasks)]);
+
+    const channels = status.channels;
+    if (channels && typeof channels === 'object') {
+      for (const [name, state] of Object.entries(channels)) {
+        entries.push([`Channel: ${name}`, String(state)]);
+      }
+    }
+
+    kv.innerHTML = entries.map(([k, v]) => `<div class="k">${this._escapeHtml(k)}</div><div class="v">${this._escapeHtml(v)}</div>`).join('');
+  },
+
+  _renderSystemStatusError(err) {
+    const kv = document.getElementById('systemStatusKv');
+    if (!kv) return;
+    kv.innerHTML = `<div class="k">Error</div><div class="v">${this._escapeHtml(err?.message || String(err))}</div>`;
+  },
+
+  _renderAgentsList() {
+    const agentsList = document.getElementById('agentsList');
+    if (!agentsList) return;
+
+    if (!Array.isArray(this.agents) || this.agents.length === 0) {
+      agentsList.innerHTML = `<div class="sessions-empty">${this._escapeHtml(this.t('dashboard.not_available'))}</div>`;
+      return;
+    }
+
+    agentsList.innerHTML = this.agents.map((agent) => {
+      const name = agent.display_name || agent.name || '';
+      const status = agent.status || '';
+      const desc = agent.description || '';
+      const sub = [status, desc].filter(Boolean).join(' · ');
+      return `
+        <div class="dashboard-row">
+          <div class="dashboard-row-main">
+            <div class="dashboard-row-title">${this._escapeHtml(name)}</div>
+            <div class="dashboard-row-sub">${this._escapeHtml(sub)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  _renderCronList(payload) {
+    const cronList = document.getElementById('cronList');
+    if (!cronList) return;
+
+    const tasks = payload?.tasks;
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      cronList.innerHTML = `<div class="sessions-empty">${this._escapeHtml(this.t('dashboard.not_available'))}</div>`;
+      return;
+    }
+
+    cronList.innerHTML = tasks.map((task) => {
+      const id = task.id || '';
+      const name = task.name || id;
+      const agent = task.agent || '';
+      const schedule = task.schedule || '';
+      const enabled = Boolean(task.enabled);
+
+      return `
+        <div class="dashboard-row">
+          <div class="dashboard-row-main">
+            <div class="dashboard-row-title">${this._escapeHtml(name)}</div>
+            <div class="dashboard-row-sub">${this._escapeHtml([agent, schedule].filter(Boolean).join(' · '))}</div>
+          </div>
+          <label class="toggle-pill">
+            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="app.toggleCronTask('${this._escapeHtml(id).replace(/'/g, "\'")}', this.checked)">
+            <span>${enabled ? 'ON' : 'OFF'}</span>
+          </label>
+        </div>
+      `;
+    }).join('');
+  },
+
+  _renderCronListError(err) {
+    const cronList = document.getElementById('cronList');
+    if (!cronList) return;
+    cronList.innerHTML = `<div class="sessions-error">${this._escapeHtml(err?.message || String(err))}</div>`;
+  },
+
+  async toggleCronTask(id, enabled) {
+    if (!id) return;
+    try {
+      await this.connection.sendRequest('cron.toggle', { id, enabled: Boolean(enabled) });
+      showToast('OK', 'info', 1500);
+      await this.refreshDashboard();
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+      await this.refreshDashboard();
+    }
+  },
+
 
   handleProfileSelectChange() {
     const profileId = this._getSelectedProfileId();
@@ -510,7 +1068,7 @@ export const app = {
     this._saveSettings({ relayUrl, gatewayPubKey, selectedProfileId: profile.id });
     this._hideProfileSavePrompt();
     this._updateDiagnostics();
-    showToast(existingId ? 'Profile updated.' : 'Profile saved.', 'info');
+    showToast(existingId ? this.t('profiles.updated') : this.t('profiles.saved'), 'info');
   },
 
   deleteProfile() {
@@ -544,7 +1102,7 @@ export const app = {
       selectedProfileId: '',
     });
     this._updateDiagnostics();
-    showToast('Profile deleted.', 'info');
+    showToast(this.t('profiles.deleted'), 'info');
   },
 
   async exportIdentity() {
@@ -762,7 +1320,7 @@ export const app = {
       this._updateDiagnostics();
     } catch (err) {
       select.innerHTML = '<option value="">Failed to load agents</option>';
-      showToast('Failed to fetch agents: ' + err.message, 'error');
+      showToast(this.t('agents.fetch_failed', { error: err.message }), 'error');
     }
   },
 
@@ -789,7 +1347,7 @@ export const app = {
 
     const agent = document.getElementById('agentSelect').value;
     if (!agent) {
-      showToast('Please select an agent', 'warning');
+      showToast(this.t('agents.select_required'), 'warning');
       return;
     }
 
@@ -967,7 +1525,7 @@ export const app = {
       icon.textContent = visible ? '🙈' : '👁';
     }
     if (button) {
-      const label = visible ? 'Hide access token' : 'Show access token';
+      const label = visible ? this.t('token.hide') : this.t('token.show');
       button.title = label;
       button.setAttribute('aria-label', label);
     }
@@ -997,10 +1555,10 @@ export const app = {
     dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'connecting' || state === 'reconnecting' ? 'connecting' : '');
 
     const labels = {
-      disconnected: 'Not connected',
-      connecting: 'Connecting…',
-      reconnecting: 'Reconnecting…',
-      connected: 'Connected',
+      disconnected: this.t('status.not_connected'),
+      connecting: this.t('status.connecting'),
+      reconnecting: this.t('status.reconnecting'),
+      connected: this.t('status.connected'),
     };
     text.textContent = labels[state] || state;
 
@@ -1028,6 +1586,8 @@ export const app = {
     const clientEl = document.getElementById('clientValue');
     const profileEl = document.getElementById('profileValue');
     const gatewayEl = document.getElementById('gatewayValue');
+    const dashboardBtn = document.getElementById('dashboardBtn');
+    const sessionsBtn = document.getElementById('sessionsBtn');
     const newChatBtn = document.getElementById('newChatBtn');
     const exportChatBtn = document.getElementById('exportChatBtn');
     const statusBarText = document.getElementById('statusBarText');
@@ -1051,16 +1611,16 @@ export const app = {
 
     if (statusBarText) {
       if (this.connection.state === 'connected') {
-        const parts = [relayHost ? `Connected to ${relayHost}` : 'Connected securely'];
+        const parts = [relayHost ? this.t('statusbar.connected_to', { host: relayHost }) : this.t('statusbar.connected_secure')];
         parts.push(this.connection.encrypted ? 'Encrypted' : 'Security pending');
         if (agentName) parts.push(agentName);
         statusBarText.textContent = parts.join(' · ');
       } else if (this.connection.state === 'connecting') {
-        statusBarText.textContent = 'Connecting…';
+        statusBarText.textContent = this.t('statusbar.connecting');
       } else if (this.connection.state === 'reconnecting') {
-        statusBarText.textContent = 'Reconnecting…';
+        statusBarText.textContent = this.t('statusbar.reconnecting');
       } else {
-        statusBarText.textContent = 'Not connected';
+        statusBarText.textContent = this.t('statusbar.not_connected');
       }
     }
 
@@ -1113,6 +1673,8 @@ export const app = {
       }
     }
 
+    if (dashboardBtn) dashboardBtn.disabled = this.connection.state !== 'connected';
+    if (sessionsBtn) sessionsBtn.disabled = this.connection.state !== 'connected';
     if (newChatBtn) newChatBtn.disabled = this.connection.state !== 'connected';
     if (exportChatBtn) exportChatBtn.disabled = this.chatTranscript.length === 0;
   },
@@ -1125,7 +1687,7 @@ export const app = {
     const summary = this.connection.getIdentitySummary();
 
     if (summary.loadFailed) {
-      el.textContent = 'Browser identity: load failed';
+      el.textContent = this.t('identity.summary.load_failed');
       if (banner) banner.hidden = false;
       return;
     }
@@ -1139,11 +1701,11 @@ export const app = {
     }
 
     if (summary.persistence === 'unsupported') {
-      el.textContent = 'Browser identity: persistence unavailable';
+      el.textContent = this.t('identity.summary.persist_unavailable');
       return;
     }
 
-    el.textContent = 'Browser identity: not created yet';
+    el.textContent = this.t('identity.summary.not_created');
   },
 
   _updateIdentityStatus() {
@@ -1173,14 +1735,14 @@ export const app = {
     metaEl.textContent = summary.createdAt ? `Created: ${this._formatIdentityCreatedAt(summary.createdAt)}` : '';
 
     if (summary.persistence === 'persisted') {
-      modeEl.textContent = 'Persistent browser identity';
+      modeEl.textContent = this.t('identity.mode.persistent');
       fingerprintEl.textContent = `Fingerprint: ${this._shortFingerprint(summary.fingerprint)}`;
       fingerprintEl.title = summary.fingerprint;
       return;
     }
 
     if (summary.persistence === 'memory') {
-      modeEl.textContent = 'Temporary page identity';
+      modeEl.textContent = this.t('identity.mode.memory');
       fingerprintEl.textContent = summary.fingerprint
         ? `Fingerprint: ${this._shortFingerprint(summary.fingerprint)} · not persisted`
         : 'This page is using a temporary identity only.';
@@ -1192,7 +1754,7 @@ export const app = {
     }
 
     if (summary.persistence === 'unsupported') {
-      modeEl.textContent = 'Persistence unavailable';
+      modeEl.textContent = this.t('identity.mode.unsupported');
       fingerprintEl.textContent = 'This browser cannot persist the client identity; a new key will be created after every reload.';
       fingerprintEl.title = '';
       if (!metaEl.textContent) {
@@ -1201,7 +1763,7 @@ export const app = {
       return;
     }
 
-    modeEl.textContent = 'Not created yet';
+    modeEl.textContent = this.t('identity.mode.not_created');
     fingerprintEl.textContent = 'A stable client identity will be created on first connect and saved in this browser.';
     fingerprintEl.title = '';
     metaEl.textContent = 'You can also import an existing identity file before connecting.';

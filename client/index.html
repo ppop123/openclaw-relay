@@ -45,6 +45,198 @@ header {
   flex-shrink: 0;
 }
 
+/* ── Modal / Overlay ──────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 50;
+}
+
+.modal {
+  width: min(720px, 100%);
+  max-height: min(80vh, 720px);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+}
+
+.modal.modal-wide {
+  width: min(980px, 100%);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-title {
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 14px;
+  overflow: auto;
+}
+
+.modal-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0b1220;
+}
+
+.session-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.session-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.session-preview {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.sessions-loading,
+.sessions-empty,
+.sessions-error {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 4px;
+}
+
+.secondary-btn.load-more {
+  align-self: flex-start;
+}
+
+/* ── Dashboard ───────────────────────────────── */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+
+.dashboard-card {
+  grid-column: span 12;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: #0b1220;
+}
+
+.dashboard-card h3 {
+  font-size: 13px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+
+.kv .k {
+  color: var(--muted);
+}
+
+.kv .v {
+  color: var(--text);
+}
+
+.dashboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #08101d;
+}
+
+.dashboard-row-main {
+  min-width: 0;
+}
+
+.dashboard-row-title {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-row-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.toggle-pill input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 header h1 {
   font-size: 18px;
   font-weight: 600;
@@ -796,18 +988,20 @@ main {
   .connection-details-section { padding: 0 14px; }
   .connection-details-wrap { padding-bottom: 10px; }
   .status-details { display: none; }
+  .kv { grid-template-columns: 120px 1fr; }
 }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>OpenClaw Relay</h1>
+  <h1>OpenClaw</h1>
   <div class="status-indicator">
     <span class="status-dot" id="statusDot"></span>
     <span id="statusText">Not connected</span>
     <span class="status-details" id="statusDetails"></span>
     <button class="disconnect-btn" id="disconnectBtn" style="display:none" onclick="app.disconnect()">Disconnect</button>
+    <button class="secondary-btn" id="langToggleBtn" type="button" onclick="app.toggleLanguage()">EN</button>
   </div>
 </header>
 
@@ -815,29 +1009,29 @@ main {
   <!-- Connection form -->
   <div class="connect-panel" id="connectPanel">
     <form class="connect-form" id="connectForm" onsubmit="return app.handleConnect(event)">
-      <h2>Connect to your OpenClaw</h2>
-      <p class="subtitle">Paste the pairing link from OpenClaw pairing. If you need it, open Manual setup.</p>
+      <h2 data-i18n="connect.title">连接你的 OpenClaw</h2>
+      <p class="subtitle" data-i18n="connect.subtitle">粘贴 OpenClaw 发给你的配对链接即可。需要手动填写时再展开“手动设置”。</p>
 
       <div class="form-group">
-        <label for="pairingLink">Pairing link</label>
-        <span class="field-subtitle">Recommended for first-time setup</span>
-        <input type="text" id="pairingLink" placeholder="openclaw-relay://relay.example.com/..." autocomplete="off" autocapitalize="off" spellcheck="false">
+        <label for="pairingLink" data-i18n="connect.pairing_label">配对链接</label>
+        <span class="field-subtitle" data-i18n="connect.pairing_recommended">首次使用推荐</span>
+        <input type="text" id="pairingLink" data-i18n-placeholder="connect.pairing_placeholder" placeholder="openclaw-relay://relay.example.com/..." autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
 
       <div class="collapsible-section" id="manualSetupSection">
         <button type="button" class="section-toggle" id="manualSetupToggle" onclick="app.toggleSection('manualSetup')" aria-expanded="false" aria-controls="manualSetupContent">
-          <span class="toggle-arrow">&#x25B8;</span> Manual setup
+          <span class="toggle-arrow">&#x25B8;</span> <span data-i18n="connect.manual_setup">手动设置</span>
         </button>
         <div class="section-content" id="manualSetupContent" hidden>
           <div class="form-group">
-            <label for="relayUrl">Server address</label>
-            <span class="field-subtitle">Relay URL</span>
+            <label for="relayUrl" data-i18n="connect.server_address">服务器地址</label>
+            <span class="field-subtitle" data-i18n="connect.server_address_hint">Relay URL</span>
             <input type="text" id="relayUrl" placeholder="wss://relay.example.com/ws" autocomplete="off">
           </div>
 
           <div class="form-group">
-            <label for="channelToken">Access token</label>
-            <span class="field-subtitle">Channel token</span>
+            <label for="channelToken" data-i18n="connect.access_token">访问令牌</label>
+            <span class="field-subtitle" data-i18n="connect.access_token_hint">Channel token</span>
             <div class="input-with-toggle">
               <input type="password" id="channelToken" placeholder="kx8f-a3mv-9pqz" autocomplete="off">
               <button type="button" class="toggle-visibility-btn" id="tokenVisibilityBtn" onclick="app.toggleTokenVisibility()" title="Show access token" aria-label="Show access token">
@@ -847,18 +1041,18 @@ main {
           </div>
 
           <div class="form-group">
-            <label for="gatewayPubKey">Gateway verification key</label>
-            <span class="field-subtitle">Your OpenClaw operator provides this key</span>
+            <label for="gatewayPubKey" data-i18n="connect.gateway_key">验证密钥</label>
+            <span class="field-subtitle" data-i18n="connect.gateway_key_hint">由 OpenClaw 管理员提供</span>
             <input type="text" id="gatewayPubKey" placeholder="base64-encoded 32-byte X25519 public key" autocomplete="off">
           </div>
         </div>
       </div>
 
-      <button type="submit" class="connect-btn" id="connectBtn">Connect</button>
+      <button type="submit" class="connect-btn" id="connectBtn" data-i18n="connect.connect_btn">连接</button>
       <div class="connect-error" id="connectError"></div>
 
       <div class="identity-summary" id="identitySummary" onclick="app.toggleSection('identity')">
-        <span id="identitySummaryText">Browser identity: loading…</span>
+        <span id="identitySummaryText" data-i18n="identity.summary.loading">浏览器身份：加载中…</span>
       </div>
 
       <div class="identity-error-banner" id="identityErrorBanner" hidden>
@@ -867,12 +1061,12 @@ main {
 
       <div class="collapsible-section" id="profilesSection">
         <button type="button" class="section-toggle" id="profilesToggle" onclick="app.toggleSection('profiles')" aria-expanded="false" aria-controls="profilesContent">
-          <span class="toggle-arrow">&#x25B8;</span> Saved profiles
+          <span class="toggle-arrow">&#x25B8;</span> <span data-i18n="profiles.title">已保存的连接</span>
         </button>
         <div class="section-content" id="profilesContent" hidden>
           <div class="profiles-empty" id="profilesEmpty">
-            <p class="empty-hint">No saved profiles yet. Connect once, then save this connection for quick access next time.</p>
-            <button type="button" class="secondary-btn" id="saveConnectionBtn" onclick="app.saveProfile()">Save current connection</button>
+            <p class="empty-hint" data-i18n="profiles.empty">还没有保存的连接。先连接一次，然后保存，方便下次一键使用。</p>
+            <button type="button" class="secondary-btn" id="saveConnectionBtn" onclick="app.saveProfile()" data-i18n="profiles.save_current">保存当前连接</button>
           </div>
           <div class="profiles-list" id="profilesList" hidden>
             <div class="form-group">
@@ -880,12 +1074,12 @@ main {
                 <select id="profileSelect">
                   <option value="">Custom / unsaved</option>
                 </select>
-                <button type="button" class="secondary-btn" id="saveProfileBtn" onclick="app.saveProfile()">Save</button>
-                <button type="button" class="secondary-btn" id="deleteProfileBtn" onclick="app.deleteProfile()" disabled>Delete</button>
+                <button type="button" class="secondary-btn" id="saveProfileBtn" onclick="app.saveProfile()" data-i18n="profiles.save">保存</button>
+                <button type="button" class="secondary-btn" id="deleteProfileBtn" onclick="app.deleteProfile()" disabled data-i18n="profiles.delete">删除</button>
               </div>
             </div>
             <div class="form-group">
-              <label for="profileName">Profile name</label>
+              <label for="profileName" data-i18n="profiles.name">名称</label>
               <input type="text" id="profileName" placeholder="Office relay" autocomplete="off">
             </div>
           </div>
@@ -894,7 +1088,7 @@ main {
 
       <div class="collapsible-section" id="identitySection">
         <button type="button" class="section-toggle" id="identityToggle" onclick="app.toggleSection('identity')" aria-expanded="false" aria-controls="identityContent">
-          <span class="toggle-arrow">&#x25B8;</span> Browser identity
+          <span class="toggle-arrow">&#x25B8;</span> <span data-i18n="identity.title">浏览器身份</span>
         </button>
         <div class="section-content" id="identityContent" hidden>
           <div class="identity-card">
@@ -929,7 +1123,7 @@ main {
   <!-- Chat interface -->
   <div class="chat-panel" id="chatPanel">
     <div class="agent-bar">
-      <label for="agentSelect">Agent:</label>
+      <label for="agentSelect" data-i18n="agent.label">Agent</label>
       <select id="agentSelect">
         <option value="">Loading agents...</option>
       </select>
@@ -941,8 +1135,53 @@ main {
         <span id="statusBarText">Not connected</span>
       </div>
       <div class="status-bar-actions">
-        <button class="secondary-btn session-action" id="newChatBtn" onclick="app.startNewChat()" disabled>New chat</button>
-        <button class="secondary-btn session-action" id="exportChatBtn" onclick="app.exportCurrentChat()" disabled>Save conversation</button>
+        <button class="secondary-btn session-action" id="dashboardBtn" onclick="app.openDashboard()" disabled data-i18n="dashboard.button">概览</button>
+        <button class="secondary-btn session-action" id="sessionsBtn" onclick="app.openSessions()" disabled data-i18n="sessions.button">会话</button>
+        <button class="secondary-btn session-action" id="newChatBtn" onclick="app.startNewChat()" disabled data-i18n="chat.new_button">新对话</button>
+        <button class="secondary-btn session-action" id="exportChatBtn" onclick="app.exportCurrentChat()" disabled data-i18n="chat.export_button">保存对话</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="sessionsOverlay" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <div class="modal-title" data-i18n="sessions.title">会话</div>
+          <button type="button" class="secondary-btn" onclick="app.closeSessions()" data-i18n="sessions.close">关闭</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-note" data-i18n="sessions.note">继续之前的对话，或开始新的对话。</div>
+          <div class="sessions-list" id="sessionsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="dashboardOverlay" hidden>
+      <div class="modal modal-wide">
+        <div class="modal-header">
+          <div class="modal-title" data-i18n="dashboard.title">概览</div>
+          <div class="modal-header-actions">
+            <button type="button" class="secondary-btn" onclick="app.refreshDashboard()" data-i18n="dashboard.refresh">刷新</button>
+            <button type="button" class="secondary-btn" onclick="app.closeDashboard()" data-i18n="dashboard.close">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="dashboard-grid">
+            <section class="dashboard-card">
+              <h3 data-i18n="dashboard.system">系统状态</h3>
+              <div class="kv" id="systemStatusKv"></div>
+            </section>
+
+            <section class="dashboard-card">
+              <h3 data-i18n="dashboard.agents">Agents</h3>
+              <div class="dashboard-list" id="agentsList"></div>
+            </section>
+
+            <section class="dashboard-card">
+              <h3 data-i18n="dashboard.cron">定时任务</h3>
+              <div class="dashboard-list" id="cronList"></div>
+            </section>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -974,10 +1213,10 @@ main {
 
     <div class="input-area">
       <div class="input-row">
-        <textarea id="messageInput" placeholder="Type a message..." rows="1"
+        <textarea id="messageInput" data-i18n-placeholder="chat.input_placeholder" placeholder="Type a message..." rows="1"
           onkeydown="app.handleInputKey(event)"
           oninput="app.autoResize(this)"></textarea>
-        <button class="send-btn" id="sendBtn" onclick="app.sendMessage()" disabled>Send</button>
+        <button class="send-btn" id="sendBtn" onclick="app.sendMessage()" disabled data-i18n="chat.send_button">发送</button>
       </div>
     </div>
   </div>
