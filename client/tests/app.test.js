@@ -140,7 +140,13 @@ beforeEach(() => {
 
   app.profiles = [];
   app.selectedAgentPreference = '';
-  app.chatTranscript = [];
+  app.tabs = [];
+  app.activeTabId = null;
+  app.splitTabId = null;
+  app._tabCounter = 0;
+  app._orphanTranscript = [];
+  app._orphanSessionId = null;
+  app._orphanStreamEpoch = 0;
   app.connection.crypto.clearIdentity();
   app.connection.identityPersistence = 'unsupported';
   app.connection.identityFingerprint = '';
@@ -149,7 +155,6 @@ beforeEach(() => {
   app.connection._identityLoadFailed = false;
   app.connection._closed = false;
   app.connection.state = 'disconnected';
-  app.streamEpoch = 0;
   app._pendingDesktopAutoConnect = false;
   app._lastDesktopPairingLink = '';
   app._initComplete = false;
@@ -481,7 +486,7 @@ describe('saved profiles', () => {
 
 
 describe('agent preference', () => {
-  it('restores the saved agent when the agent list loads', async () => {
+  it('restores the saved agent preference from settings', async () => {
     store.set(STORAGE_KEY, JSON.stringify({ selectedAgent: 'analyst' }));
     app.connection.sendRequest = vi.fn(async () => ({
       agents: [
@@ -493,31 +498,22 @@ describe('agent preference', () => {
     await app.init();
     await app._fetchAgents();
 
-    expect(getElement('agentSelect').value).toBe('analyst');
-    expect(JSON.parse(store.get(STORAGE_KEY))).toMatchObject({ selectedAgent: 'analyst' });
+    expect(app.selectedAgentPreference).toBe('analyst');
+    expect(app.agents).toHaveLength(2);
   });
 
-  it('persists agent changes without overwriting other safe settings', () => {
-    store.set(STORAGE_KEY, JSON.stringify({
-      relayUrl: 'wss://relay.example.com/ws',
-      gatewayPubKey: 'BASE64KEY',
-      selectedProfileId: 'profile_saved',
+  it('fetches agents without errors', async () => {
+    app.connection.sendRequest = vi.fn(async () => ({
+      agents: [
+        { name: 'scout', status: 'ready' },
+        { name: 'analyst', status: 'busy', description: 'Deep research' },
+      ],
     }));
-    app.agents = [
-      { name: 'scout', status: 'ready' },
-      { name: 'analyst', status: 'busy', description: 'Deep research' },
-    ];
-    getElement('agentSelect').value = 'analyst';
 
-    app.handleAgentSelectChange();
+    await app._fetchAgents();
 
-    expect(JSON.parse(store.get(STORAGE_KEY))).toMatchObject({
-      relayUrl: 'wss://relay.example.com/ws',
-      gatewayPubKey: 'BASE64KEY',
-      selectedProfileId: 'profile_saved',
-      selectedAgent: 'analyst',
-    });
-    expect(getElement('agentStatus').textContent).toMatch(/busy/);
+    expect(app.agents).toHaveLength(2);
+    expect(app.agents[1].name).toBe('analyst');
   });
 });
 
@@ -822,7 +818,9 @@ describe('status bar text', () => {
     app.connection.state = 'connected';
     app.connection.relayUrl = 'wss://relay.example.com/ws';
     app.connection.encrypted = true;
-    getElement('agentSelect').value = 'wukong';
+    // Set up a tab with agent to test status bar agent display
+    app.tabs = [{ id: 'tab-1', agent: 'wukong', sessionId: null, transcript: [], currentStreamEl: null, currentStreamText: '', streamEpoch: 0, messagesHTML: '' }];
+    app.activeTabId = 'tab-1';
 
     app._updateDiagnostics();
 
@@ -859,7 +857,13 @@ describe('profile save banner', () => {
 });
 
 describe('diagnostics and session controls', () => {
+  function setupTab(agent = 'demo') {
+    app.tabs = [{ id: 'tab-t', agent, sessionId: null, transcript: [], currentStreamEl: null, currentStreamText: '', streamEpoch: 0, messagesHTML: '' }];
+    app.activeTabId = 'tab-t';
+  }
+
   it('renders connection details and legacy diagnostics values', () => {
+    setupTab();
     app.connection.clientId = 'web_deadbeef';
     app.sessionId = 'sess_123';
     app.chatTranscript = [{ role: 'system', text: 'Connected.' }];
@@ -888,6 +892,7 @@ describe('diagnostics and session controls', () => {
   });
 
   it('exports the current chat transcript as a downloadable file', () => {
+    setupTab();
     app.connection.clientId = 'web_deadbeef';
     app.connection.relayUrl = 'wss://relay.example.com/ws';
     app.sessionId = 'sess_123';
@@ -913,6 +918,7 @@ describe('diagnostics and session controls', () => {
   });
 
   it('starts a new chat without disconnecting', () => {
+    setupTab();
     app.connection.state = 'connected';
     app.sessionId = 'sess_123';
     const addSystemSpy = vi.spyOn(app, '_addSystemMessage').mockImplementation(() => {});
@@ -930,9 +936,9 @@ describe('diagnostics and session controls', () => {
   });
 
   it('ignores stale stream chunks after starting a new chat', async () => {
+    setupTab('analyst');
     app.connection.state = 'connected';
     app.agents = [{ name: 'analyst', status: 'ready' }];
-    getElement('agentSelect').value = 'analyst';
     getElement('messageInput').value = 'Hello';
 
     let onChunk;

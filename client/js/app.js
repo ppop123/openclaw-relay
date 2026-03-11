@@ -104,6 +104,8 @@ const UI_STRINGS = {
     'agents.no_agents': '无可用 Agent',
     'agents.load_failed_option': '加载 Agent 失败',
     'agents.loading': '正在加载 Agent…',
+    'agents.ungrouped': '未分组',
+    'chat.new_tab': '新对话',
 
     'connect.connecting': '连接中…',
     'connect.validation_error': '粘贴配对链接，或展开"手动设置"填写连接信息。',
@@ -286,6 +288,8 @@ const UI_STRINGS = {
     'agents.no_agents': 'No agents available',
     'agents.load_failed_option': 'Failed to load agents',
     'agents.loading': 'Loading agents…',
+    'agents.ungrouped': 'Ungrouped',
+    'chat.new_tab': 'New Chat',
 
     'connect.connecting': 'Connecting…',
     'connect.validation_error': 'Paste a pairing link, or open Manual setup and enter the connection details.',
@@ -414,11 +418,28 @@ export const app = {
   agents: [],
   profiles: [],
   selectedAgentPreference: '',
-  chatTranscript: [],
-  sessionId: null,
-  currentStreamEl: null,
-  currentStreamText: '',
-  streamEpoch: 0,
+
+  // Tab state
+  tabs: [],
+  activeTabId: null,
+  splitTabId: null,
+  _tabCounter: 0,
+
+  // Per-tab state accessors (delegate to active tab)
+  get chatTranscript() { const t = this._activeTab(); return t ? t.transcript : []; },
+  set chatTranscript(v) { const t = this._activeTab(); if (t) t.transcript = v; else this._orphanTranscript = v; },
+  get sessionId() { const t = this._activeTab(); return t ? t.sessionId : this._orphanSessionId ?? null; },
+  set sessionId(v) { const t = this._activeTab(); if (t) t.sessionId = v; else this._orphanSessionId = v; },
+  get currentStreamEl() { const t = this._activeTab(); return t ? t.currentStreamEl : null; },
+  set currentStreamEl(v) { const t = this._activeTab(); if (t) t.currentStreamEl = v; },
+  get currentStreamText() { const t = this._activeTab(); return t ? t.currentStreamText : ''; },
+  set currentStreamText(v) { const t = this._activeTab(); if (t) t.currentStreamText = v; },
+  get streamEpoch() { const t = this._activeTab(); return t ? t.streamEpoch : this._orphanStreamEpoch ?? 0; },
+  set streamEpoch(v) { const t = this._activeTab(); if (t) t.streamEpoch = v; else this._orphanStreamEpoch = v; },
+
+  _orphanTranscript: [],
+  _orphanSessionId: null,
+  _orphanStreamEpoch: 0,
   _profileSavePromptDismissed: false,
   _desktopLaunchListenerBound: false,
   _pendingDesktopAutoConnect: false,
@@ -496,8 +517,8 @@ export const app = {
     document.getElementById('profileSelect').addEventListener('change', () => {
       this.handleProfileSelectChange();
     });
-    document.getElementById('agentSelect').addEventListener('change', () => {
-      this.handleAgentSelectChange();
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeAgentSelector();
     });
     document.getElementById('pairingLink')?.addEventListener('change', () => {
       if (!document.getElementById('pairingLink').value.trim()) return;
@@ -811,12 +832,18 @@ export const app = {
       // Fetch agent list
       await this._fetchAgents();
 
+      // Create initial tab if none exist
+      if (this.tabs.length === 0) {
+        const preferred = this.selectedAgentPreference || (this.agents[0]?.name ?? '');
+        this.openNewTab(preferred);
+      }
+
       // Add system message
       this._addSystemMessage(this.t('connect.connected_secure'));
       this._showProfileSavePrompt();
 
       // Focus input
-      document.getElementById('messageInput').focus();
+      document.getElementById('messageInput')?.focus();
 
     } catch (err) {
       errorEl.textContent = err.message;
@@ -832,14 +859,19 @@ export const app = {
   },
 
   disconnect() {
-    this.streamEpoch += 1;
-    this.currentStreamEl = null;
-    this.currentStreamText = '';
+    // Cancel all tab streams
+    for (const tab of this.tabs) tab.streamEpoch += 1;
+    this.tabs = [];
+    this.activeTabId = null;
+    this.splitTabId = null;
+    this._renderTabs();
+    this._updateSplitView();
     this._profileSavePromptDismissed = false;
     this._hideProfileSavePrompt();
     this.connection.disconnect();
     this.closeSessions?.();
     this.closeDashboard?.();
+    this.closeAgentSelector?.();
 
     this._returnToConnectView();
     this._updateIdentityStatus();
@@ -870,15 +902,18 @@ export const app = {
       return;
     }
 
+    const tab = this._activeTab();
+    if (!tab) return;
+
     // Cancel any in-flight streaming request so late chunks can't corrupt the new chat.
     this.connection.cancelInFlightStreams?.('New chat started');
 
-    this.streamEpoch += 1;
+    tab.streamEpoch += 1;
     document.getElementById('messages').innerHTML = '';
-    this.chatTranscript = [];
-    this.sessionId = null;
-    this.currentStreamEl = null;
-    this.currentStreamText = '';
+    tab.transcript = [];
+    tab.sessionId = null;
+    tab.currentStreamEl = null;
+    tab.currentStreamText = '';
     this._addSystemMessage(this.t('chat.new_thread'));
     this._updateDiagnostics();
   },
@@ -894,7 +929,7 @@ export const app = {
     list.innerHTML = `<div class="sessions-loading">${this._escapeHtml(this.t('sessions.loading'))}</div>`;
 
     try {
-      const agent = document.getElementById('agentSelect')?.value || '';
+      const agent = this._activeTab()?.agent || '';
       const result = await this.connection.sendRequest('sessions.list', {
         agent: agent || undefined,
         limit: 20,
@@ -938,7 +973,7 @@ export const app = {
     if (!list) return;
 
     try {
-      const agent = document.getElementById('agentSelect')?.value || '';
+      const agent = this._activeTab()?.agent || '';
       const result = await this.connection.sendRequest('sessions.list', {
         agent: agent || undefined,
         limit: 20,
@@ -1204,11 +1239,7 @@ export const app = {
   },
 
   handleAgentSelectChange() {
-    const selectedAgent = document.getElementById('agentSelect').value || '';
-    this.selectedAgentPreference = selectedAgent;
-    this._saveSettings({ selectedAgent });
-    this._updateAgentStatus();
-    this._updateDiagnostics();
+    // Legacy no-op — agent selection is now per-tab via agent selector
   },
 
   saveProfile() {
@@ -1467,51 +1498,16 @@ export const app = {
   // ── Agents ──
 
   async _fetchAgents() {
-    const select = document.getElementById('agentSelect');
-    const previousSelection = select.value || this.selectedAgentPreference;
     try {
       const result = await this.connection.sendRequest('agents.list', {});
       this.agents = result.agents || [];
-      select.innerHTML = '';
-
-      if (this.agents.length === 0) {
-        select.innerHTML = `<option value="">${this._escapeHtml(this.t('agents.no_agents'))}</option>`;
-        return;
-      }
-
-      for (const agent of this.agents) {
-        const opt = document.createElement('option');
-        opt.value = agent.name;
-        opt.textContent = agent.display_name
-          ? `${agent.display_name} (${agent.name})`
-          : agent.name;
-        select.appendChild(opt);
-      }
-
-      const selectedAgent = this._resolveAvailableAgent(previousSelection);
-      select.value = selectedAgent;
-      this.selectedAgentPreference = selectedAgent;
-      this._saveSettings({ selectedAgent });
-      this._updateAgentStatus();
-      this._updateDiagnostics();
     } catch (err) {
-      select.innerHTML = `<option value="">${this._escapeHtml(this.t('agents.load_failed_option'))}</option>`;
       showToast(this.t('agents.fetch_failed', { error: err.message }), 'error');
     }
   },
 
   _updateAgentStatus() {
-    const select = document.getElementById('agentSelect');
-    const statusEl = document.getElementById('agentStatus');
-    const selected = this.agents.find(a => a.name === select.value);
-    if (selected) {
-      statusEl.textContent = selected.status || '';
-      if (selected.description) {
-        statusEl.textContent += ' -- ' + selected.description;
-      }
-    } else {
-      statusEl.textContent = '';
-    }
+    // Legacy no-op — status shown in agent selector panel
   },
 
   // ── Chat ──
@@ -1521,9 +1517,10 @@ export const app = {
     const text = input.value.trim();
     if (!text || this.connection.state !== 'connected') return;
 
-    const agent = document.getElementById('agentSelect').value;
+    const tab = this._activeTab();
+    const agent = tab?.agent || '';
     if (!agent) {
-      showToast(this.t('agents.select_required'), 'warning');
+      this.openAgentSelector();
       return;
     }
 
@@ -1659,10 +1656,11 @@ export const app = {
 
   // ── Input handling ──
 
-  handleInputKey(e) {
+  handleInputKey(e, paneIdx = 0) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      this.sendMessage();
+      if (paneIdx === 0) this.sendMessage();
+      else this.sendMessageInPane(paneIdx);
     }
   },
 
@@ -1777,7 +1775,7 @@ export const app = {
     const selectedProfile = this._findProfile(this._getSelectedProfileId());
     const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim() || this.connection.gatewayPubKeyB64 || '';
     const identitySummary = this.connection.getIdentitySummary();
-    const agentName = document.getElementById('agentSelect')?.value || '';
+    const agentName = this._activeTab()?.agent || '';
 
     let relayHost = '';
     try {
@@ -2182,6 +2180,333 @@ export const app = {
     if (!fingerprint) return '';
     if (fingerprint.length <= 28) return fingerprint;
     return `${fingerprint.slice(0, 20)}…${fingerprint.slice(-8)}`;
+  },
+
+  // ── Tab management ──
+
+  _activeTab() {
+    return this.tabs.find(t => t.id === this.activeTabId) || null;
+  },
+
+  _splitTab() {
+    return this.tabs.find(t => t.id === this.splitTabId) || null;
+  },
+
+  _createTab(agentName) {
+    this._tabCounter += 1;
+    const tab = {
+      id: `tab-${this._tabCounter}`,
+      agent: agentName,
+      sessionId: null,
+      transcript: [],
+      currentStreamEl: null,
+      currentStreamText: '',
+      streamEpoch: 0,
+      messagesHTML: '',
+    };
+    this.tabs.push(tab);
+    return tab;
+  },
+
+  _saveTabDOM() {
+    const tab = this._activeTab();
+    if (!tab) return;
+    const el = document.getElementById('messages');
+    if (el) tab.messagesHTML = el.innerHTML;
+  },
+
+  _restoreTabDOM(tabId) {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+    const el = document.getElementById('messages');
+    if (el) el.innerHTML = tab.messagesHTML;
+  },
+
+  switchTab(tabId) {
+    if (tabId === this.activeTabId) return;
+    this._saveTabDOM();
+    this.activeTabId = tabId;
+    this._restoreTabDOM(tabId);
+    this._renderTabs();
+    this._updateDiagnostics();
+  },
+
+  openNewTab(agentName) {
+    this._saveTabDOM();
+    const tab = this._createTab(agentName);
+    this.activeTabId = tab.id;
+    const messagesEl = document.getElementById('messages');
+    if (messagesEl) messagesEl.innerHTML = '';
+    this._renderTabs();
+    this._updateDiagnostics();
+  },
+
+  closeTab(tabId) {
+    const idx = this.tabs.findIndex(t => t.id === tabId);
+    if (idx === -1) return;
+
+    this.tabs[idx].streamEpoch += 1;
+
+    if (this.splitTabId === tabId) {
+      this.splitTabId = null;
+      this._updateSplitView();
+    }
+
+    this.tabs.splice(idx, 1);
+
+    if (this.activeTabId === tabId) {
+      if (this.tabs.length === 0) {
+        this.openNewTab('');
+      } else {
+        const newIdx = Math.min(idx, this.tabs.length - 1);
+        this.activeTabId = this.tabs[newIdx].id;
+        this._restoreTabDOM(this.activeTabId);
+      }
+    }
+    this._renderTabs();
+    this._updateDiagnostics();
+  },
+
+  _renderTabs() {
+    const bar = document.getElementById('tabBar');
+    if (!bar) return;
+
+    const addBtn = document.getElementById('tabAddBtn');
+    bar.querySelectorAll('.tab').forEach(el => el.remove());
+
+    for (const tab of this.tabs) {
+      const el = document.createElement('div');
+      el.className = 'tab';
+      if (tab.id === this.activeTabId) el.classList.add('active');
+      if (tab.id === this.splitTabId) el.classList.add('split-active');
+
+      const agent = this.agents.find(a => a.name === tab.agent);
+      const label = agent?.display_name || tab.agent || this.t('chat.new_tab');
+
+      const span = document.createElement('span');
+      span.textContent = label;
+      span.onclick = () => this.switchTab(tab.id);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.onclick = (e) => { e.stopPropagation(); this.closeTab(tab.id); };
+
+      el.appendChild(span);
+      el.appendChild(closeBtn);
+
+      el.addEventListener('click', (e) => {
+        if (e.shiftKey && tab.id !== this.activeTabId) {
+          e.preventDefault();
+          this.toggleSplit(tab.id);
+        }
+      });
+
+      bar.insertBefore(el, addBtn);
+    }
+  },
+
+  // ── Split view ──
+
+  toggleSplit(tabId) {
+    if (this.splitTabId === tabId) {
+      this.splitTabId = null;
+    } else {
+      this.splitTabId = tabId;
+    }
+    this._updateSplitView();
+    this._renderTabs();
+  },
+
+  _updateSplitView() {
+    const content = document.getElementById('chatContent');
+    const pane0 = document.getElementById('chatPane0');
+    if (!content || !pane0) return;
+
+    let pane1 = document.getElementById('chatPane1');
+
+    if (this.splitTabId) {
+      if (!pane1) {
+        pane1 = document.createElement('div');
+        pane1.id = 'chatPane1';
+        pane1.className = 'chat-pane';
+        pane1.innerHTML = `
+          <div class="messages" id="messages1"></div>
+          <div class="input-area">
+            <div class="input-row">
+              <textarea id="messageInput1" placeholder="${this._escapeHtml(this.t('chat.input_placeholder'))}" rows="1"
+                onkeydown="app.handleInputKey(event, 1)"
+                oninput="app.autoResize(this)"></textarea>
+              <button class="send-btn" id="sendBtn1" onclick="app.sendMessageInPane(1)">${this._escapeHtml(this.t('chat.send_button'))}</button>
+            </div>
+          </div>`;
+        content.appendChild(pane1);
+      }
+      const splitTab = this._splitTab();
+      if (splitTab) {
+        const m1 = document.getElementById('messages1');
+        if (m1) m1.innerHTML = splitTab.messagesHTML;
+      }
+      const btn1 = document.getElementById('sendBtn1');
+      if (btn1) btn1.disabled = this.connection.state !== 'connected';
+    } else {
+      if (pane1) pane1.remove();
+    }
+  },
+
+  async sendMessageInPane(paneIdx) {
+    if (paneIdx === 0) return this.sendMessage();
+
+    const inputEl = document.getElementById('messageInput1');
+    const messagesEl = document.getElementById('messages1');
+    const sendBtnEl = document.getElementById('sendBtn1');
+    const splitTab = this._splitTab();
+
+    if (!inputEl || !messagesEl || !splitTab) return;
+    const text = inputEl.value.trim();
+    if (!text || this.connection.state !== 'connected') return;
+
+    const agent = splitTab.agent || '';
+    if (!agent) {
+      this.openAgentSelector();
+      return;
+    }
+
+    // Add user message
+    splitTab.transcript.push({ role: 'user', text, createdAt: new Date().toISOString() });
+    const userEl = document.createElement('div');
+    userEl.className = 'message user';
+    userEl.innerHTML = `<div class="msg-content">${renderMarkdown(text)}</div>`;
+    messagesEl.appendChild(userEl);
+
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    if (sendBtnEl) sendBtnEl.disabled = true;
+
+    // Create assistant message
+    const assistantEntry = { role: 'assistant', text: '', agentName: agent, createdAt: new Date().toISOString() };
+    splitTab.transcript.push(assistantEntry);
+    const msgEl = document.createElement('div');
+    msgEl.className = 'message assistant';
+    msgEl.innerHTML = `<div class="agent-name">${this._escapeHtml(agent)}</div><div class="msg-content"></div>`;
+    messagesEl.appendChild(msgEl);
+    const contentEl = msgEl.querySelector('.msg-content');
+
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    contentEl.appendChild(cursor);
+    const streamEpoch = splitTab.streamEpoch;
+    let streamText = '';
+
+    try {
+      const result = await this.connection.sendStreamRequest(
+        'chat.send',
+        { agent, message: text, session_id: splitTab.sessionId, stream: true },
+        (chunk) => {
+          if (splitTab.streamEpoch !== streamEpoch) return;
+          if (chunk?.delta) {
+            streamText += chunk.delta;
+            assistantEntry.text = streamText;
+            contentEl.innerHTML = renderMarkdown(streamText);
+            const c = document.createElement('span');
+            c.className = 'cursor';
+            contentEl.appendChild(c);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }
+          if (chunk?.session_id) {
+            splitTab.sessionId = chunk.session_id;
+          }
+        }
+      );
+
+      if (splitTab.streamEpoch !== streamEpoch) return;
+      if (result?.session_id) splitTab.sessionId = result.session_id;
+      assistantEntry.text = streamText;
+      contentEl.innerHTML = renderMarkdown(streamText);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } catch (err) {
+      if (splitTab.streamEpoch !== streamEpoch) return;
+      contentEl.innerHTML = renderMarkdown(streamText || this.t('chat.error_prefix', { error: err.message }));
+    } finally {
+      if (sendBtnEl) sendBtnEl.disabled = this.connection.state !== 'connected';
+    }
+  },
+
+  // ── Agent selector ──
+
+  openAgentSelector() {
+    const overlay = document.getElementById('agentSelectorOverlay');
+    if (!overlay) return;
+    overlay.hidden = false;
+    this._renderAgentSelector('');
+    const input = document.getElementById('agentSearchInput');
+    if (input) { input.value = ''; input.focus(); }
+  },
+
+  closeAgentSelector() {
+    const overlay = document.getElementById('agentSelectorOverlay');
+    if (overlay) overlay.hidden = true;
+  },
+
+  filterAgentSelector(query) {
+    this._renderAgentSelector(query);
+  },
+
+  _renderAgentSelector(query) {
+    const list = document.getElementById('agentSelectorList');
+    if (!list) return;
+
+    const q = (query || '').toLowerCase();
+    const filtered = this.agents.filter(a =>
+      !q || a.name.toLowerCase().includes(q) || (a.display_name || '').toLowerCase().includes(q)
+    );
+
+    // Group by group field
+    const groups = {};
+    for (const agent of filtered) {
+      const g = agent.group || this.t('agents.ungrouped');
+      (groups[g] ??= []).push(agent);
+    }
+
+    let html = '';
+    for (const [groupName, groupAgents] of Object.entries(groups)) {
+      html += `<div class="agent-group-header" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.hidden = !this.nextElementSibling.hidden">
+        <span class="agent-group-arrow">▾</span> ${this._escapeHtml(groupName)}
+      </div>`;
+      html += `<div class="agent-group-items">`;
+      for (const agent of groupAgents) {
+        const label = agent.display_name
+          ? `${agent.display_name} (${agent.name})`
+          : agent.name;
+        html += `<div class="agent-option" onclick="app.selectAgentFromSelector('${this._escapeHtml(agent.name)}')">
+          <span>${this._escapeHtml(label)}</span>
+          <span class="agent-option-status">${this._escapeHtml(agent.status || '')}</span>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (!html) {
+      html = `<div style="padding:20px;text-align:center;color:var(--muted)">${this._escapeHtml(this.t('agents.no_agents'))}</div>`;
+    }
+
+    list.innerHTML = html;
+  },
+
+  selectAgentFromSelector(agentName) {
+    this.closeAgentSelector();
+
+    // If active tab has no agent yet, assign to it
+    const tab = this._activeTab();
+    if (tab && !tab.agent) {
+      tab.agent = agentName;
+      this._renderTabs();
+      this._updateDiagnostics();
+      return;
+    }
+
+    // Otherwise open a new tab
+    this.openNewTab(agentName);
   }
 };
 
