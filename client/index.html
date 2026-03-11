@@ -1197,6 +1197,12 @@ main {
             <span class="field-subtitle" data-i18n="connect.gateway_key_hint">由 OpenClaw 管理员提供</span>
             <input type="text" id="gatewayPubKey" placeholder="base64-encoded 32-byte X25519 public key" autocomplete="off">
           </div>
+
+          <div class="form-group">
+            <label for="controlUiUrl" data-i18n="control.url_label">管理界面地址</label>
+            <span class="field-subtitle" data-i18n="control.url_hint">本地 OpenClaw 控制台</span>
+            <input type="text" id="controlUiUrl" data-i18n-placeholder="control.url_placeholder" placeholder="http://127.0.0.1:18789/" autocomplete="off" autocapitalize="off" spellcheck="false">
+          </div>
         </div>
       </div>
 
@@ -1286,6 +1292,7 @@ main {
         <button class="secondary-btn session-action" id="dashboardBtn" onclick="app.openDashboard()" disabled data-i18n="dashboard.button">概览</button>
         <button class="secondary-btn session-action" id="sessionsBtn" onclick="app.openSessions()" disabled data-i18n="sessions.button">会话</button>
         <button class="secondary-btn session-action" id="newChatBtn" onclick="app.startNewChat()" disabled data-i18n="chat.new_button">新对话</button>
+        <button class="secondary-btn session-action" id="controlUiBtn" onclick="app.openControlUi()" data-i18n="control.button">管理界面</button>
         <button class="secondary-btn session-action" id="exportChatBtn" onclick="app.exportCurrentChat()" disabled data-i18n="chat.export_button">保存对话</button>
       </div>
     </div>

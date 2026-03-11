@@ -12,6 +12,7 @@ import { RelayConnection } from './transport.js';
 // ── Storage keys ──
 const STORAGE_KEY_SETTINGS = 'openclaw-relay-settings';
 const STORAGE_KEY_PROFILES = 'openclaw-relay-profiles';
+const DEFAULT_CONTROL_UI_URL = 'http://127.0.0.1:18789/';
 
 // ── UI strings (minimal i18n) ──
 
@@ -94,6 +95,13 @@ const UI_STRINGS = {
     'dashboard.cron': '定时任务',
     'dashboard.loading': '加载中…',
     'dashboard.not_available': '当前网关不支持此功能。',
+
+    'control.button': '管理界面',
+    'control.url_label': '管理界面地址',
+    'control.url_hint': '本地 OpenClaw 控制台',
+    'control.url_placeholder': 'http://127.0.0.1:18789/',
+    'control.url_missing': '请先填写管理界面地址。',
+    'control.url_invalid': '管理界面地址无效（需要 http/https）。',
 
     'profiles.saved': '连接已保存。',
     'profiles.updated': '连接已更新。',
@@ -278,6 +286,13 @@ const UI_STRINGS = {
     'dashboard.cron': 'Cron tasks',
     'dashboard.loading': 'Loading…',
     'dashboard.not_available': 'This gateway does not support this feature yet.',
+
+    'control.button': 'Control UI',
+    'control.url_label': 'Control UI URL',
+    'control.url_hint': 'Local OpenClaw control',
+    'control.url_placeholder': 'http://127.0.0.1:18789/',
+    'control.url_missing': 'Please enter the Control UI URL first.',
+    'control.url_invalid': 'Invalid Control UI URL (http/https required).',
 
     'profiles.saved': 'Connection saved.',
     'profiles.updated': 'Connection updated.',
@@ -471,6 +486,14 @@ export const app = {
       try {
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(saved));
       } catch {}
+    }
+
+    const controlInput = document.getElementById('controlUiUrl');
+    if (controlInput) {
+      const controlUrl = typeof saved.controlUiUrl === 'string' && saved.controlUiUrl.trim()
+        ? saved.controlUiUrl.trim()
+        : DEFAULT_CONTROL_UI_URL;
+      if (!controlInput.value) controlInput.value = controlUrl;
     }
 
     this.profiles = this._loadProfiles();
@@ -796,6 +819,7 @@ export const app = {
     const relayUrl = document.getElementById('relayUrl').value.trim();
     const channelToken = document.getElementById('channelToken').value.trim();
     const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim();
+    const controlUiUrl = document.getElementById('controlUiUrl')?.value.trim() || '';
 
     // Validate
     if (!relayUrl || !channelToken || !gatewayPubKey) {
@@ -814,6 +838,7 @@ export const app = {
       channelToken,
       gatewayPubKey,
       selectedProfileId: this._getSelectedProfileId(),
+      ...(controlUiUrl ? { controlUiUrl } : {}),
     });
 
     try {
@@ -1055,6 +1080,35 @@ export const app = {
     if (!overlay) return;
     overlay.hidden = false;
     await this.refreshDashboard();
+  },
+
+  openControlUi() {
+    const input = document.getElementById('controlUiUrl');
+    const fallback = this._loadSettings().controlUiUrl || DEFAULT_CONTROL_UI_URL;
+    const raw = (input?.value || '').trim() || String(fallback || '').trim();
+
+    if (!raw) {
+      showToast(this.t('control.url_missing'), 'warning');
+      return;
+    }
+
+    const normalized = /^[a-z]+:\/\//i.test(raw) ? raw : `http://${raw}`;
+    let url;
+    try {
+      url = new URL(normalized);
+    } catch {
+      showToast(this.t('control.url_invalid'), 'warning');
+      return;
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      showToast(this.t('control.url_invalid'), 'warning');
+      return;
+    }
+
+    const finalUrl = url.href;
+    if (input) input.value = finalUrl;
+    this._saveSettings({ controlUiUrl: finalUrl });
+    window.open(finalUrl, '_blank', 'noopener');
   },
 
   closeDashboard() {
