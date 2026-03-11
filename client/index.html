@@ -718,42 +718,191 @@ main {
   display: flex;
 }
 
-.agent-bar {
+/* ── Tab bar ─────────────────────────────────── */
+
+.tab-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
+  overflow-x: auto;
+  gap: 2px;
+  min-height: 40px;
 }
 
-.agent-bar label {
+.tab-bar::-webkit-scrollbar { height: 0; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
   font-size: 13px;
   color: var(--muted);
-  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
 }
 
-.agent-bar select {
-  padding: 6px 10px;
+.tab:hover { color: var(--text); }
+
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab.split-active {
+  color: var(--text);
+  border-bottom-color: var(--warning);
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.tab-close:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+
+.tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 16px;
+  color: var(--muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  flex-shrink: 0;
+}
+
+.tab-add:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+/* ── Agent selector panel ────────────────────── */
+
+.agent-selector-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+
+.agent-selector-overlay[hidden] { display: none; }
+
+.agent-selector {
+  width: min(420px, 90%);
+  max-height: min(60vh, 500px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+}
+
+.agent-selector-search {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-selector-search input {
+  width: 100%;
+  padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 13px;
   outline: none;
-  cursor: pointer;
-  min-width: 160px;
+  box-sizing: border-box;
 }
 
-.agent-bar select:focus {
-  border-color: var(--accent);
+.agent-selector-search input:focus { border-color: var(--accent); }
+
+.agent-selector-list {
+  overflow-y: auto;
+  padding: 6px 0;
 }
 
-.agent-status {
+.agent-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
   font-size: 12px;
+  font-weight: 600;
   color: var(--muted);
-  margin-left: auto;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.agent-group-header:hover { color: var(--text); }
+
+.agent-group-arrow {
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.agent-group-header.collapsed .agent-group-arrow {
+  transform: rotate(-90deg);
+}
+
+.agent-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 8px 28px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.agent-option:hover { background: rgba(255,255,255,0.05); }
+
+.agent-option-status {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Split view ──────────────────────────────── */
+
+.chat-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.chat-pane + .chat-pane {
+  border-left: 1px solid var(--border);
 }
 
 /* ── Messages ──────────────────────────────────── */
@@ -984,7 +1133,7 @@ main {
   .messages { padding: 14px; }
   .message { max-width: 90%; }
   .input-area { padding: 12px 14px; }
-  .agent-bar { padding: 8px 14px; }
+  .tab-bar { padding: 0 4px; }
   .status-bar { padding: 6px 14px; font-size: 12px; }
   .status-bar-actions { gap: 4px; }
   .profile-save-banner { padding: 8px 14px; flex-direction: column; align-items: flex-start; }
@@ -1125,12 +1274,8 @@ main {
 
   <!-- Chat interface -->
   <div class="chat-panel" id="chatPanel">
-    <div class="agent-bar">
-      <label for="agentSelect" data-i18n="agent.label">Agent</label>
-      <select id="agentSelect">
-        <option value="" data-i18n="agents.loading">正在加载 Agent…</option>
-      </select>
-      <span class="agent-status" id="agentStatus"></span>
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-add" id="tabAddBtn" onclick="app.openAgentSelector()" title="新建对话">+</button>
     </div>
 
     <div class="status-bar" id="statusBar">
@@ -1188,6 +1333,15 @@ main {
       </div>
     </div>
 
+    <div class="agent-selector-overlay" id="agentSelectorOverlay" hidden onclick="if(event.target===this) app.closeAgentSelector()">
+      <div class="agent-selector">
+        <div class="agent-selector-search">
+          <input type="text" id="agentSearchInput" placeholder="搜索 agent..." oninput="app.filterAgentSelector(this.value)">
+        </div>
+        <div class="agent-selector-list" id="agentSelectorList"></div>
+      </div>
+    </div>
+
     <div class="profile-save-banner" id="profileSaveBanner" hidden>
       <span data-i18n="profiles.save_banner_text">保存此连接？</span>
       <div class="profile-save-actions">
@@ -1212,16 +1366,20 @@ main {
       </div>
     </div>
 
-    <div class="messages" id="messages"></div>
+    <div class="chat-content" id="chatContent">
+      <div class="chat-pane" id="chatPane0">
+        <div class="messages" id="messages"></div>
 
-    <div class="input-area">
-      <div class="input-row">
-        <textarea id="messageInput" data-i18n-placeholder="chat.input_placeholder" placeholder="Type a message..." rows="1"
-          onkeydown="app.handleInputKey(event)"
-          oninput="app.autoResize(this)"></textarea>
-        <button class="send-btn" id="sendBtn" onclick="app.sendMessage()" disabled data-i18n="chat.send_button">发送</button>
-      </div>
-    </div>
+        <div class="input-area">
+          <div class="input-row">
+            <textarea id="messageInput" data-i18n-placeholder="chat.input_placeholder" placeholder="Type a message..." rows="1"
+              onkeydown="app.handleInputKey(event)"
+              oninput="app.autoResize(this)"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="app.sendMessage()" disabled data-i18n="chat.send_button">发送</button>
+          </div>
+        </div>
+      </div><!-- /chat-pane -->
+    </div><!-- /chat-content -->
   </div>
 </main>
 
