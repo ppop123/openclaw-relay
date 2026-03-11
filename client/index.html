@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -998,9 +998,9 @@ main {
   <h1>OpenClaw</h1>
   <div class="status-indicator">
     <span class="status-dot" id="statusDot"></span>
-    <span id="statusText">Not connected</span>
+    <span id="statusText" data-i18n="status.not_connected">未连接</span>
     <span class="status-details" id="statusDetails"></span>
-    <button class="disconnect-btn" id="disconnectBtn" style="display:none" onclick="app.disconnect()">Disconnect</button>
+    <button class="disconnect-btn" id="disconnectBtn" style="display:none" onclick="app.disconnect()" data-i18n="connect.disconnect_btn">断开连接</button>
     <button class="secondary-btn" id="langToggleBtn" type="button" onclick="app.toggleLanguage()">EN</button>
   </div>
 </header>
@@ -1055,8 +1055,8 @@ main {
         <span id="identitySummaryText" data-i18n="identity.summary.loading">浏览器身份：加载中…</span>
       </div>
 
-      <div class="identity-error-banner" id="identityErrorBanner" hidden>
-        Identity load failed — import a backup or reset
+      <div class="identity-error-banner" id="identityErrorBanner" hidden data-i18n="identity.error_banner">
+        身份加载失败 — 请导入备份或重置
       </div>
 
       <div class="collapsible-section" id="profilesSection">
@@ -1072,7 +1072,7 @@ main {
             <div class="form-group">
               <div class="profile-actions">
                 <select id="profileSelect">
-                  <option value="">Custom / unsaved</option>
+                  <option value="" data-i18n="profiles.custom_unsaved">自定义 / 未保存</option>
                 </select>
                 <button type="button" class="secondary-btn" id="saveProfileBtn" onclick="app.saveProfile()" data-i18n="profiles.save">保存</button>
                 <button type="button" class="secondary-btn" id="deleteProfileBtn" onclick="app.deleteProfile()" disabled data-i18n="profiles.delete">删除</button>
@@ -1093,25 +1093,25 @@ main {
         <div class="section-content" id="identityContent" hidden>
           <div class="identity-card">
             <div class="identity-card-header">
-              <span class="identity-title">Client identity</span>
+              <span class="identity-title" data-i18n="identity.card_title">客户端身份</span>
               <div class="identity-actions">
-                <button type="button" class="secondary-btn" id="exportIdentityBtn" onclick="app.exportIdentity()" disabled>Export</button>
-                <button type="button" class="secondary-btn" id="importIdentityBtn" onclick="app.triggerImportIdentity()">Import</button>
-                <button type="button" class="secondary-btn" id="resetIdentityBtn" onclick="app.resetIdentity()" disabled>Reset</button>
+                <button type="button" class="secondary-btn" id="exportIdentityBtn" onclick="app.exportIdentity()" disabled data-i18n="identity.export_btn">导出</button>
+                <button type="button" class="secondary-btn" id="importIdentityBtn" onclick="app.triggerImportIdentity()" data-i18n="identity.import_btn">导入</button>
+                <button type="button" class="secondary-btn" id="resetIdentityBtn" onclick="app.resetIdentity()" disabled data-i18n="identity.reset_btn">重置</button>
               </div>
             </div>
-            <div class="identity-mode" id="identityMode">Loading…</div>
-            <div class="identity-fingerprint" id="identityFingerprint">Checking browser identity storage…</div>
+            <div class="identity-mode" id="identityMode" data-i18n="identity.loading">加载中…</div>
+            <div class="identity-fingerprint" id="identityFingerprint" data-i18n="identity.checking">正在检查浏览器身份存储…</div>
             <div class="identity-meta" id="identityMeta"></div>
             <div class="identity-copy-actions">
-              <button type="button" class="secondary-btn" id="copyFingerprintBtn" onclick="app.copyIdentityFingerprint()" disabled>Copy fingerprint</button>
-              <button type="button" class="secondary-btn" id="copyPublicKeyBtn" onclick="app.copyIdentityPublicKey()" disabled>Copy public key</button>
+              <button type="button" class="secondary-btn" id="copyFingerprintBtn" onclick="app.copyIdentityFingerprint()" disabled data-i18n="identity.copy_fingerprint">复制指纹</button>
+              <button type="button" class="secondary-btn" id="copyPublicKeyBtn" onclick="app.copyIdentityPublicKey()" disabled data-i18n="identity.copy_public_key">复制公钥</button>
             </div>
-            <div class="identity-note identity-recovery" id="identityRecoveryHint">Checking browser identity storage…</div>
+            <div class="identity-note identity-recovery" id="identityRecoveryHint" data-i18n="identity.checking">正在检查浏览器身份存储…</div>
             <div class="identity-passphrase">
-              <label for="identityPassphrase">Identity file passphrase (optional)</label>
-              <input type="password" id="identityPassphrase" placeholder="Used only for export/import" autocomplete="off">
-              <div class="identity-note">Never stored. Set it to encrypt exports or unlock protected identity files.</div>
+              <label for="identityPassphrase" data-i18n="identity.passphrase_label">身份文件密码（可选）</label>
+              <input type="password" id="identityPassphrase" data-i18n-placeholder="identity.passphrase_placeholder" placeholder="仅用于导出/导入" autocomplete="off">
+              <div class="identity-note" data-i18n="identity.passphrase_note">不会被存储。设置后用于加密导出文件或解锁受保护的身份文件。</div>
             </div>
             <input type="file" id="identityImportInput" accept="application/json" style="display:none">
           </div>
@@ -1125,14 +1125,14 @@ main {
     <div class="agent-bar">
       <label for="agentSelect" data-i18n="agent.label">Agent</label>
       <select id="agentSelect">
-        <option value="">Loading agents...</option>
+        <option value="" data-i18n="agents.loading">正在加载 Agent…</option>
       </select>
       <span class="agent-status" id="agentStatus"></span>
     </div>
 
     <div class="status-bar" id="statusBar">
       <div class="status-bar-info">
-        <span id="statusBarText">Not connected</span>
+        <span id="statusBarText" data-i18n="statusbar.not_connected">未连接</span>
       </div>
       <div class="status-bar-actions">
         <button class="secondary-btn session-action" id="dashboardBtn" onclick="app.openDashboard()" disabled data-i18n="dashboard.button">概览</button>
@@ -1186,25 +1186,25 @@ main {
     </div>
 
     <div class="profile-save-banner" id="profileSaveBanner" hidden>
-      <span>Save this connection as a profile?</span>
+      <span data-i18n="profiles.save_banner_text">保存此连接？</span>
       <div class="profile-save-actions">
-        <button type="button" class="secondary-btn" onclick="app._acceptProfileSave()">Save</button>
-        <button type="button" class="secondary-btn" onclick="app._dismissProfileSave()">Dismiss</button>
+        <button type="button" class="secondary-btn" onclick="app._acceptProfileSave()" data-i18n="profiles.save_banner_save">保存</button>
+        <button type="button" class="secondary-btn" onclick="app._dismissProfileSave()" data-i18n="profiles.save_banner_dismiss">忽略</button>
       </div>
     </div>
 
     <div class="connection-details-section">
       <button type="button" class="section-toggle" id="connDetailsToggle" onclick="app.toggleSection('connectionDetails')" aria-expanded="false" aria-controls="connectionDetailsContent">
-        Connection details <span class="toggle-arrow">&#x25B8;</span>
+        <span data-i18n="details.toggle_label">连接详情</span> <span class="toggle-arrow">&#x25B8;</span>
       </button>
       <div id="connectionDetailsContent" class="connection-details-wrap" hidden>
         <div class="connection-details">
-          <div class="detail-row"><span class="detail-label">Session</span><span class="detail-value" id="detailSession">New chat</span></div>
-          <div class="detail-row"><span class="detail-label">Client</span><span class="detail-value" id="detailClient">Pending</span></div>
-          <div class="detail-row"><span class="detail-label">Gateway</span><span class="detail-value" id="detailGateway">Not set</span></div>
-          <div class="detail-row"><span class="detail-label">Profile</span><span class="detail-value" id="detailProfile">Custom / unsaved</span></div>
-          <div class="detail-row"><span class="detail-label">Encryption</span><span class="detail-value" id="detailEncryption">—</span></div>
-          <div class="detail-row"><span class="detail-label">Identity</span><span class="detail-value" id="detailIdentity">—</span></div>
+          <div class="detail-row"><span class="detail-label" data-i18n="details.session">会话</span><span class="detail-value" id="detailSession">新对话</span></div>
+          <div class="detail-row"><span class="detail-label" data-i18n="details.client">客户端</span><span class="detail-value" id="detailClient">等待中</span></div>
+          <div class="detail-row"><span class="detail-label" data-i18n="details.gateway">网关</span><span class="detail-value" id="detailGateway">未设置</span></div>
+          <div class="detail-row"><span class="detail-label" data-i18n="details.profile">配置</span><span class="detail-value" id="detailProfile">自定义 / 未保存</span></div>
+          <div class="detail-row"><span class="detail-label" data-i18n="details.encryption">加密</span><span class="detail-value" id="detailEncryption">—</span></div>
+          <div class="detail-row"><span class="detail-label" data-i18n="details.identity_label">身份</span><span class="detail-value" id="detailIdentity">—</span></div>
         </div>
       </div>
     </div>

@@ -101,6 +101,101 @@ const UI_STRINGS = {
 
     'agents.fetch_failed': '获取 agent 列表失败：{error}',
     'agents.select_required': '请先选择一个 agent。',
+    'agents.no_agents': '无可用 Agent',
+    'agents.load_failed_option': '加载 Agent 失败',
+    'agents.loading': '正在加载 Agent…',
+
+    'connect.connecting': '连接中…',
+    'connect.validation_error': '粘贴配对链接，或展开"手动设置"填写连接信息。',
+
+    'chat.no_transcript': '暂无本地聊天记录。',
+    'chat.exported': '对话已导出。',
+    'chat.error_prefix': '（错误：{error}）',
+    'chat.send_failed': '发送失败：{error}',
+
+    'cron.toggled': 'OK',
+
+    'profiles.save_required': '需要填写服务器地址和验证密钥才能保存。',
+    'profiles.select_to_delete': '请先选择要删除的连接。',
+    'profiles.confirm_delete': '删除已保存的连接"{name}"？',
+    'profiles.custom_unsaved': '自定义 / 未保存',
+    'profiles.save_banner_text': '保存此连接？',
+    'profiles.save_banner_save': '保存',
+    'profiles.save_banner_dismiss': '忽略',
+
+    'identity.card_title': '客户端身份',
+    'identity.export_btn': '导出',
+    'identity.import_btn': '导入',
+    'identity.reset_btn': '重置',
+    'identity.copy_fingerprint': '复制指纹',
+    'identity.copy_public_key': '复制公钥',
+    'identity.passphrase_label': '身份文件密码（可选）',
+    'identity.passphrase_placeholder': '仅用于导出/导入',
+    'identity.passphrase_note': '不会被存储。设置后用于加密导出文件或解锁受保护的身份文件。',
+    'identity.error_banner': '身份加载失败 — 请导入备份或重置',
+    'identity.exported_protected': '身份已导出（密码保护）。',
+    'identity.confirm_export_unprotected': '不设密码直接导出？文件将包含未加密的私钥。',
+    'identity.exported_unprotected': '身份已导出（无密码保护）。请妥善保管此文件。',
+    'identity.no_fingerprint': '尚无身份指纹信息。',
+    'identity.fingerprint_copied': '身份指纹已复制。',
+    'identity.no_public_key': '尚无身份公钥信息。',
+    'identity.public_key_copied': '身份公钥已复制。',
+    'identity.confirm_import': '导入身份文件将替换当前浏览器身份。是否继续？',
+    'identity.imported_persisted': '身份已导入并保存到此浏览器。',
+    'identity.imported_memory': '身份已导入，但仅在当前页面有效（无法持久化）。',
+    'identity.import_failed': '导入身份失败：{error}',
+    'identity.confirm_reset': '重置 {label}？可能需要重新建立网关信任。',
+    'identity.reset_success': '身份已重置。下次连接时将创建新身份。',
+    'identity.created_at': '创建时间：{date}',
+    'identity.fingerprint_prefix': '指纹：{fingerprint}',
+    'identity.fingerprint_not_persisted': '指纹：{fingerprint} · 未持久化',
+    'identity.temp_only': '当前页面使用的是临时身份。',
+    'identity.lost_on_reload': '刷新页面后此身份将丢失，除非持久化变为可用。',
+    'identity.cannot_persist': '此浏览器无法持久化客户端身份，每次刷新都会创建新密钥。',
+    'identity.can_import_temp': '你仍可以导入身份文件用于当前页面会话。',
+    'identity.will_create_on_connect': '首次连接时将创建稳定的客户端身份并保存到此浏览器。',
+    'identity.can_import_before_connect': '也可以在连接前导入现有的身份文件。',
+    'identity.summary.with_fingerprint': '浏览器身份：{fingerprint} · {mode}',
+    'identity.summary.mode_persistent': '已持久化',
+    'identity.summary.mode_temporary': '临时',
+    'identity.recovery.load_failed': '已存储的身份无法在此标签页加载。请导入备份或重置浏览器身份后重新连接。',
+    'identity.recovery.persisted': '建议备份：配对后导出受保护的身份文件，以便日后恢复此浏览器身份。',
+    'identity.recovery.memory': '此身份仅存在于当前页面会话。如需保留网关信任，请在刷新前导出。',
+    'identity.recovery.unsupported': 'IndexedDB 身份存储不可用。可导入受保护的身份文件临时使用，或启用浏览器存储。',
+    'identity.recovery.not_created': '尚无浏览器身份。连接一次或导入身份文件后即可与网关共享。',
+    'identity.checking': '正在检查浏览器身份存储…',
+    'identity.loading': '加载中…',
+
+    'details.toggle_label': '连接详情',
+    'details.session': '会话',
+    'details.client': '客户端',
+    'details.gateway': '网关',
+    'details.profile': '配置',
+    'details.encryption': '加密',
+    'details.identity_label': '身份',
+    'details.new_chat': '新对话',
+    'details.pending': '等待中',
+    'details.not_set': '未设置',
+    'details.persistent_idb': '持久化（IndexedDB）',
+    'details.temporary_page': '临时（仅本页）',
+    'details.temporary_unavailable': '临时（无法持久化）',
+    'details.negotiating': '协商中',
+
+    'statusbar.encrypted': '已加密',
+    'statusbar.security_pending': '安全协商中',
+    'status.secure': '安全连接',
+    'status.encrypted_suffix': '（已加密）',
+
+    'pairing.incomplete': '配对链接不完整。必须包含服务器地址、访问令牌和验证密钥。',
+    'pairing.empty': '请粘贴 OpenClaw 配对链接。',
+    'pairing.invalid': '配对链接无效。请粘贴完整的 OpenClaw 配对链接。',
+    'pairing.incomplete_uri': '配对链接不完整。请粘贴完整的 OpenClaw 配对链接。',
+    'pairing.missing_host': '配对链接缺少服务器地址。',
+
+    'browser.cannot_export': '此浏览器不支持导出文件',
+    'browser.cannot_read': '此浏览器无法读取所选文件',
+    'browser.nothing_to_copy': '没有可复制的内容',
+    'browser.cannot_copy': '此浏览器无法复制到剪贴板',
 
   },
   en: {
@@ -188,6 +283,101 @@ const UI_STRINGS = {
 
     'agents.fetch_failed': 'Failed to fetch agents: {error}',
     'agents.select_required': 'Please select an agent.',
+    'agents.no_agents': 'No agents available',
+    'agents.load_failed_option': 'Failed to load agents',
+    'agents.loading': 'Loading agents…',
+
+    'connect.connecting': 'Connecting…',
+    'connect.validation_error': 'Paste a pairing link, or open Manual setup and enter the connection details.',
+
+    'chat.no_transcript': 'No local chat transcript is available yet.',
+    'chat.exported': 'Current chat exported.',
+    'chat.error_prefix': '(Error: {error})',
+    'chat.send_failed': 'Failed to send: {error}',
+
+    'cron.toggled': 'OK',
+
+    'profiles.save_required': 'Relay URL and gateway public key are required to save a profile.',
+    'profiles.select_to_delete': 'Select a saved profile to delete.',
+    'profiles.confirm_delete': 'Delete saved profile "{name}"?',
+    'profiles.custom_unsaved': 'Custom / unsaved',
+    'profiles.save_banner_text': 'Save this connection as a profile?',
+    'profiles.save_banner_save': 'Save',
+    'profiles.save_banner_dismiss': 'Dismiss',
+
+    'identity.card_title': 'Client identity',
+    'identity.export_btn': 'Export',
+    'identity.import_btn': 'Import',
+    'identity.reset_btn': 'Reset',
+    'identity.copy_fingerprint': 'Copy fingerprint',
+    'identity.copy_public_key': 'Copy public key',
+    'identity.passphrase_label': 'Identity file passphrase (optional)',
+    'identity.passphrase_placeholder': 'Used only for export/import',
+    'identity.passphrase_note': 'Never stored. Set it to encrypt exports or unlock protected identity files.',
+    'identity.error_banner': 'Identity load failed — import a backup or reset',
+    'identity.exported_protected': 'Client identity exported with passphrase protection.',
+    'identity.confirm_export_unprotected': 'Export without a passphrase? The file will contain an unencrypted private key.',
+    'identity.exported_unprotected': 'Client identity exported without passphrase. Keep this file secret.',
+    'identity.no_fingerprint': 'No identity fingerprint is available yet.',
+    'identity.fingerprint_copied': 'Identity fingerprint copied.',
+    'identity.no_public_key': 'No identity public key is available yet.',
+    'identity.public_key_copied': 'Identity public key copied.',
+    'identity.confirm_import': 'Importing an identity file will replace the current browser identity. Continue?',
+    'identity.imported_persisted': 'Identity imported and saved in this browser.',
+    'identity.imported_memory': 'Identity imported for this page only because persistence is unavailable.',
+    'identity.import_failed': 'Failed to import identity: {error}',
+    'identity.confirm_reset': 'Reset {label}? Existing gateway trust may need to be re-established.',
+    'identity.reset_success': 'Client identity reset. A new identity will be created on next connect.',
+    'identity.created_at': 'Created: {date}',
+    'identity.fingerprint_prefix': 'Fingerprint: {fingerprint}',
+    'identity.fingerprint_not_persisted': 'Fingerprint: {fingerprint} · not persisted',
+    'identity.temp_only': 'This page is using a temporary identity only.',
+    'identity.lost_on_reload': 'This identity will be lost on full reload unless persistence becomes available.',
+    'identity.cannot_persist': 'This browser cannot persist the client identity; a new key will be created after every reload.',
+    'identity.can_import_temp': 'You can still import an identity file for the current page session.',
+    'identity.will_create_on_connect': 'A stable client identity will be created on first connect and saved in this browser.',
+    'identity.can_import_before_connect': 'You can also import an existing identity file before connecting.',
+    'identity.summary.with_fingerprint': 'Browser identity: {fingerprint} · {mode}',
+    'identity.summary.mode_persistent': 'persistent',
+    'identity.summary.mode_temporary': 'temporary',
+    'identity.recovery.load_failed': 'Stored identity could not be loaded in this tab. Import a backup or reset the browser identity before reconnecting.',
+    'identity.recovery.persisted': 'Backup recommended: export a protected identity file after pairing so you can recover this browser identity later.',
+    'identity.recovery.memory': 'This identity only exists for the current page session. Export it before reloading if you need to preserve gateway trust.',
+    'identity.recovery.unsupported': 'IndexedDB identity storage is unavailable. Import a protected identity file for temporary use or enable browser storage.',
+    'identity.recovery.not_created': 'No browser identity exists yet. Connect once or import an identity file before sharing it with the gateway.',
+    'identity.checking': 'Checking browser identity storage…',
+    'identity.loading': 'Loading…',
+
+    'details.toggle_label': 'Connection details',
+    'details.session': 'Session',
+    'details.client': 'Client',
+    'details.gateway': 'Gateway',
+    'details.profile': 'Profile',
+    'details.encryption': 'Encryption',
+    'details.identity_label': 'Identity',
+    'details.new_chat': 'New chat',
+    'details.pending': 'Pending',
+    'details.not_set': 'Not set',
+    'details.persistent_idb': 'Persistent (IndexedDB)',
+    'details.temporary_page': 'Temporary (page only)',
+    'details.temporary_unavailable': 'Temporary (persistence unavailable)',
+    'details.negotiating': 'Negotiating',
+
+    'statusbar.encrypted': 'Encrypted',
+    'statusbar.security_pending': 'Security pending',
+    'status.secure': 'Secure',
+    'status.encrypted_suffix': ' (encrypted)',
+
+    'pairing.incomplete': 'Pairing link is incomplete. It must include the server address, access token, and verification key.',
+    'pairing.empty': 'Paste the pairing link from OpenClaw pairing.',
+    'pairing.invalid': 'Pairing link is invalid. Paste the full link from OpenClaw pairing.',
+    'pairing.incomplete_uri': 'Pairing link is incomplete. Paste the full link from OpenClaw pairing.',
+    'pairing.missing_host': 'Pairing link is missing the relay host.',
+
+    'browser.cannot_export': 'This browser cannot export files',
+    'browser.cannot_read': 'This browser cannot read the selected file',
+    'browser.nothing_to_copy': 'Nothing to copy',
+    'browser.cannot_copy': 'This browser cannot copy to the clipboard',
 
   },
 };
@@ -483,7 +673,7 @@ export const app = {
 
     if (!relayUrl && !channelToken && !gatewayPubKey) return null;
     if (!relayUrl || !channelToken || !gatewayPubKey) {
-      throw new Error('Pairing link is incomplete. It must include the server address, access token, and verification key.');
+      throw new Error(this.t('pairing.incomplete'));
     }
 
     return {
@@ -497,27 +687,27 @@ export const app = {
   _parsePairingLink(value) {
     const trimmed = value.trim();
     if (!trimmed) {
-      throw new Error('Paste the pairing link from OpenClaw pairing.');
+      throw new Error(this.t('pairing.empty'));
     }
 
     if (trimmed.startsWith('#')) {
       const fields = this._extractPairingFragment(trimmed);
       if (fields) return fields;
-      throw new Error('Pairing link is invalid. Paste the full link from OpenClaw pairing.');
+      throw new Error(this.t('pairing.invalid'));
     }
 
     let parsed;
     try {
       parsed = new URL(trimmed);
     } catch {
-      throw new Error('Pairing link is invalid. Paste the full link from OpenClaw pairing.');
+      throw new Error(this.t('pairing.invalid'));
     }
 
     if (parsed.protocol === 'openclaw-relay:') {
       const channelToken = parsed.pathname.replace(/^\/+/, '').trim();
       const gatewayPubKey = parsed.hash.replace(/^#/, '').trim();
       if (!parsed.host || !channelToken || !gatewayPubKey) {
-        throw new Error('Pairing link is incomplete. Paste the full link from OpenClaw pairing.');
+        throw new Error(this.t('pairing.incomplete_uri'));
       }
       return {
         relayUrl: this._buildRelayUrlFromPairingHost(parsed.host),
@@ -529,13 +719,13 @@ export const app = {
     const fragmentFields = this._extractPairingFragment(parsed.hash);
     if (fragmentFields) return fragmentFields;
 
-    throw new Error('Pairing link is invalid. Paste the full link from OpenClaw pairing.');
+    throw new Error(this.t('pairing.invalid'));
   },
 
   _buildRelayUrlFromPairingHost(host) {
     const normalizedHost = host.trim();
     if (!normalizedHost) {
-      throw new Error('Pairing link is missing the relay host.');
+      throw new Error(this.t('pairing.missing_host'));
     }
 
     let hostname = normalizedHost;
@@ -565,7 +755,7 @@ export const app = {
 
     const errorEl = document.getElementById('connectError');
     btn.disabled = true;
-    btn.textContent = 'Connecting...';
+    btn.textContent = this.t('connect.connecting');
     errorEl.style.display = 'none';
 
     let usedPairingLink = false;
@@ -577,7 +767,7 @@ export const app = {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = 'Connect';
+        btn.textContent = this.t('connect.connect_btn');
         return false;
       }
     }
@@ -588,10 +778,10 @@ export const app = {
 
     // Validate
     if (!relayUrl || !channelToken || !gatewayPubKey) {
-      errorEl.textContent = 'Paste a pairing link, or open Manual setup and enter the connection details.';
+      errorEl.textContent = this.t('connect.validation_error');
       errorEl.style.display = 'block';
       btn.disabled = false;
-      btn.textContent = 'Connect';
+      btn.textContent = this.t('connect.connect_btn');
       return false;
     }
 
@@ -633,7 +823,7 @@ export const app = {
       errorEl.style.display = 'block';
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Connect';
+      btn.textContent = this.t('connect.connect_btn');
       this._updateIdentityStatus();
       this._updateDiagnostics();
     }
@@ -658,7 +848,7 @@ export const app = {
 
   exportCurrentChat() {
     if (!this.chatTranscript.length) {
-      showToast('No local chat transcript is available yet.', 'warning');
+      showToast(this.t('chat.no_transcript'), 'warning');
       return;
     }
 
@@ -671,7 +861,7 @@ export const app = {
       sessionId: this.sessionId || null,
       messages: this.chatTranscript.map((entry) => ({ ...entry })),
     });
-    showToast('Current chat exported.', 'info');
+    showToast(this.t('chat.exported'), 'info');
   },
 
   startNewChat() {
@@ -973,7 +1163,7 @@ export const app = {
     if (!id) return;
     try {
       await this.connection.sendRequest('cron.toggle', { id, enabled: Boolean(enabled) });
-      showToast('OK', 'info', 1500);
+      showToast(this.t('cron.toggled'), 'info', 1500);
       await this.refreshDashboard();
     } catch (err) {
       showToast(err?.message || String(err), 'error');
@@ -1025,7 +1215,7 @@ export const app = {
     const relayUrl = this._normalizeRelayUrl(document.getElementById('relayUrl').value.trim());
     const gatewayPubKey = document.getElementById('gatewayPubKey').value.trim();
     if (!relayUrl || !gatewayPubKey) {
-      showToast('Relay URL and gateway public key are required to save a profile.', 'warning');
+      showToast(this.t('profiles.save_required'), 'warning');
       return;
     }
 
@@ -1060,7 +1250,7 @@ export const app = {
   deleteProfile() {
     const profileId = this._getSelectedProfileId();
     if (!profileId) {
-      showToast('Select a saved profile to delete.', 'warning');
+      showToast(this.t('profiles.select_to_delete'), 'warning');
       return;
     }
 
@@ -1072,7 +1262,7 @@ export const app = {
     }
 
     if (typeof confirm === 'function') {
-      const confirmed = confirm(`Delete saved profile "${profile.name}"?`);
+      const confirmed = confirm(this.t('profiles.confirm_delete', { name: profile.name }));
       if (!confirmed) return;
     }
 
@@ -1101,17 +1291,17 @@ export const app = {
         const protectedBundle = await protectIdentityBundle(bundle, passphrase);
         this._downloadJsonFile(`openclaw-relay-${suffix}.protected.json`, protectedBundle);
         this._clearIdentityPassphrase();
-        showToast('Client identity exported with passphrase protection.', 'info');
+        showToast(this.t('identity.exported_protected'), 'info');
         return;
       }
 
       if (typeof confirm === 'function') {
-        const confirmed = confirm('Export without a passphrase? The file will contain an unencrypted private key.');
+        const confirmed = confirm(this.t('identity.confirm_export_unprotected'));
         if (!confirmed) return;
       }
 
       this._downloadJsonFile(`openclaw-relay-${suffix}.json`, bundle);
-      showToast('Client identity exported without passphrase. Keep this file secret.', 'warning');
+      showToast(this.t('identity.exported_unprotected'), 'warning');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -1126,13 +1316,13 @@ export const app = {
   async copyIdentityFingerprint() {
     const summary = this.connection.getIdentitySummary();
     if (!summary.fingerprint) {
-      showToast('No identity fingerprint is available yet.', 'warning');
+      showToast(this.t('identity.no_fingerprint'), 'warning');
       return;
     }
 
     try {
       await this._copyText(summary.fingerprint);
-      showToast('Identity fingerprint copied.', 'info');
+      showToast(this.t('identity.fingerprint_copied'), 'info');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -1141,13 +1331,13 @@ export const app = {
   async copyIdentityPublicKey() {
     const summary = this.connection.getIdentitySummary();
     if (!summary.publicKey) {
-      showToast('No identity public key is available yet.', 'warning');
+      showToast(this.t('identity.no_public_key'), 'warning');
       return;
     }
 
     try {
       await this._copyText(summary.publicKey);
-      showToast('Identity public key copied.', 'info');
+      showToast(this.t('identity.public_key_copied'), 'info');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -1160,7 +1350,7 @@ export const app = {
     try {
       const summary = this.connection.getIdentitySummary();
       if (summary.exists && typeof confirm === 'function') {
-        const shouldReplace = confirm('Importing an identity file will replace the current browser identity. Continue?');
+        const shouldReplace = confirm(this.t('identity.confirm_import'));
         if (!shouldReplace) return;
       }
 
@@ -1174,12 +1364,12 @@ export const app = {
 
       this._clearIdentityPassphrase();
       if (nextSummary.persistence === 'persisted') {
-        showToast('Identity imported and saved in this browser.', 'info');
+        showToast(this.t('identity.imported_persisted'), 'info');
       } else {
-        showToast('Identity imported for this page only because persistence is unavailable.', 'warning');
+        showToast(this.t('identity.imported_memory'), 'warning');
       }
     } catch (err) {
-      showToast(`Failed to import identity: ${err.message}`, 'error');
+      showToast(this.t('identity.import_failed', { error: err.message }), 'error');
     } finally {
       if (event?.target) {
         event.target.value = '';
@@ -1195,8 +1385,8 @@ export const app = {
     }
 
     if (typeof confirm === 'function') {
-      const label = summary.fingerprint ? this._shortFingerprint(summary.fingerprint) : 'this browser identity';
-      const confirmed = confirm(`Reset ${label}? Existing gateway trust may need to be re-established.`);
+      const label = summary.fingerprint ? this._shortFingerprint(summary.fingerprint) : this.t('identity.title');
+      const confirmed = confirm(this.t('identity.confirm_reset', { label }));
       if (!confirmed) {
         this._updateIdentityStatus();
         return;
@@ -1212,7 +1402,7 @@ export const app = {
       document.getElementById('connectError').style.display = 'none';
       this._updateIdentityStatus();
       this._updateDiagnostics();
-      showToast('Client identity reset. A new identity will be created on next connect.', 'info');
+      showToast(this.t('identity.reset_success'), 'info');
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -1285,7 +1475,7 @@ export const app = {
       select.innerHTML = '';
 
       if (this.agents.length === 0) {
-        select.innerHTML = '<option value="">No agents available</option>';
+        select.innerHTML = `<option value="">${this._escapeHtml(this.t('agents.no_agents'))}</option>`;
         return;
       }
 
@@ -1305,7 +1495,7 @@ export const app = {
       this._updateAgentStatus();
       this._updateDiagnostics();
     } catch (err) {
-      select.innerHTML = '<option value="">Failed to load agents</option>';
+      select.innerHTML = `<option value="">${this._escapeHtml(this.t('agents.load_failed_option'))}</option>`;
       showToast(this.t('agents.fetch_failed', { error: err.message }), 'error');
     }
   },
@@ -1404,14 +1594,14 @@ export const app = {
     } catch (err) {
       if (this.streamEpoch !== streamEpoch) return;
 
-      assistantEntry.text = this.currentStreamText || `(Error: ${err.message})`;
+      assistantEntry.text = this.currentStreamText || this.t('chat.error_prefix', { error: err.message });
       assistantEntry.error = err.message;
-      contentEl.innerHTML = renderMarkdown(this.currentStreamText || '(Error: ' + err.message + ')');
+      contentEl.innerHTML = renderMarkdown(this.currentStreamText || this.t('chat.error_prefix', { error: err.message }));
       if (!this.currentStreamText) {
         msgEl.remove();
         this.chatTranscript.pop();
         this._updateDiagnostics();
-        showToast('Failed to send: ' + err.message, 'error');
+        showToast(this.t('chat.send_failed', { error: err.message }), 'error');
       }
     } finally {
       if (this.streamEpoch === streamEpoch) {
@@ -1553,11 +1743,11 @@ export const app = {
       try {
         host = new URL(this.connection.relayUrl).host;
       } catch {}
-      const suffix = this.connection.encrypted ? ' (encrypted)' : '';
+      const suffix = this.connection.encrypted ? this.t('status.encrypted_suffix') : '';
       const fingerprint = this.connection.identityFingerprint
         ? ` · ${this._shortFingerprint(this.connection.identityFingerprint)}`
         : '';
-      details.textContent = host ? host + suffix + fingerprint : `Secure${suffix}${fingerprint}`;
+      details.textContent = host ? host + suffix + fingerprint : `${this.t('status.secure')}${suffix}${fingerprint}`;
       document.getElementById('sendBtn').disabled = !document.getElementById('messageInput').value.trim();
     } else {
       details.textContent = '';
@@ -1598,7 +1788,7 @@ export const app = {
     if (statusBarText) {
       if (this.connection.state === 'connected') {
         const parts = [relayHost ? this.t('statusbar.connected_to', { host: relayHost }) : this.t('statusbar.connected_secure')];
-        parts.push(this.connection.encrypted ? 'Encrypted' : 'Security pending');
+        parts.push(this.connection.encrypted ? this.t('statusbar.encrypted') : this.t('statusbar.security_pending'));
         if (agentName) parts.push(agentName);
         statusBarText.textContent = parts.join(' · ');
       } else if (this.connection.state === 'connecting') {
@@ -1611,49 +1801,49 @@ export const app = {
     }
 
     if (sessionEl) {
-      sessionEl.textContent = this.sessionId || 'New chat';
+      sessionEl.textContent = this.sessionId || this.t('details.new_chat');
       sessionEl.title = this.sessionId || '';
     }
     if (clientEl) {
-      clientEl.textContent = this.connection.clientId || 'Pending';
+      clientEl.textContent = this.connection.clientId || this.t('details.pending');
       clientEl.title = this.connection.clientId || '';
     }
     if (profileEl) {
-      profileEl.textContent = selectedProfile?.name || 'Custom / unsaved';
+      profileEl.textContent = selectedProfile?.name || this.t('profiles.custom_unsaved');
       profileEl.title = selectedProfile?.name || '';
     }
     if (gatewayEl) {
-      gatewayEl.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
+      gatewayEl.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : this.t('details.not_set');
       gatewayEl.title = gatewayPubKey;
     }
     if (detailSession) {
-      detailSession.textContent = this.sessionId || 'New chat';
+      detailSession.textContent = this.sessionId || this.t('details.new_chat');
       detailSession.title = this.sessionId || '';
     }
     if (detailClient) {
-      detailClient.textContent = this.connection.clientId || 'Pending';
+      detailClient.textContent = this.connection.clientId || this.t('details.pending');
       detailClient.title = this.connection.clientId || '';
     }
     if (detailGateway) {
-      detailGateway.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : 'Not set';
+      detailGateway.textContent = gatewayPubKey ? this._shortKey(gatewayPubKey) : this.t('details.not_set');
       detailGateway.title = gatewayPubKey;
     }
     if (detailProfile) {
-      detailProfile.textContent = selectedProfile?.name || 'Custom / unsaved';
+      detailProfile.textContent = selectedProfile?.name || this.t('profiles.custom_unsaved');
       detailProfile.title = selectedProfile?.name || '';
     }
     if (detailEncryption) {
       detailEncryption.textContent = this.connection.state === 'connected'
-        ? (this.connection.encrypted ? 'AES-256-GCM' : 'Negotiating')
+        ? (this.connection.encrypted ? 'AES-256-GCM' : this.t('details.negotiating'))
         : '—';
     }
     if (detailIdentity) {
       if (identitySummary.persistence === 'persisted') {
-        detailIdentity.textContent = 'Persistent (IndexedDB)';
+        detailIdentity.textContent = this.t('details.persistent_idb');
       } else if (identitySummary.persistence === 'memory') {
-        detailIdentity.textContent = 'Temporary (page only)';
+        detailIdentity.textContent = this.t('details.temporary_page');
       } else if (identitySummary.persistence === 'unsupported') {
-        detailIdentity.textContent = 'Temporary (persistence unavailable)';
+        detailIdentity.textContent = this.t('details.temporary_unavailable');
       } else {
         detailIdentity.textContent = '—';
       }
@@ -1681,8 +1871,8 @@ export const app = {
     if (banner) banner.hidden = true;
 
     if (summary.fingerprint) {
-      const mode = summary.persistence === 'persisted' ? 'persistent' : summary.persistence === 'memory' ? 'temporary' : summary.persistence;
-      el.textContent = `Browser identity: ${this._shortFingerprint(summary.fingerprint)} · ${mode}`;
+      const mode = summary.persistence === 'persisted' ? this.t('identity.summary.mode_persistent') : summary.persistence === 'memory' ? this.t('identity.summary.mode_temporary') : summary.persistence;
+      el.textContent = this.t('identity.summary.with_fingerprint', { fingerprint: this._shortFingerprint(summary.fingerprint), mode });
       return;
     }
 
@@ -1718,11 +1908,11 @@ export const app = {
     copyFingerprintBtn.disabled = !summary.fingerprint;
     copyPublicKeyBtn.disabled = !summary.publicKey;
     recoveryEl.textContent = this._getIdentityRecoveryHint(summary);
-    metaEl.textContent = summary.createdAt ? `Created: ${this._formatIdentityCreatedAt(summary.createdAt)}` : '';
+    metaEl.textContent = summary.createdAt ? this.t('identity.created_at', { date: this._formatIdentityCreatedAt(summary.createdAt) }) : '';
 
     if (summary.persistence === 'persisted') {
       modeEl.textContent = this.t('identity.mode.persistent');
-      fingerprintEl.textContent = `Fingerprint: ${this._shortFingerprint(summary.fingerprint)}`;
+      fingerprintEl.textContent = this.t('identity.fingerprint_prefix', { fingerprint: this._shortFingerprint(summary.fingerprint) });
       fingerprintEl.title = summary.fingerprint;
       return;
     }
@@ -1730,29 +1920,29 @@ export const app = {
     if (summary.persistence === 'memory') {
       modeEl.textContent = this.t('identity.mode.memory');
       fingerprintEl.textContent = summary.fingerprint
-        ? `Fingerprint: ${this._shortFingerprint(summary.fingerprint)} · not persisted`
-        : 'This page is using a temporary identity only.';
+        ? this.t('identity.fingerprint_not_persisted', { fingerprint: this._shortFingerprint(summary.fingerprint) })
+        : this.t('identity.temp_only');
       fingerprintEl.title = summary.fingerprint || '';
       if (!metaEl.textContent) {
-        metaEl.textContent = 'This identity will be lost on full reload unless persistence becomes available.';
+        metaEl.textContent = this.t('identity.lost_on_reload');
       }
       return;
     }
 
     if (summary.persistence === 'unsupported') {
       modeEl.textContent = this.t('identity.mode.unsupported');
-      fingerprintEl.textContent = 'This browser cannot persist the client identity; a new key will be created after every reload.';
+      fingerprintEl.textContent = this.t('identity.cannot_persist');
       fingerprintEl.title = '';
       if (!metaEl.textContent) {
-        metaEl.textContent = 'You can still import an identity file for the current page session.';
+        metaEl.textContent = this.t('identity.can_import_temp');
       }
       return;
     }
 
     modeEl.textContent = this.t('identity.mode.not_created');
-    fingerprintEl.textContent = 'A stable client identity will be created on first connect and saved in this browser.';
+    fingerprintEl.textContent = this.t('identity.will_create_on_connect');
     fingerprintEl.title = '';
-    metaEl.textContent = 'You can also import an existing identity file before connecting.';
+    metaEl.textContent = this.t('identity.can_import_before_connect');
   },
 
   _updateProfilesView() {
@@ -1788,7 +1978,7 @@ export const app = {
 
   _downloadJsonFile(filename, value) {
     if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
-      throw new Error('This browser cannot export files');
+      throw new Error(this.t('browser.cannot_export'));
     }
 
     const blob = new Blob([JSON.stringify(value, null, 2) + '\n'], { type: 'application/json' });
@@ -1805,7 +1995,7 @@ export const app = {
       return file.text();
     }
 
-    throw new Error('This browser cannot read the selected file');
+    throw new Error(this.t('browser.cannot_read'));
   },
 
   _formatIdentityCreatedAt(createdAt) {
@@ -1814,23 +2004,23 @@ export const app = {
 
   _getIdentityRecoveryHint(summary) {
     if (summary.loadFailed) {
-      return 'Stored identity could not be loaded in this tab. Import a backup or reset the browser identity before reconnecting.';
+      return this.t('identity.recovery.load_failed');
     }
     if (summary.persistence === 'persisted') {
-      return 'Backup recommended: export a protected identity file after pairing so you can recover this browser identity later.';
+      return this.t('identity.recovery.persisted');
     }
     if (summary.persistence === 'memory') {
-      return 'This identity only exists for the current page session. Export it before reloading if you need to preserve gateway trust.';
+      return this.t('identity.recovery.memory');
     }
     if (summary.persistence === 'unsupported') {
-      return 'IndexedDB identity storage is unavailable. Import a protected identity file for temporary use or enable browser storage.';
+      return this.t('identity.recovery.unsupported');
     }
-    return 'No browser identity exists yet. Connect once or import an identity file before sharing it with the gateway.';
+    return this.t('identity.recovery.not_created');
   },
 
   async _copyText(text) {
     if (!text) {
-      throw new Error('Nothing to copy');
+      throw new Error(this.t('browser.nothing_to_copy'));
     }
 
     if (globalThis.navigator?.clipboard?.writeText) {
@@ -1854,7 +2044,7 @@ export const app = {
       }
     }
 
-    throw new Error('This browser cannot copy to the clipboard');
+    throw new Error(this.t('browser.cannot_copy'));
   },
 
   _getIdentityPassphrase() {
@@ -1891,7 +2081,7 @@ export const app = {
 
     const custom = document.createElement('option');
     custom.value = '';
-    custom.textContent = 'Custom / unsaved';
+    custom.textContent = this.t('profiles.custom_unsaved');
     select.appendChild(custom);
 
     for (const profile of this.profiles) {

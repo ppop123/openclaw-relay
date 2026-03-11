@@ -602,7 +602,7 @@ describe('pairing link parsing', () => {
     expect(result).toBe(false);
     expect(connectSpy).not.toHaveBeenCalled();
     expect(getElement('connectError').style.display).toBe('block');
-    expect(getElement('connectError').textContent).toMatch(/pairing link is invalid/i);
+    expect(getElement('connectError').textContent).toMatch(/pairing link is invalid|配对链接无效/i);
   });
 });
 
