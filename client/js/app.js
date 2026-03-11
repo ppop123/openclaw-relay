@@ -95,6 +95,36 @@ const UI_STRINGS = {
     'dashboard.loading': '加载中…',
     'dashboard.not_available': '当前网关不支持此功能。',
 
+    'admin.button': '管理',
+    'admin.title': '管理',
+    'admin.refresh': '刷新',
+    'admin.close': '关闭',
+    'admin.skills': '技能',
+    'admin.skills_refresh': '刷新',
+    'admin.skills_loading': '加载中…',
+    'admin.skills_empty': '暂无技能。',
+    'admin.config': '配置',
+    'admin.config_load': '读取',
+    'admin.config_save': '写入',
+    'admin.config_apply': '应用',
+    'admin.config_hash_missing': '缺少配置 hash，请先读取。',
+    'admin.config_loaded': '配置已读取。',
+    'admin.config_saved': '配置已写入。',
+    'admin.config_applied': '配置已应用，等待重启。',
+    'admin.config_confirm_apply': '确认应用配置并重启网关？',
+    'admin.logs': '日志',
+    'admin.logs_load': '拉取',
+    'admin.logs_reset': '重置',
+    'admin.logs_auto': '自动刷新',
+    'admin.logs_empty': '暂无日志。',
+    'admin.maintenance': '维护',
+    'admin.maintenance_note': '更新或重启会暂时中断当前连接。',
+    'admin.update_run': '运行更新',
+    'admin.update_confirm': '确认运行更新？',
+    'admin.update_started': '更新已启动。',
+    'admin.reboot': '重启网关',
+    'admin.reboot_confirm': '确认重启网关服务？',
+
     'profiles.saved': '连接已保存。',
     'profiles.updated': '连接已更新。',
     'profiles.deleted': '连接已删除。',
@@ -279,6 +309,36 @@ const UI_STRINGS = {
     'dashboard.loading': 'Loading…',
     'dashboard.not_available': 'This gateway does not support this feature yet.',
 
+    'admin.button': 'Admin',
+    'admin.title': 'Admin',
+    'admin.refresh': 'Refresh',
+    'admin.close': 'Close',
+    'admin.skills': 'Skills',
+    'admin.skills_refresh': 'Refresh',
+    'admin.skills_loading': 'Loading…',
+    'admin.skills_empty': 'No skills available.',
+    'admin.config': 'Config',
+    'admin.config_load': 'Load',
+    'admin.config_save': 'Save',
+    'admin.config_apply': 'Apply',
+    'admin.config_hash_missing': 'Config hash missing; load first.',
+    'admin.config_loaded': 'Config loaded.',
+    'admin.config_saved': 'Config saved.',
+    'admin.config_applied': 'Config applied; restart pending.',
+    'admin.config_confirm_apply': 'Apply config and restart the gateway?',
+    'admin.logs': 'Logs',
+    'admin.logs_load': 'Fetch',
+    'admin.logs_reset': 'Reset',
+    'admin.logs_auto': 'Auto refresh',
+    'admin.logs_empty': 'No logs yet.',
+    'admin.maintenance': 'Maintenance',
+    'admin.maintenance_note': 'Updates or restarts will temporarily drop the connection.',
+    'admin.update_run': 'Run update',
+    'admin.update_confirm': 'Run update now?',
+    'admin.update_started': 'Update started.',
+    'admin.reboot': 'Restart gateway',
+    'admin.reboot_confirm': 'Restart the gateway service?',
+
     'profiles.saved': 'Connection saved.',
     'profiles.updated': 'Connection updated.',
     'profiles.deleted': 'Connection deleted.',
@@ -418,6 +478,30 @@ export const app = {
   agents: [],
   profiles: [],
   selectedAgentPreference: '',
+  skillsReport: null,
+  skillsLoading: false,
+  skillsError: '',
+  skillsBusyKey: null,
+  configSnapshot: null,
+  configRaw: '',
+  configHash: '',
+  configPath: '',
+  configLoading: false,
+  configSaving: false,
+  configApplying: false,
+  logsLines: [],
+  logsCursor: null,
+  logsFile: '',
+  logsLoading: false,
+  logsError: '',
+  logsAuto: false,
+  logsTruncated: false,
+  logsLimit: 200,
+  logsMaxBytes: 200000,
+  _logsPollTimer: null,
+  updateRunning: false,
+  rebootRunning: false,
+  adminTab: 'skills',
 
   // Tab state
   tabs: [],
@@ -1207,6 +1291,347 @@ export const app = {
   },
 
 
+  // ── Admin (skills/config/logs/update) ──
+
+  async openAdmin() {
+    const overlay = document.getElementById('adminOverlay');
+    if (!overlay) return;
+    overlay.hidden = false;
+    this.openAdminTab(this.adminTab || 'skills');
+    await this.refreshAdmin();
+  },
+
+  openAdminTab(tabId) {
+    const target = tabId || 'skills';
+    this.adminTab = target;
+    document.querySelectorAll('.admin-tab').forEach((tab) => {
+      const active = tab.dataset.tab === target;
+      tab.classList.toggle('is-active', active);
+    });
+    document.querySelectorAll('.admin-panel').forEach((panel) => {
+      const active = panel.dataset.panel === target;
+      panel.hidden = !active;
+    });
+  },
+
+  closeAdmin() {
+    const overlay = document.getElementById('adminOverlay');
+    if (overlay) overlay.hidden = true;
+    this.toggleLogsAuto(false);
+  },
+
+  async refreshAdmin() {
+    await Promise.all([
+      this.refreshSkills(),
+      this.loadConfig(),
+    ]);
+  },
+
+  async refreshSkills() {
+    const list = document.getElementById('skillsList');
+    const meta = document.getElementById('skillsMeta');
+    if (list) {
+      list.innerHTML = `<div class="sessions-loading">${this._escapeHtml(this.t('admin.skills_loading'))}</div>`;
+    }
+    if (meta) meta.textContent = '';
+    this.skillsLoading = true;
+    this.skillsError = '';
+    try {
+      const result = await this.connection.sendRequest('skills.status', {});
+      this.skillsReport = result?.result ?? result;
+      this._renderSkillsList();
+    } catch (err) {
+      const message = err?.message || String(err);
+      this.skillsError = message;
+      if (list) {
+        list.innerHTML = `<div class="sessions-error">${this._escapeHtml(message)}</div>`;
+      }
+      if (meta) meta.textContent = message;
+    } finally {
+      this.skillsLoading = false;
+    }
+  },
+
+  _renderSkillsList() {
+    const list = document.getElementById('skillsList');
+    const meta = document.getElementById('skillsMeta');
+    if (!list) return;
+    const report = this.skillsReport;
+    const skills = report?.skills;
+    if (!Array.isArray(skills) || skills.length === 0) {
+      list.innerHTML = `<div class="sessions-empty">${this._escapeHtml(this.t('admin.skills_empty'))}</div>`;
+      if (meta) meta.textContent = '';
+      return;
+    }
+
+    if (meta) {
+      const workspaceDir = typeof report.workspaceDir === 'string' ? report.workspaceDir : '';
+      const managedDir = typeof report.managedSkillsDir === 'string' ? report.managedSkillsDir : '';
+      const metaParts = [];
+      if (workspaceDir) metaParts.push(`workspace: ${workspaceDir}`);
+      if (managedDir) metaParts.push(`managed: ${managedDir}`);
+      meta.textContent = metaParts.join(' · ');
+    }
+
+    list.innerHTML = skills.map((skill) => {
+      const name = skill.name || skill.skillKey || '';
+      const skillKey = skill.skillKey || skill.name || '';
+      const desc = skill.description || '';
+      const disabled = Boolean(skill.disabled);
+      const eligible = skill.eligible !== false;
+      const missingBins = Array.isArray(skill.missing?.bins) ? skill.missing.bins.filter(Boolean) : [];
+      const missingEnv = Array.isArray(skill.missing?.env) ? skill.missing.env.filter(Boolean) : [];
+      const missing = [...missingBins, ...missingEnv];
+      const statusParts = [];
+      statusParts.push(disabled ? 'disabled' : 'enabled');
+      if (!eligible && missing.length > 0) {
+        statusParts.push(`missing: ${missing.join(', ')}`);
+      }
+
+      const installs = Array.isArray(skill.install) ? skill.install : [];
+      const installButtons = installs.map((entry) => {
+        const label = entry?.label || 'Install';
+        const installId = entry?.id || '';
+        if (!installId || !skillKey) return '';
+        return `<button type="button" class="secondary-btn" onclick="app.installSkill('${this._escapeHtml(skillKey)}','${this._escapeHtml(installId)}','${this._escapeHtml(label)}')">${this._escapeHtml(label)}</button>`;
+      }).join('');
+
+      return `
+        <div class="dashboard-row">
+          <div class="dashboard-row-main">
+            <div class="dashboard-row-title">${this._escapeHtml(name)}</div>
+            <div class="dashboard-row-sub">${this._escapeHtml([desc, ...statusParts].filter(Boolean).join(' · '))}</div>
+          </div>
+          <div class="dashboard-row-actions">
+            ${installButtons}
+            <label class="toggle-pill">
+              <input type="checkbox" ${disabled ? '' : 'checked'} onchange="app.toggleSkill('${this._escapeHtml(skillKey)}', this.checked)">
+              <span>${disabled ? 'OFF' : 'ON'}</span>
+            </label>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  async toggleSkill(skillKey, enabled) {
+    if (!skillKey) return;
+    try {
+      await this.connection.sendRequest('skills.update', { skillKey, enabled: Boolean(enabled) });
+      await this.refreshSkills();
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+      await this.refreshSkills();
+    }
+  },
+
+  async installSkill(skillKey, installId, label) {
+    if (!skillKey || !installId) return;
+    try {
+      showToast(label || 'Installing…', 'info', 2000);
+      await this.connection.sendRequest('skills.install', { name: skillKey, installId, timeoutMs: 120000 });
+      await this.refreshSkills();
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+    }
+  },
+
+  updateConfigDraft(value) {
+    this.configRaw = String(value ?? '');
+  },
+
+  _getConfigDraft() {
+    const editor = document.getElementById('configEditor');
+    if (editor) return editor.value;
+    return this.configRaw;
+  },
+
+  async loadConfig() {
+    const meta = document.getElementById('configMeta');
+    if (meta) meta.textContent = '';
+    this.configLoading = true;
+    try {
+      const result = await this.connection.sendRequest('config.get', {});
+      const payload = result?.result ?? result;
+      const raw = typeof payload?.raw === 'string'
+        ? payload.raw
+        : payload?.config
+          ? JSON.stringify(payload.config, null, 2)
+          : '';
+      this.configSnapshot = payload;
+      this.configHash = typeof payload?.hash === 'string' ? payload.hash : '';
+      this.configPath = typeof payload?.path === 'string' ? payload.path : '';
+      this.configRaw = raw;
+      const editor = document.getElementById('configEditor');
+      if (editor) editor.value = raw;
+      this._renderConfigMeta(payload);
+      showToast(this.t('admin.config_loaded'), 'info', 1500);
+    } catch (err) {
+      const message = err?.message || String(err);
+      if (meta) meta.textContent = message;
+      showToast(message, 'error');
+    } finally {
+      this.configLoading = false;
+    }
+  },
+
+  _renderConfigMeta(payload) {
+    const meta = document.getElementById('configMeta');
+    if (!meta) return;
+    const parts = [];
+    if (this.configPath) parts.push(`path: ${this.configPath}`);
+    if (this.configHash) parts.push(`hash: ${this.configHash}`);
+    const issues = Array.isArray(payload?.issues) ? payload.issues.length : 0;
+    const warnings = Array.isArray(payload?.warnings) ? payload.warnings.length : 0;
+    if (issues) parts.push(`issues: ${issues}`);
+    if (warnings) parts.push(`warnings: ${warnings}`);
+    meta.textContent = parts.join(' · ');
+  },
+
+  async saveConfig() {
+    if (!this.configHash) {
+      showToast(this.t('admin.config_hash_missing'), 'error');
+      return;
+    }
+    const raw = this._getConfigDraft();
+    this.configSaving = true;
+    try {
+      await this.connection.sendRequest('config.set', { raw, baseHash: this.configHash });
+      showToast(this.t('admin.config_saved'), 'info', 2000);
+      await this.loadConfig();
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+    } finally {
+      this.configSaving = false;
+    }
+  },
+
+  async applyConfig() {
+    if (!this.configHash) {
+      showToast(this.t('admin.config_hash_missing'), 'error');
+      return;
+    }
+    if (!confirm(this.t('admin.config_confirm_apply'))) return;
+    const raw = this._getConfigDraft();
+    this.configApplying = true;
+    try {
+      await this.connection.sendRequest('config.apply', { raw, baseHash: this.configHash });
+      showToast(this.t('admin.config_applied'), 'info', 2500);
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+    } finally {
+      this.configApplying = false;
+    }
+  },
+
+  async refreshLogs(options = {}) {
+    const { reset = false, quiet = false } = options;
+    if (this.logsLoading && !quiet) return;
+    if (!quiet) this.logsLoading = true;
+    this.logsError = '';
+    const meta = document.getElementById('logsMeta');
+    if (reset) {
+      this.logsLines = [];
+      this.logsCursor = null;
+      this.logsTruncated = false;
+    }
+    try {
+      const params = {
+        limit: this.logsLimit,
+        maxBytes: this.logsMaxBytes,
+        ...(this.logsCursor != null && !reset ? { cursor: this.logsCursor } : {}),
+      };
+      const result = await this.connection.sendRequest('logs.tail', params);
+      const payload = result?.result ?? result;
+      const lines = Array.isArray(payload?.lines) ? payload.lines.filter((line) => typeof line === 'string') : [];
+      const shouldReset = reset || payload?.reset || this.logsCursor == null;
+      if (shouldReset) {
+        this.logsLines = lines;
+      } else if (lines.length > 0) {
+        this.logsLines = this.logsLines.concat(lines).slice(-2000);
+      }
+      if (typeof payload?.cursor === 'number') this.logsCursor = payload.cursor;
+      if (typeof payload?.file === 'string') this.logsFile = payload.file;
+      this.logsTruncated = payload?.truncated === true;
+      this._renderLogs();
+    } catch (err) {
+      const message = err?.message || String(err);
+      this.logsError = message;
+      if (meta) meta.textContent = message;
+      if (!quiet) showToast(message, 'error');
+    } finally {
+      if (!quiet) this.logsLoading = false;
+    }
+  },
+
+  _renderLogs() {
+    const viewer = document.getElementById('logsViewer');
+    if (viewer) {
+      viewer.value = this.logsLines.join('\n');
+      viewer.scrollTop = viewer.scrollHeight;
+    }
+    const meta = document.getElementById('logsMeta');
+    if (!meta) return;
+    const parts = [];
+    if (this.logsFile) parts.push(`file: ${this.logsFile}`);
+    if (typeof this.logsCursor === 'number') parts.push(`cursor: ${this.logsCursor}`);
+    if (this.logsTruncated) parts.push('truncated');
+    meta.textContent = parts.join(' · ') || this.t('admin.logs_empty');
+  },
+
+  toggleLogsAuto(enabled) {
+    this.logsAuto = Boolean(enabled);
+    const toggle = document.getElementById('logsAutoToggle');
+    if (toggle) toggle.checked = this.logsAuto;
+    if (this.logsAuto) {
+      if (!this._logsPollTimer) {
+        this._logsPollTimer = setInterval(() => {
+          const overlay = document.getElementById('adminOverlay');
+          if (overlay && overlay.hidden) return;
+          void this.refreshLogs({ quiet: true });
+        }, 2000);
+      }
+      return;
+    }
+    if (this._logsPollTimer) {
+      clearInterval(this._logsPollTimer);
+      this._logsPollTimer = null;
+    }
+  },
+
+  async runUpdate() {
+    if (!confirm(this.t('admin.update_confirm'))) return;
+    const btn = document.getElementById('updateBtn');
+    if (btn) btn.disabled = true;
+    this.updateRunning = true;
+    try {
+      await this.connection.sendRequest('update.run', { timeoutMs: 120000 });
+      showToast(this.t('admin.update_started'), 'info', 2500);
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+    } finally {
+      this.updateRunning = false;
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  async restartGateway() {
+    if (!confirm(this.t('admin.reboot_confirm'))) return;
+    const btn = document.getElementById('rebootBtn');
+    if (btn) btn.disabled = true;
+    this.rebootRunning = true;
+    try {
+      await this.connection.sendRequest('gateway.restart', {});
+      showToast(this.t('admin.reboot'), 'info', 2500);
+    } catch (err) {
+      showToast(err?.message || String(err), 'error');
+    } finally {
+      this.rebootRunning = false;
+      if (btn) btn.disabled = false;
+    }
+  },
+
+
   handleProfileSelectChange() {
     const profileId = this._getSelectedProfileId();
     if (!profileId) {
@@ -1761,6 +2186,7 @@ export const app = {
     const profileEl = document.getElementById('profileValue');
     const gatewayEl = document.getElementById('gatewayValue');
     const dashboardBtn = document.getElementById('dashboardBtn');
+    const adminBtn = document.getElementById('adminBtn');
     const sessionsBtn = document.getElementById('sessionsBtn');
     const newChatBtn = document.getElementById('newChatBtn');
     const exportChatBtn = document.getElementById('exportChatBtn');
@@ -1848,6 +2274,7 @@ export const app = {
     }
 
     if (dashboardBtn) dashboardBtn.disabled = this.connection.state !== 'connected';
+    if (adminBtn) adminBtn.disabled = this.connection.state !== 'connected';
     if (sessionsBtn) sessionsBtn.disabled = this.connection.state !== 'connected';
     if (newChatBtn) newChatBtn.disabled = this.connection.state !== 'connected';
     if (exportChatBtn) exportChatBtn.disabled = this.chatTranscript.length === 0;

@@ -11,11 +11,13 @@ import {
   RequestMessage,
   ResponseMessage,
 } from './types.js';
-import { b64Decode, b64Encode, nowIso, publicKeyFingerprint } from './utils.js';
+import { b64Decode, b64Encode, nowIso, publicKeyFingerprint, utf8ByteLength } from './utils.js';
 
 export interface GatewaySession extends ClientSessionRecord {
   cipher: SessionCipher;
 }
+
+const MAX_LAYER2_PLAINTEXT_BYTES = 512 * 1024;
 
 export interface GatewayTransportOptions {
   accountId: string;
@@ -61,6 +63,9 @@ export class GatewayTransport {
     }
 
     const plaintext = await session.cipher.decryptToText(frame.payload);
+    if (utf8ByteLength(plaintext) > MAX_LAYER2_PLAINTEXT_BYTES) {
+      return;
+    }
     const message = JSON.parse(plaintext) as Layer2Message;
     session.lastActivity = new Date();
     await this.dispatchLayer2(session, message);

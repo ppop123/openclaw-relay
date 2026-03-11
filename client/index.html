@@ -240,6 +240,175 @@ header {
   height: 16px;
 }
 
+.admin-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(8, 16, 29, 0.6);
+  min-height: 420px;
+}
+
+.admin-tab {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-tab:hover {
+  color: var(--text);
+  border-color: rgba(233, 69, 96, 0.3);
+}
+
+.admin-tab.is-active {
+  color: var(--text);
+  border-color: rgba(233, 69, 96, 0.6);
+  background: rgba(233, 69, 96, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(233, 69, 96, 0.12);
+}
+
+.admin-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(10, 18, 32, 0.7);
+  min-width: 0;
+}
+
+.admin-panel[hidden] {
+  display: none;
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.admin-panel-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-panel-header .admin-actions {
+  margin-bottom: 0;
+}
+
+.admin-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.dashboard-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(8, 12, 22, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  resize: vertical;
+  min-height: 160px;
+  line-height: 1.4;
+}
+
+.admin-textarea.logs-viewer {
+  min-height: 220px;
+}
+
+.admin-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.admin-note {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.admin-panel .dashboard-row {
+  background: rgba(6, 12, 22, 0.95);
+  border-color: rgba(42, 42, 74, 0.7);
+}
+
+.admin-panel .dashboard-row:hover {
+  border-color: rgba(233, 69, 96, 0.45);
+}
+
+@media (max-width: 900px) {
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    min-height: unset;
+  }
+
+  .admin-tab {
+    white-space: nowrap;
+  }
+}
+
+.danger-btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #6b1d27;
+  background: #3b1116;
+  color: #f0c0c4;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.danger-btn:hover {
+  background: #4b141b;
+}
+
 header h1 {
   font-size: 18px;
   font-weight: 600;
@@ -663,6 +832,10 @@ main {
   color: var(--text);
   font-size: 13px;
   flex-shrink: 0;
+}
+
+.profile-save-banner[hidden] {
+  display: none;
 }
 
 .profile-save-actions {
@@ -1284,6 +1457,7 @@ main {
       </div>
       <div class="status-bar-actions">
         <button class="secondary-btn session-action" id="dashboardBtn" onclick="app.openDashboard()" disabled data-i18n="dashboard.button">概览</button>
+        <button class="secondary-btn session-action" id="adminBtn" onclick="app.openAdmin()" disabled data-i18n="admin.button">管理</button>
         <button class="secondary-btn session-action" id="sessionsBtn" onclick="app.openSessions()" disabled data-i18n="sessions.button">会话</button>
         <button class="secondary-btn session-action" id="newChatBtn" onclick="app.startNewChat()" disabled data-i18n="chat.new_button">新对话</button>
         <button class="secondary-btn session-action" id="exportChatBtn" onclick="app.exportCurrentChat()" disabled data-i18n="chat.export_button">保存对话</button>
@@ -1328,6 +1502,88 @@ main {
               <h3 data-i18n="dashboard.cron">定时任务</h3>
               <div class="dashboard-list" id="cronList"></div>
             </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="adminOverlay" hidden>
+      <div class="modal modal-wide">
+        <div class="modal-header">
+          <div class="modal-title" data-i18n="admin.title">管理</div>
+          <div class="modal-header-actions">
+            <button type="button" class="secondary-btn" onclick="app.refreshAdmin()" data-i18n="admin.refresh">刷新</button>
+            <button type="button" class="secondary-btn" onclick="app.closeAdmin()" data-i18n="admin.close">关闭</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="admin-layout">
+            <aside class="admin-nav">
+              <button type="button" class="admin-tab is-active" data-tab="skills" onclick="app.openAdminTab('skills')" data-i18n="admin.skills">技能</button>
+              <button type="button" class="admin-tab" data-tab="config" onclick="app.openAdminTab('config')" data-i18n="admin.config">配置</button>
+              <button type="button" class="admin-tab" data-tab="logs" onclick="app.openAdminTab('logs')" data-i18n="admin.logs">日志</button>
+              <button type="button" class="admin-tab" data-tab="maintenance" onclick="app.openAdminTab('maintenance')" data-i18n="admin.maintenance">维护</button>
+            </aside>
+            <div class="admin-panels">
+              <section class="admin-panel" data-panel="skills">
+                <div class="admin-panel-header">
+                  <h3 data-i18n="admin.skills">Skills</h3>
+                  <div class="admin-actions">
+                    <button type="button" class="secondary-btn" onclick="app.refreshSkills()" data-i18n="admin.skills_refresh">刷新</button>
+                  </div>
+                </div>
+                <div class="admin-panel-body">
+                  <div class="dashboard-list" id="skillsList"></div>
+                  <div class="admin-meta" id="skillsMeta"></div>
+                </div>
+              </section>
+
+              <section class="admin-panel" data-panel="config" hidden>
+                <div class="admin-panel-header">
+                  <h3 data-i18n="admin.config">配置</h3>
+                  <div class="admin-actions">
+                    <button type="button" class="secondary-btn" onclick="app.loadConfig()" data-i18n="admin.config_load">读取</button>
+                    <button type="button" class="secondary-btn" onclick="app.saveConfig()" data-i18n="admin.config_save">写入</button>
+                    <button type="button" class="secondary-btn" onclick="app.applyConfig()" data-i18n="admin.config_apply">应用</button>
+                  </div>
+                </div>
+                <div class="admin-panel-body">
+                  <textarea id="configEditor" class="admin-textarea" rows="10" spellcheck="false" oninput="app.updateConfigDraft(this.value)"></textarea>
+                  <div class="admin-meta" id="configMeta"></div>
+                </div>
+              </section>
+
+              <section class="admin-panel" data-panel="logs" hidden>
+                <div class="admin-panel-header">
+                  <h3 data-i18n="admin.logs">日志</h3>
+                  <div class="admin-actions">
+                    <button type="button" class="secondary-btn" onclick="app.refreshLogs({ reset: true })" data-i18n="admin.logs_reset">重置</button>
+                    <button type="button" class="secondary-btn" onclick="app.refreshLogs()" data-i18n="admin.logs_load">拉取</button>
+                    <label class="toggle-pill">
+                      <input type="checkbox" id="logsAutoToggle" onchange="app.toggleLogsAuto(this.checked)">
+                      <span data-i18n="admin.logs_auto">自动刷新</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="admin-panel-body">
+                  <textarea id="logsViewer" class="admin-textarea logs-viewer" rows="8" readonly spellcheck="false"></textarea>
+                  <div class="admin-meta" id="logsMeta"></div>
+                </div>
+              </section>
+
+              <section class="admin-panel" data-panel="maintenance" hidden>
+                <div class="admin-panel-header">
+                  <h3 data-i18n="admin.maintenance">维护</h3>
+                  <div class="admin-actions">
+                    <button type="button" class="secondary-btn" id="updateBtn" onclick="app.runUpdate()" data-i18n="admin.update_run">运行更新</button>
+                    <button type="button" class="danger-btn" id="rebootBtn" onclick="app.restartGateway()" data-i18n="admin.reboot">重启网关</button>
+                  </div>
+                </div>
+                <div class="admin-panel-body">
+                  <div class="admin-note" data-i18n="admin.maintenance_note">更新或重启会暂时中断当前连接。</div>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </div>
@@ -1385,7 +1641,7 @@ main {
 
 <div class="toast-container" id="toastContainer"></div>
 
-<script type="module" src="js/app.js?v=20260311b"></script>
+<script type="module" src="js/app.js?v=20260312a"></script>
 
 <!-- Development note: All JavaScript has been modularized into client/js/.
      See js/utils.js, js/markdown.js, js/crypto.js, js/transport.js, js/app.js.

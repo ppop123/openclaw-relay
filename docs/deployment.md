@@ -91,7 +91,7 @@ go build -o openclaw-relay
 ```json
 {
   "name": "openclaw-relay",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "protocol_version": 1,
   "channels_active": 12,
   "channels_limit": 500,
@@ -286,7 +286,7 @@ To allow specific cross-origin browser clients, pass a comma-separated list of *
 ```json
 {
   "name": "openclaw-relay",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "protocol_version": 1,
   "channels_active": 12,
   "channels_limit": 500,

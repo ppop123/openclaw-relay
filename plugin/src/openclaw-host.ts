@@ -180,6 +180,118 @@ function cloneConfig<T>(value: T): T {
   return structuredClone(value);
 }
 
+const OPENCLAW_CLI_MAX_BUFFER = 50 * 1024 * 1024;
+const DEFAULT_GATEWAY_TIMEOUT_MS = 10000;
+const DEFAULT_LONG_TIMEOUT_MS = 120000;
+const DEFAULT_RESTART_TIMEOUT_MS = 60000;
+const CLI_TIMEOUT_GRACE_MS = 5000;
+
+function normalizeTimeoutMs(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+async function runOpenClawCommand(
+  args: string[],
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<{ stdout: string; stderr: string }> {
+  const execOptions: childProcess.ExecFileOptions = {
+    maxBuffer: OPENCLAW_CLI_MAX_BUFFER,
+    env: {
+      ...(process.env ?? {}),
+      NO_COLOR: '1',
+      OPENCLAW_NO_COLOR: '1',
+    },
+  };
+  if (typeof opts.timeoutMs === 'number') {
+    execOptions.timeout = opts.timeoutMs;
+  }
+  if (opts.signal) {
+    execOptions.signal = opts.signal;
+  }
+  return await new Promise((resolve, reject) => {
+    childProcess.execFile(
+      'openclaw',
+      args,
+      execOptions,
+      (error, stdout, stderr) => {
+        const out = typeof stdout === 'string' ? stdout : stdout?.toString() ?? '';
+        const err = typeof stderr === 'string' ? stderr : stderr?.toString() ?? '';
+        if (error) {
+          const message = err.trim() || out.trim() || error.message || 'openclaw CLI failed';
+          const wrapped = new Error(message);
+          (wrapped as { cause?: unknown }).cause = error;
+          (wrapped as { stdout?: string }).stdout = out;
+          (wrapped as { stderr?: string }).stderr = err;
+          reject(wrapped);
+          return;
+        }
+        resolve({ stdout: out, stderr: err });
+      },
+    );
+  });
+}
+
+function parseOpenClawJsonOutput(raw: string, method: string, stderr = ''): Record<string, unknown> {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(`openclaw gateway call ${method} returned empty output${stderr ? ` (${stderr.trim()})` : ''}`);
+  }
+  const tryParse = (value: string): Record<string, unknown> | null => {
+    try {
+      const parsed = JSON.parse(value);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      return parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+  const direct = tryParse(trimmed);
+  if (direct) return direct;
+
+  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 1) {
+    const first = lines[0];
+    if (first) {
+      const single = tryParse(first);
+      if (single) return single;
+    }
+  } else if (lines.length > 1) {
+    const candidates = lines.map((line) => tryParse(line)).filter(Boolean) as Record<string, unknown>[];
+    if (candidates.length === 1) {
+      const candidate = candidates[0];
+      if (candidate) return candidate;
+    }
+  }
+
+  throw new Error(`openclaw gateway call ${method} returned invalid JSON`);
+}
+
+async function callGatewayMethod(
+  method: string,
+  params: Record<string, unknown>,
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<Record<string, unknown>> {
+  const timeoutMs = normalizeTimeoutMs(opts.timeoutMs, DEFAULT_GATEWAY_TIMEOUT_MS);
+  const cliTimeout = timeoutMs + CLI_TIMEOUT_GRACE_MS;
+  const args = ['gateway', 'call', method, '--json', '--params', JSON.stringify(params ?? {})];
+  if (timeoutMs) {
+    args.push('--timeout', String(timeoutMs));
+  }
+  const runOpts = opts.signal
+    ? { timeoutMs: cliTimeout, signal: opts.signal }
+    : { timeoutMs: cliTimeout };
+  const { stdout, stderr } = await runOpenClawCommand(args, runOpts);
+  return parseOpenClawJsonOutput(stdout, method, stderr);
+}
+
+async function restartGatewayService(opts: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
+  const runOpts = opts.signal
+    ? { timeoutMs: DEFAULT_RESTART_TIMEOUT_MS, signal: opts.signal }
+    : { timeoutMs: DEFAULT_RESTART_TIMEOUT_MS };
+  const { stdout, stderr } = await runOpenClawCommand(['gateway', 'restart', '--json'], runOpts);
+  return parseOpenClawJsonOutput(stdout, 'gateway.restart', stderr);
+}
+
 function getChannels(cfg: OpenClawConfig): Record<string, unknown> {
   return isObject(cfg.channels) ? cfg.channels : {};
 }
@@ -813,6 +925,128 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
         cron_tasks: jobs.length,
         channels,
       };
+    },
+
+    configGet: async (_params, ctx) => {
+      return callGatewayMethod('config.get', {}, { signal: ctx.signal, timeoutMs: DEFAULT_GATEWAY_TIMEOUT_MS });
+    },
+
+    configSet: async (params, ctx) => {
+      const baseHash = typeof params.baseHash === 'string' ? params.baseHash : undefined;
+      return callGatewayMethod(
+        'config.set',
+        {
+          raw: String(params.raw ?? ''),
+          ...(baseHash ? { baseHash } : {}),
+        },
+        { signal: ctx.signal, timeoutMs: DEFAULT_GATEWAY_TIMEOUT_MS },
+      );
+    },
+
+    configApply: async (params, ctx) => {
+      const baseHash = typeof params.baseHash === 'string' ? params.baseHash : undefined;
+      const sessionKey = typeof params.sessionKey === 'string' ? params.sessionKey : undefined;
+      const note = typeof params.note === 'string' ? params.note : undefined;
+      const restartDelayMs = typeof params.restartDelayMs === 'number' && Number.isFinite(params.restartDelayMs)
+        ? Math.max(0, Math.floor(params.restartDelayMs))
+        : undefined;
+      return callGatewayMethod(
+        'config.apply',
+        {
+          raw: String(params.raw ?? ''),
+          ...(baseHash ? { baseHash } : {}),
+          ...(sessionKey ? { sessionKey } : {}),
+          ...(note ? { note } : {}),
+          ...(restartDelayMs !== undefined ? { restartDelayMs } : {}),
+        },
+        { signal: ctx.signal, timeoutMs: DEFAULT_LONG_TIMEOUT_MS },
+      );
+    },
+
+    logsTail: async (params, ctx) => {
+      const cursor = typeof params.cursor === 'number' && Number.isFinite(params.cursor)
+        ? Math.max(0, Math.floor(params.cursor))
+        : undefined;
+      const limit = typeof params.limit === 'number' && Number.isFinite(params.limit)
+        ? Math.max(1, Math.floor(params.limit))
+        : undefined;
+      const maxBytes = typeof params.maxBytes === 'number' && Number.isFinite(params.maxBytes)
+        ? Math.max(1, Math.floor(params.maxBytes))
+        : undefined;
+      return callGatewayMethod(
+        'logs.tail',
+        {
+          ...(cursor !== undefined ? { cursor } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+          ...(maxBytes !== undefined ? { maxBytes } : {}),
+        },
+        { signal: ctx.signal, timeoutMs: DEFAULT_GATEWAY_TIMEOUT_MS },
+      );
+    },
+
+    skillsStatus: async (params, ctx) => {
+      const agentId = typeof params.agentId === 'string' ? params.agentId : undefined;
+      return callGatewayMethod(
+        'skills.status',
+        {
+          ...(agentId ? { agentId } : {}),
+        },
+        { signal: ctx.signal, timeoutMs: DEFAULT_GATEWAY_TIMEOUT_MS },
+      );
+    },
+
+    skillsUpdate: async (params, ctx) => {
+      const enabled = typeof params.enabled === 'boolean' ? params.enabled : undefined;
+      const apiKey = typeof params.apiKey === 'string' ? params.apiKey : undefined;
+      const env = params.env && typeof params.env === 'object' && !Array.isArray(params.env)
+        ? params.env as Record<string, unknown>
+        : undefined;
+      return callGatewayMethod(
+        'skills.update',
+        {
+          skillKey: String(params.skillKey ?? ''),
+          ...(enabled !== undefined ? { enabled } : {}),
+          ...(apiKey ? { apiKey } : {}),
+          ...(env ? { env } : {}),
+        },
+        { signal: ctx.signal, timeoutMs: DEFAULT_GATEWAY_TIMEOUT_MS },
+      );
+    },
+
+    skillsInstall: async (params, ctx) => {
+      const timeoutMs = normalizeTimeoutMs(params.timeoutMs, DEFAULT_LONG_TIMEOUT_MS);
+      return callGatewayMethod(
+        'skills.install',
+        {
+          name: String(params.name ?? ''),
+          installId: String(params.installId ?? ''),
+          ...(timeoutMs ? { timeoutMs } : {}),
+        },
+        { signal: ctx.signal, timeoutMs },
+      );
+    },
+
+    updateRun: async (params, ctx) => {
+      const sessionKey = typeof params.sessionKey === 'string' ? params.sessionKey : undefined;
+      const note = typeof params.note === 'string' ? params.note : undefined;
+      const restartDelayMs = typeof params.restartDelayMs === 'number' && Number.isFinite(params.restartDelayMs)
+        ? Math.max(0, Math.floor(params.restartDelayMs))
+        : undefined;
+      const timeoutMs = normalizeTimeoutMs(params.timeoutMs, DEFAULT_LONG_TIMEOUT_MS);
+      return callGatewayMethod(
+        'update.run',
+        {
+          ...(sessionKey ? { sessionKey } : {}),
+          ...(note ? { note } : {}),
+          ...(restartDelayMs !== undefined ? { restartDelayMs } : {}),
+          ...(timeoutMs ? { timeoutMs } : {}),
+        },
+        { signal: ctx.signal, timeoutMs },
+      );
+    },
+
+    gatewayRestart: async (_params, ctx) => {
+      return restartGatewayService({ signal: ctx.signal });
     },
   };
 }

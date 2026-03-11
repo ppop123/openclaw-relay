@@ -16,13 +16,14 @@ import {
   WebSocketFactory,
   WebSocketLike,
 } from './types.js';
-import { b64Decode, b64Encode, generateMessageId, randomHex, sha256Hex } from './utils.js';
+import { b64Decode, b64Encode, generateMessageId, randomHex, sha256Hex, utf8ByteLength } from './utils.js';
 
 const WS_OPEN = 1;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const DEFAULT_STREAM_TIMEOUT_MS = 300_000;
 const STREAM_END_RESPONSE_GRACE_MS = 250;
+const MAX_LAYER2_PLAINTEXT_BYTES = 512 * 1024;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
 const GATEWAY_PEER_ID = 'gateway';
@@ -53,6 +54,7 @@ export class RelayPeerSession {
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly frameWaiters = new Map<string, { resolve: (frame: Record<string, unknown>) => void; reject: (error: Error) => void; timeout: ReturnType<typeof setTimeout> }>();
   private readonly dataWaiters = new Map<string, { resolve: (payload: Record<string, unknown>) => void; reject: (error: Error) => void; timeout: ReturnType<typeof setTimeout> }>();
+  private frameQueue: Promise<void> = Promise.resolve();
   private ws: WebSocketLike | undefined;
   private cipher: SessionCipher | undefined;
   private connected = false;
@@ -283,11 +285,9 @@ export class RelayPeerSession {
       this.handleProtocolFailure(new RelayProtocolError('Received malformed relay frame'));
       return;
     }
-    try {
-      await this.handleFrame(frame);
-    } catch (error) {
+    this.frameQueue = this.frameQueue.then(() => this.handleFrame(frame)).catch((error) => {
       this.handleProtocolFailure(error instanceof Error ? error : new Error(String(error)));
-    }
+    });
   }
 
   private async handleFrame(frame: RelayFrame): Promise<void> {
@@ -337,12 +337,18 @@ export class RelayPeerSession {
     if (this.cipher) {
       try {
         const plaintext = await this.cipher.decryptToText(frame.payload);
+        if (utf8ByteLength(plaintext) > MAX_LAYER2_PLAINTEXT_BYTES) {
+          return;
+        }
         payload = JSON.parse(plaintext) as Record<string, unknown>;
       } catch {
         return;
       }
     } else {
       try {
+        if (utf8ByteLength(frame.payload) > MAX_LAYER2_PLAINTEXT_BYTES) {
+          return;
+        }
         payload = JSON.parse(frame.payload) as Record<string, unknown>;
       } catch {
         return;

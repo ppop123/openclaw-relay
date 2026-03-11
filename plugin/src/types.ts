@@ -300,6 +300,15 @@ export interface RelayRuntimeAdapter {
   cronList?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
   cronToggle?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
   systemStatus?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  configGet?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  configSet?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  configApply?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  logsTail?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  skillsStatus?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  skillsUpdate?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  skillsInstall?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  updateRun?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
+  gatewayRestart?(params: Record<string, unknown>, ctx: RelayRequestContext): Promise<Record<string, unknown>>;
 }
 
 export interface PeerDiscoveryStatus {

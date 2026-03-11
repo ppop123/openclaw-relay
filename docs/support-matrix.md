@@ -20,13 +20,13 @@
 | 协议规范（Protocol specification） | `protocol/` | 线协议规范（v1） |
 | OpenClaw Gateway 插件 | `plugin/` | TypeScript 网关插件，用于将 Relay 支持集成到你的 OpenClaw 运行时；包含本地生命周期冒烟测试脚本 |
 
-以上组件均在积极维护中，有 CI 测试覆盖，受 `v0.5.0` 稳定性保证约束。
+以上组件均在积极维护中，有 CI 测试覆盖，受 `v0.5.1` 稳定性保证约束。
 
 ### main 分支中开发中
 
 | 组件 | 路径 | 说明 |
 |------|------|------|
-| Windows/macOS 桌面壳 | `desktop/` | 围绕共享浏览器前端的 Tauri 桌面壳。目标是让非技术用户通过一条 pairing link 完成安装和连接。当前在 `main` 上开发，尚未包含在 `v0.5.0` 已发布资产中。 |
+| Windows/macOS 桌面壳 | `desktop/` | 围绕共享浏览器前端的 Tauri 桌面壳。目标是让非技术用户通过一条 pairing link 完成安装和连接。当前在 `main` 上开发，尚未包含在 `v0.5.1` 已发布资产中。 |
 
 ### 尚未实现
 
@@ -88,13 +88,13 @@ CI 流水线执行以下检查：
 | Protocol specification | `protocol/` | Wire protocol specification (v1) |
 | OpenClaw gateway plugin | `plugin/` | TypeScript gateway plugin for installing relay support into your own OpenClaw runtime; includes a local lifecycle smoke script for real-host verification |
 
-These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.5.0`.
+These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.5.1`.
 
 ### In Progress on `main`
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| Windows/macOS desktop shell | `desktop/` | Thin Tauri shell around the shared browser client. It is being built on `main` for non-technical users who want a normal desktop app and a pairing-link-first connect flow. It is not part of the already released `v0.5.0` assets yet. |
+| Windows/macOS desktop shell | `desktop/` | Thin Tauri shell around the shared browser client. It is being built on `main` for non-technical users who want a normal desktop app and a pairing-link-first connect flow. It is not part of the already released `v0.5.1` assets yet. |
 
 ### Not Yet Implemented
 

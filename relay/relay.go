@@ -13,6 +13,7 @@ import (
 const (
 	maxSignalsPerMinute      = 10
 	maxPendingInvitesPerPeer = 10
+	invitePruneInterval      = time.Minute
 )
 
 // RelayConfig holds relay server configuration.
@@ -67,6 +68,8 @@ type Relay struct {
 	discoveryByConn map[*websocket.Conn]*discoveryEntry
 	invites         map[string]*inviteEntry
 	signalLimiters  map[*websocket.Conn]*tokenBucket
+	invitePruner    *time.Ticker
+	invitePruneDone chan struct{}
 
 	framesForwarded int64
 	framesRejected  int64
@@ -74,7 +77,7 @@ type Relay struct {
 
 // NewRelay creates a new Relay instance.
 func NewRelay(config RelayConfig, logger *slog.Logger) *Relay {
-	return &Relay{
+	relay := &Relay{
 		config:          config,
 		logger:          logger,
 		channels:        make(map[string]*channel),
@@ -83,6 +86,8 @@ func NewRelay(config RelayConfig, logger *slog.Logger) *Relay {
 		invites:         make(map[string]*inviteEntry),
 		signalLimiters:  make(map[*websocket.Conn]*tokenBucket),
 	}
+	relay.startInvitePruneLoop(invitePruneInterval)
+	return relay
 }
 
 // RegisterGateway registers a gateway on the given channel hash.
@@ -427,6 +432,39 @@ func (r *Relay) pruneExpiredInvitesLocked(now time.Time) {
 	}
 }
 
+func (r *Relay) startInvitePruneLoop(interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	r.invitePruner = time.NewTicker(interval)
+	r.invitePruneDone = make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-r.invitePruner.C:
+				r.mu.Lock()
+				r.pruneExpiredInvitesLocked(time.Now())
+				r.mu.Unlock()
+			case <-r.invitePruneDone:
+				return
+			}
+		}
+	}()
+}
+
+func (r *Relay) stopInvitePruneLoop() {
+	if r.invitePruner != nil {
+		r.invitePruner.Stop()
+	}
+	if r.invitePruneDone != nil {
+		select {
+		case <-r.invitePruneDone:
+		default:
+			close(r.invitePruneDone)
+		}
+	}
+}
+
 func (r *Relay) unbindGatewayDiscoveryLocked(conn *websocket.Conn, channelHash string) {
 	entry, ok := r.discoveryByConn[conn]
 	if ok {
@@ -490,6 +528,7 @@ func (r *Relay) ConnectionCount() int {
 func (r *Relay) CloseAll() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.stopInvitePruneLoop()
 
 	for _, ch := range r.channels {
 		ch.mu.Lock()

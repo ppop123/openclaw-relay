@@ -60,6 +60,13 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+export function utf8ByteLength(value: string): number {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(value).length;
+  }
+  return value.length;
+}
+
 export function assertNever(value: never): never {
   throw new Error(`Unexpected value: ${String(value)}`);
 }

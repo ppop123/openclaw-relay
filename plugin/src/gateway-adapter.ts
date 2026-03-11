@@ -52,6 +52,22 @@ function isStreamResult(value: Record<string, unknown> | RelayStreamResult): val
   return 'stream' in value && 'final' in value;
 }
 
+const ADMIN_METHODS = new Set([
+  'config.get',
+  'config.set',
+  'config.apply',
+  'logs.tail',
+  'skills.status',
+  'skills.update',
+  'skills.install',
+  'update.run',
+  'gateway.restart',
+]);
+
+function isAdminMethod(method: string): boolean {
+  return ADMIN_METHODS.has(method);
+}
+
 export class RelayGatewayAdapter {
   readonly accountId: string;
   readonly pairingManager: PairingManager;
@@ -341,6 +357,21 @@ export class RelayGatewayAdapter {
     if (this.options.runtime.systemStatus) {
       capabilities.add('system');
     }
+    if (this.options.runtime.configGet || this.options.runtime.configSet || this.options.runtime.configApply) {
+      capabilities.add('config');
+    }
+    if (this.options.runtime.logsTail) {
+      capabilities.add('logs');
+    }
+    if (this.options.runtime.skillsStatus || this.options.runtime.skillsUpdate || this.options.runtime.skillsInstall) {
+      capabilities.add('skills');
+    }
+    if (this.options.runtime.updateRun) {
+      capabilities.add('update');
+    }
+    if (this.options.runtime.gatewayRestart) {
+      capabilities.add('restart');
+    }
     return [...capabilities].sort();
   }
 
@@ -359,8 +390,27 @@ export class RelayGatewayAdapter {
     return count;
   }
 
+  private isApprovedFingerprint(fingerprint: string): boolean {
+    return Boolean(this.currentConfig?.approvedClients[fingerprint]);
+  }
+
+  private isAdminRequestAllowed(session: GatewaySession, method: string): boolean {
+    if (!isAdminMethod(method)) return true;
+    return this.isApprovedFingerprint(session.fingerprint);
+  }
+
   private async handleRequest(session: GatewaySession, message: RequestMessage): Promise<void> {
     if (!this.outbound) throw new Error('outbound not initialized');
+
+    if (!this.isAdminRequestAllowed(session, message.method)) {
+      await this.outbound.sendError(
+        session.clientId,
+        message.id,
+        'forbidden',
+        'Admin methods require an approved client.',
+      );
+      return;
+    }
 
     const maxPerClient = this.options.maxConcurrentPerClient ?? 4;
     const maxGlobal = this.options.maxConcurrentGlobal ?? 16;
