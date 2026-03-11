@@ -12,7 +12,7 @@ import { RelayConnection } from './transport.js';
 // ── Storage keys ──
 const STORAGE_KEY_SETTINGS = 'openclaw-relay-settings';
 const STORAGE_KEY_PROFILES = 'openclaw-relay-profiles';
-const DEFAULT_CONTROL_UI_URL = 'http://127.0.0.1:18789/';
+const DEFAULT_CONTROL_UI_URL = '/control/';
 
 // ── UI strings (minimal i18n) ──
 
@@ -98,8 +98,8 @@ const UI_STRINGS = {
 
     'control.button': '管理界面',
     'control.url_label': '管理界面地址',
-    'control.url_hint': '本地 OpenClaw 控制台',
-    'control.url_placeholder': 'http://127.0.0.1:18789/',
+    'control.url_hint': '通过 Relay 转发（/control/）',
+    'control.url_placeholder': '/control/',
     'control.url_missing': '请先填写管理界面地址。',
     'control.url_invalid': '管理界面地址无效（需要 http/https）。',
 
@@ -289,8 +289,8 @@ const UI_STRINGS = {
 
     'control.button': 'Control UI',
     'control.url_label': 'Control UI URL',
-    'control.url_hint': 'Local OpenClaw control',
-    'control.url_placeholder': 'http://127.0.0.1:18789/',
+    'control.url_hint': 'Via relay proxy (/control/)',
+    'control.url_placeholder': '/control/',
     'control.url_missing': 'Please enter the Control UI URL first.',
     'control.url_invalid': 'Invalid Control UI URL (http/https required).',
 
@@ -1092,7 +1092,12 @@ export const app = {
       return;
     }
 
-    const normalized = /^[a-z]+:\/\//i.test(raw) ? raw : `http://${raw}`;
+    let normalized = raw;
+    if (raw.startsWith('/')) {
+      normalized = `${window.location.origin}${raw}`;
+    } else if (!/^[a-z]+:\/\//i.test(raw)) {
+      normalized = `http://${raw}`;
+    }
     let url;
     try {
       url = new URL(normalized);

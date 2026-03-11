@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -38,6 +40,9 @@ func main() {
 		logFormat          string
 		allowOrigins       string
 		clientDir          string
+		controlUiURL       string
+		controlUiPath      string
+		controlUiStripOrig bool
 	)
 
 	flag.IntVar(&port, "port", 8443, "Listen port")
@@ -53,6 +58,9 @@ func main() {
 	flag.StringVar(&logFormat, "log-format", "text", "Log format: text or json")
 	flag.StringVar(&allowOrigins, "allow-origin", "", "Comma-separated allowed origin hosts (e.g. myapp.com,*.example.com)")
 	flag.StringVar(&clientDir, "client-dir", "", "Directory containing the web client assets to serve at /client/")
+	flag.StringVar(&controlUiURL, "control-ui-url", "", "Upstream OpenClaw Control UI base URL to proxy (e.g. http://127.0.0.1:18789). Disabled when empty.")
+	flag.StringVar(&controlUiPath, "control-ui-path", "/control", "Path to mount the Control UI proxy (default: /control)")
+	flag.BoolVar(&controlUiStripOrig, "control-ui-strip-origin", false, "Strip Origin header when proxying Control UI (use only if gateway rejects relay origin)")
 	flag.Parse()
 
 	// Parse --allow-origin into origin patterns for WebSocket handshake.
@@ -94,6 +102,23 @@ func main() {
 	if clientDir == "" {
 		clientDir = detectClientDir()
 	}
+
+	if controlUiURL != "" {
+		controlPath := normalizeMountPath(controlUiPath, "/control")
+		if controlPath == "/" {
+			logger.Error("controlui.invalid_path", "path", controlUiPath)
+			os.Exit(1)
+		}
+		targetURL, err := url.Parse(controlUiURL)
+		if err != nil || !targetURL.IsAbs() {
+			logger.Error("controlui.invalid_url", "url", controlUiURL)
+			os.Exit(1)
+		}
+		proxy := newControlUIProxy(targetURL, controlPath, controlUiStripOrig)
+		mux.Handle(controlPath, proxy)
+		mux.Handle(controlPath+"/", proxy)
+		logger.Info("controlui.enabled", "path", controlPath, "target", targetURL.Redacted())
+	}
 	if clientDir == "" {
 		logger.Info("webclient.disabled", "reason", "client directory not found; use --client-dir to specify")
 	} else {
@@ -133,16 +158,16 @@ func main() {
 			return
 		}
 		status := map[string]any{
-			"name":                  "openclaw-relay",
-			"version":              version,
-			"protocol_version":     1,
-			"channels_active":      relay.ChannelCount(),
-			"channels_limit":       maxChannels,
-			"connections_total":     relay.ConnectionCount(),
+			"name":                   "openclaw-relay",
+			"version":                version,
+			"protocol_version":       1,
+			"channels_active":        relay.ChannelCount(),
+			"channels_limit":         maxChannels,
+			"connections_total":      relay.ConnectionCount(),
 			"frames_forwarded_total": atomic.LoadInt64(&relay.framesForwarded),
 			"frames_rejected_total":  atomic.LoadInt64(&relay.framesRejected),
-			"uptime_seconds":       int(time.Since(startTime).Seconds()),
-			"public":               public,
+			"uptime_seconds":         int(time.Since(startTime).Seconds()),
+			"public":                 public,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(status)
@@ -246,4 +271,58 @@ func detectClientDir() string {
 		}
 	}
 	return ""
+}
+
+func normalizeMountPath(path string, fallback string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		trimmed = fallback
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		trimmed = "/" + trimmed
+	}
+	trimmed = strings.TrimRight(trimmed, "/")
+	if trimmed == "" {
+		trimmed = fallback
+	}
+	return trimmed
+}
+
+func newControlUIProxy(target *url.URL, mountPath string, stripOrigin bool) http.Handler {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.Director = func(req *http.Request) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.Host = target.Host
+
+		trimmed := strings.TrimPrefix(req.URL.Path, mountPath)
+		if trimmed == "" {
+			trimmed = "/"
+		}
+		if !strings.HasPrefix(trimmed, "/") {
+			trimmed = "/" + trimmed
+		}
+		req.URL.Path = singleJoiningSlash(target.Path, trimmed)
+
+		if stripOrigin {
+			req.Header.Del("Origin")
+		}
+	}
+	return proxy
+}
+
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		if a == "" && b == "" {
+			return "/"
+		}
+		return a + "/" + b
+	default:
+		return a + b
+	}
 }
