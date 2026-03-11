@@ -5,6 +5,7 @@ export interface AgentConfigEntry extends JsonObject {
   name?: string;
   displayName?: string;
   description?: string;
+  group?: string;
   tools?: Record<string, unknown>;
 }
 

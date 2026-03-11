@@ -677,6 +677,7 @@ function createRuntimeAdapter(api: OpenClawPluginApi, getClientStatus: () => Rec
                   : '',
           status: 'idle',
           description: typeof entry.description === 'string' ? entry.description : '',
+          group: typeof entry.group === 'string' ? entry.group : undefined,
         })).filter((entry) => entry.name),
       };
     },
