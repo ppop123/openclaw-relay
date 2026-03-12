@@ -40,6 +40,7 @@ const RELAY_CHANNEL_ID = 'relay';
 const DEFAULT_ACCOUNT_ID = 'default';
 const PAIR_WAIT_POLL_MS = 1000;
 const PAIR_WAIT_SECONDS = 600;
+const ADMIN_SESSION_TTL_SECONDS = 600;
 
 let spawnExternalProcess: typeof childProcess.spawn = childProcess.spawn;
 
@@ -1957,6 +1958,21 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
         });
 
       root
+        .command('admin-key')
+        .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
+        .option('--ttl <seconds>', 'Admin key TTL seconds', String(ADMIN_SESSION_TTL_SECONDS))
+        .action(async (options: { account?: string; ttl?: string }) => {
+          const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
+          const ttlRaw = Number(options.ttl ?? ADMIN_SESSION_TTL_SECONDS);
+          if (!Number.isFinite(ttlRaw) || ttlRaw <= 0) {
+            throw new Error('--ttl must be a positive number');
+          }
+          const record = await ensureStartedAccount({ api, accountId, log: logger });
+          const admin = await record.adapter.issueAdminSession(ttlRaw);
+          console.log(JSON.stringify({ ok: true, accountId, admin }, null, 2));
+        });
+
+      root
         .command('clients')
         .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
         .action(async (options: { account?: string }) => {
@@ -2044,6 +2060,24 @@ function registerRelayCommands(api: OpenClawPluginApi): void {
       const webBase = account.webClientBaseUrl?.trim() || buildDefaultPairingWebBase(info);
       const webClientUrl = buildPairingWebUrl(info, webBase, { autoConnect: true });
       return { text: webClientUrl };
+    },
+  });
+
+  api.registerCommand({
+    name: 'relay_admin',
+    description: 'Generate a short-lived admin session key for the Relay management UI',
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      const args = (ctx.args ?? '').trim();
+      const accountId = args || DEFAULT_ACCOUNT_ID;
+      await ensureStartedAccount({ api, accountId, log: api.logger });
+      const record = activeAccounts.get(accountId);
+      if (!record) {
+        return { text: 'Relay gateway is not running.' };
+      }
+      const admin = await record.adapter.issueAdminSession(ADMIN_SESSION_TTL_SECONDS);
+      return { text: `Admin key (valid ${ADMIN_SESSION_TTL_SECONDS}s): ${admin.key}` };
     },
   });
 }

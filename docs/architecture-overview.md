@@ -16,18 +16,15 @@
 
 - `relay/` — Go Relay 服务端
 - `sdk/python/` — Python 客户端 SDK
+- `sdk/js/` — JavaScript 客户端 SDK
 - `client/` — 浏览器参考客户端
 - `plugin/` — OpenClaw Gateway 插件
 - `protocol/` — 协议规范与示例
 
-尚未实现：
-
-- `sdk/js/`
-
 ### 系统拓扑
 
 ```text
-[Web / Python Client]  ── WSS ──>  [Relay]  <── WSS ──  [OpenClaw Gateway Plugin]
+[Web / Python / JS Client]  ── WSS ──>  [Relay]  <── WSS ──  [OpenClaw Gateway Plugin]
         │                               │                         │
         │                               │                         │
         └──── Layer 1/2/3 protocol ─────┴──────── routed to OpenClaw runtime
@@ -45,6 +42,7 @@
 |------|----------|
 | `relay/` | 频道注册、客户端加入、在线状态、消息转发、Layer 0.5 发现/信令/邀请别名路由、速率限制、载荷大小限制、来源校验 |
 | `sdk/python/` | 客户端侧协议实现（Layer 0–2）、加密、请求/响应处理 |
+| `sdk/js/` | Node 端 JavaScript/TypeScript 客户端 SDK（Layer 0–2）、加密、请求/响应处理 |
 | `client/` | 浏览器参考客户端、Layer 1/2 传输、UI、设置、消息渲染 |
 | `plugin/` | 网关侧 Relay 适配器、配对、已批准客户端持久化、操作员可控的发现功能、内部对等信令/邀请控制面、OpenClaw 运行时映射 |
 | `protocol/` | 帧格式（Frame）、安全模型、传输生命周期、应用层载荷的共享契约 |
@@ -103,6 +101,7 @@
 | `client/` | 安全的 UI 设置、网关公钥、客户端 ID | `channelToken` |
 | `plugin/` | Relay 账户配置、网关身份密钥、已批准客户端 | OpenClaw 运行时之外的应用消息历史 |
 | `sdk/python/` | 默认不存储；调用方可自行持久化身份密钥 | Relay 侧状态 |
+| `sdk/js/` | 默认不存储；调用方可自行持久化身份密钥 | Relay 侧状态 |
 
 ### 安全边界摘要
 
@@ -121,7 +120,9 @@
 
 - Go Relay 测试
 - Python SDK 测试
+- JavaScript SDK 测试
 - Web 客户端测试
+- 桌面壳构建
 - 插件测试
 - 插件类型检查
 - 协议示例验证
@@ -134,7 +135,6 @@
 ### 当前实现限制
 
 - 仅支持单 Relay 节点
-- 尚无 JavaScript SDK
 - 浏览器客户端的身份持久化依赖浏览器对 IndexedDB 的支持
 - 面向用户的客户端有意不暴露对等发现和对等联系的 UX
 - Relay 和插件已实现仅网关可用的 Layer 0.5 控制面，包括仅主机 Agent 桥接、邀请范围内的对等方接受、外呼邀请拨号，以及本地 `RelayPeerAgentService` 供 Agent 侧编排
@@ -165,18 +165,15 @@ Officially supported components:
 
 - `relay/` — Go relay server
 - `sdk/python/` — Python client SDK
+- `sdk/js/` — JavaScript client SDK
 - `client/` — browser reference client
 - `plugin/` — OpenClaw gateway plugin
 - `protocol/` — protocol specification and examples
 
-Not yet implemented:
-
-- `sdk/js/`
-
 ### System Topology
 
 ```text
-[Web / Python Client]  ── WSS ──>  [Relay]  <── WSS ──  [OpenClaw Gateway Plugin]
+[Web / Python / JS Client]  ── WSS ──>  [Relay]  <── WSS ──  [OpenClaw Gateway Plugin]
         │                               │                         │
         │                               │                         │
         └──── Layer 1/2/3 protocol ─────┴──────── routed to OpenClaw runtime
@@ -194,6 +191,7 @@ Design rule:
 |----------|---------------------------|
 | `relay/` | Channel registration, client join, presence, forwarding, Layer 0.5 discovery/signaling/invite alias routing, rate limiting, payload limits, origin validation |
 | `sdk/python/` | Client-side protocol implementation (Layers 0–2), encryption, request/response handling |
+| `sdk/js/` | Node-focused JavaScript/TypeScript client SDK (Layers 0–2), encryption, request/response handling |
 | `client/` | Browser reference client, Layer 1/2 transport, UI, settings, message rendering |
 | `plugin/` | Gateway-side relay adapter, pairing, approved-client persistence, operator-controlled discovery opt-in, internal peer signaling/invite control plane, OpenClaw runtime mapping |
 | `protocol/` | Shared contract for frames, security model, transport lifecycle, application payloads |
@@ -252,6 +250,7 @@ Human-facing clients do not participate in this flow and must not expose it in U
 | `client/` | Safe UI settings, gateway public key, client id | `channelToken` |
 | `plugin/` | Relay account config, gateway identity keys, approved clients | Application message history outside OpenClaw runtime |
 | `sdk/python/` | Nothing by default; caller may persist identity keys | Relay-side state |
+| `sdk/js/` | Nothing by default; caller may persist identity keys | Relay-side state |
 
 ### Security Boundary Summary
 
@@ -270,7 +269,9 @@ The release gate currently covers:
 
 - Go relay tests
 - Python SDK tests
+- JavaScript SDK tests
 - Web client tests
+- Desktop shell build
 - Plugin tests
 - Plugin type check
 - Protocol example validation
@@ -283,7 +284,6 @@ A local/manual lifecycle smoke also exists for the plugin:
 ### Current Implementation Limits
 
 - Single relay node only
-- No JavaScript SDK yet
 - Browser client identity persistence currently depends on IndexedDB availability in the browser environment
 - Human-facing clients intentionally do not expose peer discovery or peer-contact UX
 - Relay and plugin now implement the gateway-only Layer 0.5 control plane, including a host-only agent bridge, invite-scoped peer acceptance, outbound invite dialing, and a local `RelayPeerAgentService` for agent-side orchestration

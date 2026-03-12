@@ -58,3 +58,98 @@ describe('RelayGatewayAdapter request limiting', () => {
     expect(sendError).toHaveBeenCalledWith('client-1', 'msg_2', 'rate_limited', 'gateway request limit reached');
   });
 });
+
+describe('RelayGatewayAdapter admin auth', () => {
+  function makeApprovedConfig() {
+    return {
+      enabled: true,
+      server: 'ws://relay.example.test/ws',
+      channelToken: 'token',
+      gatewayKeyPair: { publicKey: 'pub', privateKey: 'priv' },
+      approvedClients: {
+        'sha256:test': { publicKey: 'pub', firstPairedAt: '2026-03-12T00:00:00.000Z' },
+      },
+    };
+  }
+
+  it('rejects admin methods without an admin key', async () => {
+    const adapter = new RelayGatewayAdapter({
+      accountId: 'default',
+      configStore: {
+        load: async () => undefined,
+        save: async () => undefined,
+        listAccountIds: async () => [],
+        inspectAccount: async () => undefined,
+      },
+      runtime: {},
+    });
+
+    adapter['currentConfig'] = makeApprovedConfig();
+
+    const sendError = vi.fn(async () => undefined);
+    adapter['outbound'] = {
+      sendError,
+      sendResponse: vi.fn(),
+      sendStreamStart: vi.fn(),
+      sendStreamChunk: vi.fn(),
+      sendStreamEnd: vi.fn(),
+      sendNotify: vi.fn(),
+    } as never;
+
+    const request: RequestMessage = {
+      id: 'msg_admin_1',
+      type: 'request',
+      method: 'config.get',
+      params: {},
+    };
+
+    await adapter['handleRequest'](makeSession(), request);
+
+    expect(sendError).toHaveBeenCalledWith('client-1', 'msg_admin_1', 'forbidden', 'Admin session key required or expired.');
+  });
+
+  it('allows admin methods with a valid admin key and strips it from params', async () => {
+    const runtime = {
+      configGet: vi.fn(async (params: Record<string, unknown>) => {
+        expect(params.admin_session_key).toBeUndefined();
+        return { ok: true };
+      }),
+    };
+    const adapter = new RelayGatewayAdapter({
+      accountId: 'default',
+      configStore: {
+        load: async () => undefined,
+        save: async () => undefined,
+        listAccountIds: async () => [],
+        inspectAccount: async () => undefined,
+      },
+      runtime,
+    });
+
+    adapter['currentConfig'] = makeApprovedConfig();
+
+    const { key } = await adapter.issueAdminSession(120);
+    const sendResponse = vi.fn(async () => undefined);
+    const sendError = vi.fn(async () => undefined);
+    adapter['outbound'] = {
+      sendError,
+      sendResponse,
+      sendStreamStart: vi.fn(),
+      sendStreamChunk: vi.fn(),
+      sendStreamEnd: vi.fn(),
+      sendNotify: vi.fn(),
+    } as never;
+
+    const request: RequestMessage = {
+      id: 'msg_admin_2',
+      type: 'request',
+      method: 'config.get',
+      params: { admin_session_key: key },
+    };
+
+    await adapter['handleRequest'](makeSession(), request);
+
+    expect(sendError).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith('client-1', 'msg_admin_2', { ok: true });
+  });
+});

@@ -377,7 +377,7 @@ TXT: version=2026.3.2, relay=enabled
 - OpenClaw relay 频道插件（安全配对、聊天、Agent 间对等发现）
 - 浏览器参考客户端（连接、配对、聊天、流式传输）
 
-尚未实现：JavaScript SDK、mDNS 局域网发现、Tauri/移动端封装。
+尚未实现：mDNS 局域网发现、移动端封装。
 
 ---
 
@@ -756,4 +756,4 @@ Phase 1 (Foundation / Secure MVP) is complete and shipped as v0.5.0:
 - OpenClaw relay channel plugin (secure pairing, chat, agent-to-agent peer discovery)
 - Browser reference client (connect, pair, chat, streaming)
 
-Not yet implemented: JavaScript SDK, mDNS LAN discovery, Tauri/mobile wrappers.
+Not yet implemented: mDNS LAN discovery, mobile wrappers.

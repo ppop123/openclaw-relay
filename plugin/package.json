@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/relay",
-  "version": "0.5.1",
+  "version": "0.8.0",
   "description": "OpenClaw Relay gateway plugin",
   "type": "module",
   "main": "./dist/index.js",

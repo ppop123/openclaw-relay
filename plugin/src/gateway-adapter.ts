@@ -8,6 +8,7 @@ import { PeerDiscoveryService } from './peer-discovery.js';
 import { RelayPeerSession } from './outbound-peer-session.js';
 import { RelayConnection } from './relay-connection.js';
 import { GatewayTransport, GatewaySession } from './transport.js';
+import { randomToken, sha256Hex } from './utils.js';
 import {
   CancelMessage,
   ConnectionState,
@@ -64,6 +65,9 @@ const ADMIN_METHODS = new Set([
   'gateway.restart',
 ]);
 
+const DEFAULT_ADMIN_SESSION_TTL_SECONDS = 600;
+const MIN_ADMIN_SESSION_TTL_SECONDS = 30;
+
 function isAdminMethod(method: string): boolean {
   return ADMIN_METHODS.has(method);
 }
@@ -82,6 +86,7 @@ export class RelayGatewayAdapter {
   private readonly pendingRequests = new Map<string, PendingExecution>();
   private readonly pendingPeerApprovals = new Map<string, { publicKey: string; expiresAt: number; remainingUses: number }>();
   private channelHash: string | undefined;
+  private adminSession: { hash: string; expiresAt: number } | null = null;
 
   constructor(private readonly options: RelayGatewayAdapterOptions) {
     this.accountId = options.accountId ?? 'default';
@@ -311,6 +316,15 @@ export class RelayGatewayAdapter {
     await this.transport?.endSessionsByFingerprint(fingerprint, reason);
   }
 
+  async issueAdminSession(ttlSeconds = DEFAULT_ADMIN_SESSION_TTL_SECONDS): Promise<{ key: string; expiresAt: string }> {
+    const ttl = Number.isFinite(ttlSeconds) ? Math.max(MIN_ADMIN_SESSION_TTL_SECONDS, Math.floor(ttlSeconds)) : DEFAULT_ADMIN_SESSION_TTL_SECONDS;
+    const key = randomToken(20);
+    const hash = await sha256Hex(key);
+    const expiresAtMs = Date.now() + ttl * 1000;
+    this.adminSession = { hash, expiresAt: expiresAtMs };
+    return { key, expiresAt: new Date(expiresAtMs).toISOString() };
+  }
+
   async getStatus(): Promise<GatewayStatus> {
     const approvedClients = Object.keys(this.currentConfig?.approvedClients ?? {}).length;
     const activeSessions = this.transport?.sessionCount ?? 0;
@@ -399,6 +413,27 @@ export class RelayGatewayAdapter {
     return this.isApprovedFingerprint(session.fingerprint);
   }
 
+  private async isAdminSessionValid(key: string): Promise<boolean> {
+    if (!key) return false;
+    const session = this.adminSession;
+    if (!session) return false;
+    if (session.expiresAt <= Date.now()) {
+      this.adminSession = null;
+      return false;
+    }
+    const hash = await sha256Hex(key);
+    return hash === session.hash;
+  }
+
+  private extractAdminKey(params: Record<string, unknown>): { key: string; sanitized: Record<string, unknown> } {
+    const rawKey = typeof params.admin_session_key === 'string' ? params.admin_session_key.trim() : '';
+    if (!('admin_session_key' in params)) {
+      return { key: rawKey, sanitized: params };
+    }
+    const { admin_session_key: _ignored, ...rest } = params;
+    return { key: rawKey, sanitized: rest };
+  }
+
   private async handleRequest(session: GatewaySession, message: RequestMessage): Promise<void> {
     if (!this.outbound) throw new Error('outbound not initialized');
 
@@ -410,6 +445,22 @@ export class RelayGatewayAdapter {
         'Admin methods require an approved client.',
       );
       return;
+    }
+
+    let requestMessage = message;
+    if (isAdminMethod(message.method)) {
+      const { key, sanitized } = this.extractAdminKey(message.params ?? {});
+      const ok = await this.isAdminSessionValid(key);
+      if (!ok) {
+        await this.outbound.sendError(
+          session.clientId,
+          message.id,
+          'forbidden',
+          'Admin session key required or expired.',
+        );
+        return;
+      }
+      requestMessage = { ...message, params: sanitized };
     }
 
     const maxPerClient = this.options.maxConcurrentPerClient ?? 4;
@@ -435,7 +486,7 @@ export class RelayGatewayAdapter {
     };
 
     try {
-      const result = await dispatchRequest(this.options.runtime, message, ctx);
+      const result = await dispatchRequest(this.options.runtime, requestMessage, ctx);
       if (this.isCancelled(message.id)) return;
 
       if (isStreamResult(result)) {

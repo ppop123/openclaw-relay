@@ -103,6 +103,12 @@ const UI_STRINGS = {
     'admin.skills_refresh': '刷新',
     'admin.skills_loading': '加载中…',
     'admin.skills_empty': '暂无技能。',
+    'admin.auth_label': '管理密钥',
+    'admin.auth_placeholder': '仅存于本地内存',
+    'admin.auth_apply': '使用',
+    'admin.auth_clear': '清除',
+    'admin.auth_missing': '未设置',
+    'admin.auth_active': '已设置',
     'admin.config': '配置',
     'admin.config_load': '读取',
     'admin.config_save': '写入',
@@ -317,6 +323,12 @@ const UI_STRINGS = {
     'admin.skills_refresh': 'Refresh',
     'admin.skills_loading': 'Loading…',
     'admin.skills_empty': 'No skills available.',
+    'admin.auth_label': 'Admin key',
+    'admin.auth_placeholder': 'Stored in memory only',
+    'admin.auth_apply': 'Apply',
+    'admin.auth_clear': 'Clear',
+    'admin.auth_missing': 'Not set',
+    'admin.auth_active': 'Active',
     'admin.config': 'Config',
     'admin.config_load': 'Load',
     'admin.config_save': 'Save',
@@ -502,6 +514,7 @@ export const app = {
   updateRunning: false,
   rebootRunning: false,
   adminTab: 'skills',
+  adminSessionKey: '',
 
   // Tab state
   tabs: [],
@@ -620,6 +633,7 @@ export const app = {
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
     this._updateDiagnostics();
+    this._updateAdminKeyStatus();
     this._initComplete = true;
 
     if (usedLaunchPairing || this._pendingDesktopAutoConnect) {
@@ -1293,11 +1307,40 @@ export const app = {
 
   // ── Admin (skills/config/logs/update) ──
 
+  applyAdminKey() {
+    const input = document.getElementById('adminKeyInput');
+    const value = input?.value?.trim() ?? '';
+    this.adminSessionKey = value;
+    this._updateAdminKeyStatus();
+    if (input) input.value = '';
+  },
+
+  clearAdminKey() {
+    this.adminSessionKey = '';
+    const input = document.getElementById('adminKeyInput');
+    if (input) input.value = '';
+    this._updateAdminKeyStatus();
+  },
+
+  _updateAdminKeyStatus() {
+    const status = document.getElementById('adminKeyStatus');
+    if (!status) return;
+    status.textContent = this.adminSessionKey
+      ? this.t('admin.auth_active')
+      : this.t('admin.auth_missing');
+  },
+
+  _withAdminKey(params) {
+    if (!this.adminSessionKey) return params;
+    return { ...params, admin_session_key: this.adminSessionKey };
+  },
+
   async openAdmin() {
     const overlay = document.getElementById('adminOverlay');
     if (!overlay) return;
     overlay.hidden = false;
     this.openAdminTab(this.adminTab || 'skills');
+    this._updateAdminKeyStatus();
     await this.refreshAdmin();
   },
 
@@ -1337,7 +1380,7 @@ export const app = {
     this.skillsLoading = true;
     this.skillsError = '';
     try {
-      const result = await this.connection.sendRequest('skills.status', {});
+      const result = await this.connection.sendRequest('skills.status', this._withAdminKey({}));
       this.skillsReport = result?.result ?? result;
       this._renderSkillsList();
     } catch (err) {
@@ -1417,7 +1460,7 @@ export const app = {
   async toggleSkill(skillKey, enabled) {
     if (!skillKey) return;
     try {
-      await this.connection.sendRequest('skills.update', { skillKey, enabled: Boolean(enabled) });
+      await this.connection.sendRequest('skills.update', this._withAdminKey({ skillKey, enabled: Boolean(enabled) }));
       await this.refreshSkills();
     } catch (err) {
       showToast(err?.message || String(err), 'error');
@@ -1429,7 +1472,7 @@ export const app = {
     if (!skillKey || !installId) return;
     try {
       showToast(label || 'Installing…', 'info', 2000);
-      await this.connection.sendRequest('skills.install', { name: skillKey, installId, timeoutMs: 120000 });
+      await this.connection.sendRequest('skills.install', this._withAdminKey({ name: skillKey, installId, timeoutMs: 120000 }));
       await this.refreshSkills();
     } catch (err) {
       showToast(err?.message || String(err), 'error');
@@ -1451,7 +1494,7 @@ export const app = {
     if (meta) meta.textContent = '';
     this.configLoading = true;
     try {
-      const result = await this.connection.sendRequest('config.get', {});
+      const result = await this.connection.sendRequest('config.get', this._withAdminKey({}));
       const payload = result?.result ?? result;
       const raw = typeof payload?.raw === 'string'
         ? payload.raw
@@ -1496,7 +1539,7 @@ export const app = {
     const raw = this._getConfigDraft();
     this.configSaving = true;
     try {
-      await this.connection.sendRequest('config.set', { raw, baseHash: this.configHash });
+      await this.connection.sendRequest('config.set', this._withAdminKey({ raw, baseHash: this.configHash }));
       showToast(this.t('admin.config_saved'), 'info', 2000);
       await this.loadConfig();
     } catch (err) {
@@ -1515,7 +1558,7 @@ export const app = {
     const raw = this._getConfigDraft();
     this.configApplying = true;
     try {
-      await this.connection.sendRequest('config.apply', { raw, baseHash: this.configHash });
+      await this.connection.sendRequest('config.apply', this._withAdminKey({ raw, baseHash: this.configHash }));
       showToast(this.t('admin.config_applied'), 'info', 2500);
     } catch (err) {
       showToast(err?.message || String(err), 'error');
@@ -1541,7 +1584,7 @@ export const app = {
         maxBytes: this.logsMaxBytes,
         ...(this.logsCursor != null && !reset ? { cursor: this.logsCursor } : {}),
       };
-      const result = await this.connection.sendRequest('logs.tail', params);
+      const result = await this.connection.sendRequest('logs.tail', this._withAdminKey(params));
       const payload = result?.result ?? result;
       const lines = Array.isArray(payload?.lines) ? payload.lines.filter((line) => typeof line === 'string') : [];
       const shouldReset = reset || payload?.reset || this.logsCursor == null;
@@ -1605,7 +1648,7 @@ export const app = {
     if (btn) btn.disabled = true;
     this.updateRunning = true;
     try {
-      await this.connection.sendRequest('update.run', { timeoutMs: 120000 });
+      await this.connection.sendRequest('update.run', this._withAdminKey({ timeoutMs: 120000 }));
       showToast(this.t('admin.update_started'), 'info', 2500);
     } catch (err) {
       showToast(err?.message || String(err), 'error');
@@ -1621,7 +1664,7 @@ export const app = {
     if (btn) btn.disabled = true;
     this.rebootRunning = true;
     try {
-      await this.connection.sendRequest('gateway.restart', {});
+      await this.connection.sendRequest('gateway.restart', this._withAdminKey({}));
       showToast(this.t('admin.reboot'), 'info', 2500);
     } catch (err) {
       showToast(err?.message || String(err), 'error');

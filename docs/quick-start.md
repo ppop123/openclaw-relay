@@ -90,8 +90,9 @@ openclaw relay disable
 使用官方客户端连接：
 
 - 浏览器路径：打开 `client/` 下的浏览器客户端
-- 桌面路径：在 Windows/macOS 上使用 `desktop/` 下的桌面壳（同样优先粘贴 pairing link）
-- 首选：把 `pairing.uri` 粘贴到客户端首页的 `Pairing link` 输入框
+- 桌面路径：在 Windows/macOS 上使用 `desktop/` 下的桌面壳
+- 首选：在飞书 / Telegram 等聊天里给 OpenClaw 发送 `/relay_pair`，拿到一键链接后直接点击
+- 否则：把 `pairing.uri` 粘贴到客户端首页的 `Pairing link` 输入框
 - 如果你用了 `--print-web-url`，浏览器会自动填入这些值
 - 只有在需要时，才展开 `Manual setup` 手动输入 Relay 地址、通道令牌（channel token）和网关公钥（gateway public key）
 

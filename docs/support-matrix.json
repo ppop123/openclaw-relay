@@ -16,7 +16,7 @@
       "path": "sdk/python/",
       "status": "supported",
       "release_scope": "official",
-      "description": "Client SDK (protocol layers 0-2, client-side only \u2014 no gateway-side API)",
+      "description": "Client SDK (protocol layers 0-2, client-side only — no gateway-side API)",
       "test_command": "cd sdk/python && pip install -e '.[dev]' && pytest -q",
       "test_framework": "pytest"
     },
@@ -32,8 +32,8 @@
     {
       "name": "Desktop shell (Windows/macOS)",
       "path": "desktop/",
-      "status": "in_progress",
-      "release_scope": "planned_official",
+      "status": "supported",
+      "release_scope": "official",
       "description": "Thin Tauri shell around the shared browser client for Windows and macOS",
       "test_command": "cd desktop && npm ci && npm run build:app",
       "test_framework": "tauri + cargo"
@@ -48,9 +48,11 @@
     {
       "name": "JavaScript SDK",
       "path": "sdk/js/",
-      "status": "not_implemented",
-      "release_scope": "excluded",
-      "description": "Protocol library for JS (planned)"
+      "status": "supported",
+      "release_scope": "official",
+      "description": "Node-focused JavaScript/TypeScript SDK (client-side protocol layers 0-2)",
+      "test_command": "cd sdk/js && npm ci && npm test",
+      "test_framework": "vitest + tsc"
     },
     {
       "name": "OpenClaw gateway plugin",

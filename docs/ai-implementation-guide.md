@@ -57,17 +57,14 @@ These are implemented, tested in CI, and covered by stability guarantees:
 |-----------|------|-------------|
 | Go relay server | `relay/` | `cd relay && go test -v -count=1` |
 | Python SDK (client-side only) | `sdk/python/` | `cd sdk/python && pip install -e '.[dev]' && pytest -q` |
+| JavaScript SDK (client-side only) | `sdk/js/` | `cd sdk/js && npm ci && npm test` |
 | Web reference client | `client/` | `cd client && npm ci && npm test` |
 | OpenClaw gateway plugin | `plugin/` | `cd plugin && npm ci && npm test && npm run typecheck` (requires `go` on PATH for integration test) |
 | Protocol spec | `protocol/` | (no executable tests) |
 
 ## Not Yet Implemented
 
-| Component | Path |
-|-----------|------|
-| JavaScript SDK | `sdk/js/` |
-
-These directories may contain placeholder files. Do not treat them as functional.
+None.
 
 ## Security Properties — What v1 DOES and DOES NOT Guarantee
 
@@ -121,7 +118,9 @@ All commands in `docs/release-manifest.json` → `required_test_commands` where 
 ```bash
 cd relay && go test -v -count=1
 cd sdk/python && pip install -e '.[dev]' && pytest -q
+cd sdk/js && npm ci && npm test
 cd client && npm ci && npm test
+cd desktop && npm ci && npm run build:app
 cd plugin && npm install && npm test
 cd plugin && npm ci && npm run typecheck
 ```
@@ -161,4 +160,4 @@ There is no gateway SDK. Implementing a gateway requires directly handling the L
 3. Do not persist `channelToken` on the client — it is a bearer secret.
 4. Do not use `--allow-origin` with full URLs — it takes host patterns only.
 5. Do not fall back to plaintext after session key is established — this breaks E2E integrity.
-6. Do not treat `docs/technical-design.md` code examples for the JS SDK as real — `sdk/js/` is still not implemented.
+6. Use `sdk/js/` as the source of truth for the JavaScript SDK. Treat any design sketches in `docs/technical-design.md` as historical notes only.

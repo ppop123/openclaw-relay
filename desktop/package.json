@@ -1,12 +1,14 @@
 {
   "name": "openclaw-relay-desktop",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "sync-client": "node scripts/sync-client.mjs",
+    "dev": "npm run sync-client && tauri dev",
+    "build:app": "npm run sync-client && tauri build --bundles app",
+    "build": "npm run sync-client && tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

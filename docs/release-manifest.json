@@ -1,19 +1,19 @@
 {
   "$schema_comment": "Release candidate manifest. Machine-readable declaration of what this release includes, claims, and requires.",
   "release_candidate": true,
-  "version": "0.5.1",
+  "version": "0.8.0",
   "protocol_version": 1,
   "official_components": [
     "relay/",
     "sdk/python/",
+    "sdk/js/",
     "client/",
+    "desktop/",
     "protocol/",
     "plugin/"
   ],
   "experimental_components": [],
-  "not_implemented": [
-    "sdk/js/"
-  ],
+  "not_implemented": [],
   "required_test_commands": [
     {
       "name": "Go relay tests",
@@ -23,6 +23,11 @@
     {
       "name": "Python SDK tests",
       "command": "cd sdk/python && pip install -e '.[dev]' && pytest -q",
+      "blocks_release": true
+    },
+    {
+      "name": "JavaScript SDK tests",
+      "command": "cd sdk/js && npm ci && npm test",
       "blocks_release": true
     },
     {
@@ -54,6 +59,11 @@
       "name": "Plugin lifecycle smoke test (local OpenClaw runtime)",
       "command": "bash scripts/smoke-openclaw-plugin.sh",
       "blocks_release": false
+    },
+    {
+      "name": "Desktop shell build",
+      "command": "cd desktop && npm ci && npm run build:app",
+      "blocks_release": true
     }
   ],
   "security_claims": {
@@ -72,7 +82,6 @@
     "Stream resumption not supported — interrupted streams require new request",
     "Requests are not idempotent by default — no automatic retries for state-changing methods",
     "No CA/PKI-backed gateway identity. The browser reference client uses a user-supplied pinned gateway public key and production deployments should verify that key out of band.",
-    "JavaScript SDK is not yet implemented",
     "OpenClaw gateway plugin requires a current OpenClaw runtime with channel and CLI plugin APIs enabled",
     "Browser identity persistence depends on IndexedDB availability; blocked environments fall back to a page-memory identity after reload"
   ]

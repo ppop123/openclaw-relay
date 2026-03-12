@@ -52,6 +52,7 @@
 - 紧凑的聊天状态栏，以及可展开的连接详情（显示会话、客户端、配置、网关、加密和身份状态）
 - 本地 `New chat` 按钮，重置 `sessionId` 但不断开连接
 - 将当前内存中的聊天记录显式导出为 JSON
+- 管理面板（技能/配置/日志/维护）与短时 admin key 二次授权
 - 安全的 Markdown 渲染（用于助手输出）
 - 针对 UI 状态、配对交接（pairing handoff）、身份持久化、加密、传输层和 Markdown 安全性的自动化测试
 - 本地真实浏览器 E2E 冒烟流程，覆盖连接、流式聊天、刷新持久化、受保护的身份备份/恢复和记录导出
@@ -173,6 +174,7 @@ It currently provides:
 - a compact chat-panel status bar plus expandable connection details for session, client, profile, gateway, encryption, and identity state
 - local `New chat` control that resets `sessionId` without disconnecting
 - explicit export of the current in-memory chat transcript as JSON
+- admin panels (skills/config/logs/maintenance) guarded by a short-lived admin key
 - secure Markdown rendering for assistant output
 - automated tests for UI state, identity persistence, crypto, transport, and Markdown safety
 - a local real-browser E2E smoke flow for connect, streaming chat, reload persistence, protected identity backup/restore, and transcript export
