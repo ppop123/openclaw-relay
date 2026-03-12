@@ -60,13 +60,13 @@ openclaw relay enable --server wss://relay.example.com/ws
 openclaw relay status
 ```
 
-准备从客户端连接时，在终端启动配对：
+准备从客户端连接时，首选在飞书 / Telegram 等聊天里给 OpenClaw 发送 `/relay_pair` 获取一键链接并直接点击。若没有聊天入口，再在终端启动配对：
 
 ```bash
 openclaw relay pair
 ```
 
-`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。推荐做法是把输出里的 pairing link（`pairing.uri`）直接粘贴到客户端首页的 `Pairing link` 输入框。
+`openclaw relay pair` 会打印配对信息，并保持配对窗口开放（默认 5 分钟）。把输出里的 pairing link（`pairing.uri`）直接粘贴到客户端首页的 `Pairing link` 输入框。
 
 如果浏览器客户端部署在固定地址，还可以直接生成一键连接链接：
 
@@ -202,13 +202,13 @@ openclaw relay enable --server wss://relay.example.com/ws
 openclaw relay status
 ```
 
-When you are ready to connect from the client, start pairing in one terminal:
+When you are ready to connect from the client, preferred is to send `/relay_pair` to OpenClaw via Feishu / Telegram (or your connected chat) and click the one-click link. If you do not have chat access, start pairing in one terminal:
 
 ```bash
 openclaw relay pair
 ```
 
-`openclaw relay pair` prints the pairing details and keeps the pairing window open (default 5 minutes). The recommended path is to copy the printed pairing link (`pairing.uri`) into the client's `Pairing link` field.
+`openclaw relay pair` prints the pairing details and keeps the pairing window open (default 5 minutes). Copy the printed pairing link (`pairing.uri`) into the client's `Pairing link` field.
 
 Useful day-2 commands:
 
@@ -221,9 +221,10 @@ openclaw relay disable
 
 ## Step 3: Connect from the client
 
-Use the browser client in `client/` and enter:
+Use the browser client in `client/` and connect via:
 
-- preferably: paste `pairing.uri` into the client's `Pairing link` field
+- preferred: the one-click link from `/relay_pair`
+- otherwise: paste `pairing.uri` into the client's `Pairing link` field
 - if you used `--print-web-url`, the browser fills the values automatically
 - only if needed: expand `Manual setup` and enter the relay URL, channel token, and gateway public key
 

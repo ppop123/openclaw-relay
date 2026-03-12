@@ -180,6 +180,8 @@ openclaw plugins install --link /path/to/openclaw-relay/plugin
 
 启用并与 Relay 配对：
 
+首选方式是在飞书 / Telegram 等聊天里给 OpenClaw 发送 `/relay_pair`，拿到一键配对链接后直接点击。若无法走聊天入口，再用 CLI：
+
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws
 openclaw relay pair
@@ -375,6 +377,8 @@ openclaw plugins install --link /path/to/openclaw-relay/plugin
 ```
 
 Then enable and pair it against your relay:
+
+Preferred: send `/relay_pair` to OpenClaw via Feishu / Telegram (or your connected chat) and click the returned one-click link. If you must use the CLI, run:
 
 ```bash
 openclaw relay enable --server wss://relay.example.com/ws
