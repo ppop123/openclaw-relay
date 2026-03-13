@@ -8,16 +8,16 @@
 
 OpenClaw Relay 是一个面向 OpenClaw 的开源远程连接方案。从任何地方连回自己的 OpenClaw——不需要公网 IP，不依赖第三方平台，端到端加密。
 
+```mermaid
+flowchart LR
+  C["客户端\n(任意位置)"] -- "WSS" --> R["Relay Server\n(公网节点)"]
+  R -- "WSS" --> G["OpenClaw Gateway\n(你的本地机器)"]
+  C -. "端到端加密（Relay 无法读取内容）" .- G
 ```
-                   端到端加密（Relay 无法读取内容）
-              ╔══════════════════════════════════════╗
-              ║  应用层协议（JSON-RPC / Streaming）  ║
-              ║  安全层（X25519 + AES-GCM）         ║
-              ╚══════════════════════════════════════╝
-                          │            │
- [客户端] ──WSS──> [Relay Server] <──WSS── [OpenClaw Gateway]
-  (任意位置)      (公网节点)              (你的本地机器)
-```
+
+协议与安全层：
+- 应用层协议（JSON-RPC / Streaming）
+- 安全层（X25519 + AES-GCM）
 
 两端都是主动向外连接，不需要端口映射，不需要公网 IP。Relay 只转发密文，无法读取消息内容。
 
@@ -123,16 +123,16 @@ MIT
 
 OpenClaw Relay is an open-source remote connection solution for OpenClaw. Reach your own OpenClaw from anywhere — no public IP, no third-party platform, end-to-end encrypted.
 
+```mermaid
+flowchart LR
+  C["Client\n(anywhere)"] -- "WSS" --> R["Relay Server\n(public node)"]
+  R -- "WSS" --> G["OpenClaw Gateway\n(your local machine)"]
+  C -. "E2E encrypted (relay cannot read)" .- G
 ```
-                   E2E encrypted (relay cannot read)
-              ╔══════════════════════════════════════╗
-              ║  App Protocol (JSON-RPC / Streaming) ║
-              ║  Security Layer (X25519 + AES-GCM)   ║
-              ╚══════════════════════════════════════╝
-                          │            │
- [Client] ──WSS──> [Relay Server] <──WSS── [OpenClaw Gateway]
-  (anywhere)       (public node)          (your local machine)
-```
+
+Protocol & security layers:
+- App protocol (JSON-RPC / Streaming)
+- Security layer (X25519 + AES-GCM)
 
 Both sides connect outbound — no port forwarding, no public IP. The relay forwards ciphertext only and cannot read message content.
 
