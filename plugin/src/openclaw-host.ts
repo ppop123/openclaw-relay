@@ -1960,7 +1960,7 @@ export function createOpenClawRelayPlugin(api: OpenClawPluginApi, previewPlugin:
       root
         .command('admin-key')
         .option('--account <id>', 'Account id', DEFAULT_ACCOUNT_ID)
-        .option('--ttl <seconds>', 'Admin key TTL seconds', String(ADMIN_SESSION_TTL_SECONDS))
+        .option('--ttl <seconds>', 'Admin key TTL seconds (legacy)', String(ADMIN_SESSION_TTL_SECONDS))
         .action(async (options: { account?: string; ttl?: string }) => {
           const accountId = options.account ?? DEFAULT_ACCOUNT_ID;
           const ttlRaw = Number(options.ttl ?? ADMIN_SESSION_TTL_SECONDS);
@@ -2065,7 +2065,7 @@ function registerRelayCommands(api: OpenClawPluginApi): void {
 
   api.registerCommand({
     name: 'relay_admin',
-    description: 'Generate a short-lived admin session key for the Relay management UI',
+    description: 'Generate a short-lived admin session key (legacy; admin UI no longer requires it)',
     requireAuth: true,
     acceptsArgs: true,
     handler: async (ctx) => {

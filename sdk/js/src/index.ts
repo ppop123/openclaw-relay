@@ -12,4 +12,18 @@ export {
   publicKeyFingerprint,
   type RelayIdentity,
 } from './crypto.js';
-export type { Agent, ChatChunk, ChatResponse, RelayClientOptions } from './types.js';
+export type {
+  Agent,
+  AgentInfo,
+  ChatChunk,
+  ChatResponse,
+  CronTask,
+  CronToggleResult,
+  RelayClientOptions,
+  SessionHistoryParams,
+  SessionHistoryResponse,
+  SessionMessage,
+  SessionSummary,
+  SessionsListParams,
+  SessionsListResponse,
+} from './types.js';

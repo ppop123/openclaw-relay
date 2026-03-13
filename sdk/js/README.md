@@ -64,6 +64,11 @@ const client = new RelayClient({
 - `connect()` / `disconnect()`
 - `chat(agent, message, stream = true)`
 - `agentsList()`
+- `agentsInfo(agent)`
+- `sessionsList({ agent?, limit?, offset? } = {})`
+- `sessionsHistory({ session_id, limit?, before? })`
+- `cronList()`
+- `cronToggle(id, enabled)`
 - `systemStatus()`
 - `on(event, handler)` for NOTIFY events
 

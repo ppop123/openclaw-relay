@@ -1,6 +1,6 @@
 {
   "name": "openclaw-relay-js",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "description": "JavaScript/TypeScript SDK for OpenClaw Relay (Node)",
   "type": "module",
   "main": "./dist/index.js",

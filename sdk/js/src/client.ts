@@ -7,7 +7,19 @@ import {
   generateSessionNonce,
 } from './crypto.js';
 import { TransportLayer } from './transport.js';
-import type { Agent, ChatChunk, ChatResponse, RelayClientOptions } from './types.js';
+import type {
+  Agent,
+  AgentInfo,
+  ChatChunk,
+  ChatResponse,
+  CronTask,
+  CronToggleResult,
+  RelayClientOptions,
+  SessionHistoryParams,
+  SessionHistoryResponse,
+  SessionsListParams,
+  SessionsListResponse,
+} from './types.js';
 import { b64Decode, b64Encode, channelTokenHash, randomHex } from './utils.js';
 
 const GATEWAY_PEER_ID = 'gateway';
@@ -148,7 +160,94 @@ export class RelayClient {
       display_name: String(agent.display_name ?? ''),
       status: String(agent.status ?? 'unknown'),
       description: String(agent.description ?? ''),
+      group: typeof agent.group === 'string' ? agent.group : undefined,
     }));
+  }
+
+  async agentsInfo(agent: string): Promise<AgentInfo> {
+    this._ensureConnected();
+    const transport = this.transport as TransportLayer;
+    const result = await transport.request('agents.info', { agent });
+    return {
+      name: String(result.name ?? agent),
+      display_name: String(result.display_name ?? ''),
+      status: String(result.status ?? 'unknown'),
+      description: String(result.description ?? ''),
+      group: typeof result.group === 'string' ? result.group : undefined,
+      tools: Array.isArray(result.tools) ? result.tools.map((tool) => String(tool)) : [],
+      recent_sessions: Number(result.recent_sessions ?? 0),
+    };
+  }
+
+  async sessionsList(params: SessionsListParams = {}): Promise<SessionsListResponse> {
+    this._ensureConnected();
+    const transport = this.transport as TransportLayer;
+    const requestParams: Record<string, unknown> = {};
+    if (params.agent) requestParams.agent = params.agent;
+    if (params.limit !== undefined) requestParams.limit = params.limit;
+    if (params.offset !== undefined) requestParams.offset = params.offset;
+
+    const result = await transport.request('sessions.list', requestParams);
+    const sessions = Array.isArray(result.sessions) ? result.sessions as Array<Record<string, unknown>> : [];
+
+    return {
+      sessions: sessions.map((session) => ({
+        id: String(session.id ?? ''),
+        agent: String(session.agent ?? ''),
+        started_at: String(session.started_at ?? ''),
+        last_message_at: String(session.last_message_at ?? ''),
+        message_count: Number(session.message_count ?? 0),
+        preview: String(session.preview ?? ''),
+      })),
+      total: Number(result.total ?? sessions.length),
+    };
+  }
+
+  async sessionsHistory(params: SessionHistoryParams): Promise<SessionHistoryResponse> {
+    this._ensureConnected();
+    const transport = this.transport as TransportLayer;
+    const requestParams: Record<string, unknown> = { session_id: params.session_id };
+    if (params.limit !== undefined) requestParams.limit = params.limit;
+    if ('before' in params) requestParams.before = params.before;
+
+    const result = await transport.request('sessions.history', requestParams);
+    const messages = Array.isArray(result.messages) ? result.messages as Array<Record<string, unknown>> : [];
+
+    return {
+      messages: messages.map((msg) => ({
+        role: String(msg.role ?? ''),
+        content: String(msg.content ?? ''),
+        timestamp: String(msg.timestamp ?? ''),
+      })),
+      has_more: Boolean(result.has_more),
+    };
+  }
+
+  async cronList(): Promise<CronTask[]> {
+    this._ensureConnected();
+    const transport = this.transport as TransportLayer;
+    const result = await transport.request('cron.list', {});
+    const tasks = Array.isArray(result.tasks) ? result.tasks as Array<Record<string, unknown>> : [];
+
+    return tasks.map((task) => ({
+      id: String(task.id ?? ''),
+      name: String(task.name ?? ''),
+      agent: String(task.agent ?? ''),
+      schedule: String(task.schedule ?? ''),
+      enabled: Boolean(task.enabled),
+      last_run: String(task.last_run ?? ''),
+      last_status: String(task.last_status ?? ''),
+    }));
+  }
+
+  async cronToggle(id: string, enabled: boolean): Promise<CronToggleResult> {
+    this._ensureConnected();
+    const transport = this.transport as TransportLayer;
+    const result = await transport.request('cron.toggle', { id, enabled });
+    return {
+      id: String(result.id ?? id),
+      enabled: Boolean(result.enabled ?? enabled),
+    };
   }
 
   async systemStatus(): Promise<Record<string, unknown>> {

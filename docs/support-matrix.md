@@ -22,7 +22,7 @@
 | 协议规范（Protocol specification） | `protocol/` | 线协议规范（v1） |
 | OpenClaw Gateway 插件 | `plugin/` | TypeScript 网关插件，用于将 Relay 支持集成到你的 OpenClaw 运行时；包含本地生命周期冒烟测试脚本 |
 
-以上组件均在积极维护中，有 CI 测试覆盖，受 `v0.8.0` 稳定性保证约束。
+以上组件均在积极维护中，有 CI 测试覆盖，受 `v1.0.0` 稳定性保证约束。
 
 ### 尚未实现
 
@@ -87,7 +87,7 @@ CI 流水线执行以下检查：
 | Protocol specification | `protocol/` | Wire protocol specification (v1) |
 | OpenClaw gateway plugin | `plugin/` | TypeScript gateway plugin for installing relay support into your own OpenClaw runtime; includes a local lifecycle smoke script for real-host verification |
 
-These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v0.8.0`.
+These components are actively maintained, tested in CI, and covered by the project's stability guarantees for `v1.0.0`.
 
 ### Not Yet Implemented
 

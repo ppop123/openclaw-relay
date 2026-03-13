@@ -283,16 +283,18 @@ export class RelayPeerAgentService {
     }
     const offer = RelayPeerAgentService.parseInviteOffer(signal);
     await this.closePeerSession(signal.source).catch(() => undefined);
+    const sessionRef: { current?: RelayPeerSession } = {};
     const session = await this.options.bridge.dialPeerInvite(body.invite_token, signal.source, {
       ...asSignalOptions(this.accountId),
       ...options,
       onClosed: (error) => {
         const current = this.peerRecords.get(signal.source)?.session;
-        if (current === session) {
+        if (!current || !sessionRef.current || current === sessionRef.current) {
           this.markPeerDisconnected(signal.source, error);
         }
       },
     });
+    sessionRef.current = session;
     this.markPeerConnected(signal.source, session, { ...(options.clientId ? { clientId: options.clientId } : {}), offer });
     return session;
   }

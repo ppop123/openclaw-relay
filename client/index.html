@@ -288,39 +288,6 @@ header {
   min-width: 0;
 }
 
-.admin-auth {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(8, 16, 29, 0.6);
-  margin-bottom: 12px;
-}
-
-.admin-auth-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.admin-auth input {
-  flex: 1;
-  min-width: 180px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(8, 12, 22, 0.8);
-  color: var(--text);
-  font-size: 12px;
-}
-
-.admin-auth-status {
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .admin-panel {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1550,13 +1517,6 @@ main {
           </div>
         </div>
         <div class="modal-body">
-          <div class="admin-auth">
-            <div class="admin-auth-label" data-i18n="admin.auth_label">管理密钥</div>
-            <input type="password" id="adminKeyInput" data-i18n-placeholder="admin.auth_placeholder" placeholder="仅存于本地内存" autocomplete="off">
-            <button type="button" class="secondary-btn" onclick="app.applyAdminKey()" data-i18n="admin.auth_apply">使用</button>
-            <button type="button" class="secondary-btn" onclick="app.clearAdminKey()" data-i18n="admin.auth_clear">清除</button>
-            <div class="admin-auth-status" id="adminKeyStatus" data-i18n="admin.auth_missing">未设置</div>
-          </div>
           <div class="admin-layout">
             <aside class="admin-nav">
               <button type="button" class="admin-tab is-active" data-tab="skills" onclick="app.openAdminTab('skills')" data-i18n="admin.skills">技能</button>

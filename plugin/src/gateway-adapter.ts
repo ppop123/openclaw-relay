@@ -449,17 +449,7 @@ export class RelayGatewayAdapter {
 
     let requestMessage = message;
     if (isAdminMethod(message.method)) {
-      const { key, sanitized } = this.extractAdminKey(message.params ?? {});
-      const ok = await this.isAdminSessionValid(key);
-      if (!ok) {
-        await this.outbound.sendError(
-          session.clientId,
-          message.id,
-          'forbidden',
-          'Admin session key required or expired.',
-        );
-        return;
-      }
+      const { sanitized } = this.extractAdminKey(message.params ?? {});
       requestMessage = { ...message, params: sanitized };
     }
 

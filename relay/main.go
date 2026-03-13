@@ -21,7 +21,7 @@ import (
 	"nhooyr.io/websocket"
 )
 
-const version = "0.5.1"
+const version = "1.0.0"
 
 func main() {
 	var (

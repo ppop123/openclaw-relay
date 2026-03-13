@@ -1,2 +1,11 @@
 [
+  {
+    "url": "wss://relay.wanghui.cc",
+    "region": "cn-east",
+    "operator": "ppop123",
+    "operator_url": "https://github.com/ppop123",
+    "capacity": 500,
+    "since": "2026-03-12",
+    "notes": ""
+  }
 ]

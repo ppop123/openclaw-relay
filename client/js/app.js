@@ -103,12 +103,6 @@ const UI_STRINGS = {
     'admin.skills_refresh': '刷新',
     'admin.skills_loading': '加载中…',
     'admin.skills_empty': '暂无技能。',
-    'admin.auth_label': '管理密钥',
-    'admin.auth_placeholder': '仅存于本地内存',
-    'admin.auth_apply': '使用',
-    'admin.auth_clear': '清除',
-    'admin.auth_missing': '未设置',
-    'admin.auth_active': '已设置',
     'admin.config': '配置',
     'admin.config_load': '读取',
     'admin.config_save': '写入',
@@ -323,12 +317,6 @@ const UI_STRINGS = {
     'admin.skills_refresh': 'Refresh',
     'admin.skills_loading': 'Loading…',
     'admin.skills_empty': 'No skills available.',
-    'admin.auth_label': 'Admin key',
-    'admin.auth_placeholder': 'Stored in memory only',
-    'admin.auth_apply': 'Apply',
-    'admin.auth_clear': 'Clear',
-    'admin.auth_missing': 'Not set',
-    'admin.auth_active': 'Active',
     'admin.config': 'Config',
     'admin.config_load': 'Load',
     'admin.config_save': 'Save',
@@ -514,7 +502,6 @@ export const app = {
   updateRunning: false,
   rebootRunning: false,
   adminTab: 'skills',
-  adminSessionKey: '',
 
   // Tab state
   tabs: [],
@@ -1307,32 +1294,8 @@ export const app = {
 
   // ── Admin (skills/config/logs/update) ──
 
-  applyAdminKey() {
-    const input = document.getElementById('adminKeyInput');
-    const value = input?.value?.trim() ?? '';
-    this.adminSessionKey = value;
-    this._updateAdminKeyStatus();
-    if (input) input.value = '';
-  },
-
-  clearAdminKey() {
-    this.adminSessionKey = '';
-    const input = document.getElementById('adminKeyInput');
-    if (input) input.value = '';
-    this._updateAdminKeyStatus();
-  },
-
-  _updateAdminKeyStatus() {
-    const status = document.getElementById('adminKeyStatus');
-    if (!status) return;
-    status.textContent = this.adminSessionKey
-      ? this.t('admin.auth_active')
-      : this.t('admin.auth_missing');
-  },
-
   _withAdminKey(params) {
-    if (!this.adminSessionKey) return params;
-    return { ...params, admin_session_key: this.adminSessionKey };
+    return params;
   },
 
   async openAdmin() {
@@ -1340,7 +1303,6 @@ export const app = {
     if (!overlay) return;
     overlay.hidden = false;
     this.openAdminTab(this.adminTab || 'skills');
-    this._updateAdminKeyStatus();
     await this.refreshAdmin();
   },
 

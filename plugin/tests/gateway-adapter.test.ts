@@ -72,43 +72,7 @@ describe('RelayGatewayAdapter admin auth', () => {
     };
   }
 
-  it('rejects admin methods without an admin key', async () => {
-    const adapter = new RelayGatewayAdapter({
-      accountId: 'default',
-      configStore: {
-        load: async () => undefined,
-        save: async () => undefined,
-        listAccountIds: async () => [],
-        inspectAccount: async () => undefined,
-      },
-      runtime: {},
-    });
-
-    adapter['currentConfig'] = makeApprovedConfig();
-
-    const sendError = vi.fn(async () => undefined);
-    adapter['outbound'] = {
-      sendError,
-      sendResponse: vi.fn(),
-      sendStreamStart: vi.fn(),
-      sendStreamChunk: vi.fn(),
-      sendStreamEnd: vi.fn(),
-      sendNotify: vi.fn(),
-    } as never;
-
-    const request: RequestMessage = {
-      id: 'msg_admin_1',
-      type: 'request',
-      method: 'config.get',
-      params: {},
-    };
-
-    await adapter['handleRequest'](makeSession(), request);
-
-    expect(sendError).toHaveBeenCalledWith('client-1', 'msg_admin_1', 'forbidden', 'Admin session key required or expired.');
-  });
-
-  it('allows admin methods with a valid admin key and strips it from params', async () => {
+  it('allows admin methods without an admin key', async () => {
     const runtime = {
       configGet: vi.fn(async (params: Record<string, unknown>) => {
         expect(params.admin_session_key).toBeUndefined();
@@ -128,7 +92,50 @@ describe('RelayGatewayAdapter admin auth', () => {
 
     adapter['currentConfig'] = makeApprovedConfig();
 
-    const { key } = await adapter.issueAdminSession(120);
+    const sendResponse = vi.fn(async () => undefined);
+    const sendError = vi.fn(async () => undefined);
+    adapter['outbound'] = {
+      sendError,
+      sendResponse,
+      sendStreamStart: vi.fn(),
+      sendStreamChunk: vi.fn(),
+      sendStreamEnd: vi.fn(),
+      sendNotify: vi.fn(),
+    } as never;
+
+    const request: RequestMessage = {
+      id: 'msg_admin_1',
+      type: 'request',
+      method: 'config.get',
+      params: {},
+    };
+
+    await adapter['handleRequest'](makeSession(), request);
+
+    expect(sendError).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith('client-1', 'msg_admin_1', { ok: true });
+  });
+
+  it('strips admin_session_key from admin params', async () => {
+    const runtime = {
+      configGet: vi.fn(async (params: Record<string, unknown>) => {
+        expect(params.admin_session_key).toBeUndefined();
+        return { ok: true };
+      }),
+    };
+    const adapter = new RelayGatewayAdapter({
+      accountId: 'default',
+      configStore: {
+        load: async () => undefined,
+        save: async () => undefined,
+        listAccountIds: async () => [],
+        inspectAccount: async () => undefined,
+      },
+      runtime,
+    });
+
+    adapter['currentConfig'] = makeApprovedConfig();
+
     const sendResponse = vi.fn(async () => undefined);
     const sendError = vi.fn(async () => undefined);
     adapter['outbound'] = {
@@ -144,7 +151,7 @@ describe('RelayGatewayAdapter admin auth', () => {
       id: 'msg_admin_2',
       type: 'request',
       method: 'config.get',
-      params: { admin_session_key: key },
+      params: { admin_session_key: 'not-required-anymore' },
     };
 
     await adapter['handleRequest'](makeSession(), request);
