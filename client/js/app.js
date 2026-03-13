@@ -620,7 +620,6 @@ export const app = {
     await this.connection.hydratePersistedIdentity();
     this._updateIdentityStatus();
     this._updateDiagnostics();
-    this._updateAdminKeyStatus();
     this._initComplete = true;
 
     if (usedLaunchPairing || this._pendingDesktopAutoConnect) {
